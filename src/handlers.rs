@@ -10,10 +10,7 @@ use teloxide::{
 };
 
 #[derive(teloxide::utils::command::BotCommands, Clone)]
-#[command(
-    rename_rule = "lowercase",
-    description = "Доступные команды:"
-)]
+#[command(rename_rule = "lowercase", description = "Доступные команды:")]
 pub enum Command {
     #[command(description = "Начать работу")]
     Start,
@@ -25,11 +22,7 @@ pub enum Command {
     Help,
 }
 
-pub async fn handle_command(
-    bot: Bot,
-    msg: Message,
-    cmd: Command,
-) -> Result<()> {
+pub async fn handle_command(bot: Bot, msg: Message, cmd: Command) -> Result<()> {
     let user_id = msg.from.as_ref().unwrap().id.0 as i64;
 
     match cmd {
@@ -41,26 +34,25 @@ pub async fn handle_command(
                 error!("DB error: {}", e);
                 e
             })?;
-
             let mut session = db::get_user_session(&conn, user_id).map_err(|e| {
                 error!("Session error: {}", e);
                 e
             })?;
-
             session.current_state = "start".to_string();
             session.current_continent_id = None;
             session.current_country_id = None;
             session.current_city_id = None;
             session.current_category_id = None;
             session.current_menu_state = "city_menu".to_string();
-
             db::update_user_session(&conn, &session).map_err(|e| {
                 error!("Session update error: {}", e);
                 e
             })?;
-
-            bot.send_message(msg.chat.id, "❌ Операция отменена. Используйте /start для начала.")
-                .await?;
+            bot.send_message(
+                msg.chat.id,
+                "❌ Операция отменена. Используйте /start для начала.",
+            )
+            .await?;
         }
         Command::Stats => {
             if !utils::is_admin(user_id) {
@@ -68,45 +60,43 @@ pub async fn handle_command(
                     .await?;
                 return Ok(());
             }
-
             let conn = db::get_db().map_err(|e| {
                 error!("DB error: {}", e);
                 e
             })?;
-
             let vote_count = db::get_vote_count(&conn).map_err(|e| {
                 error!("Vote count error: {}", e);
                 e
             })?;
-
-            let stats = format!("📊 <b>Статистика голосований</b>\n\nВсего голосов: {}", vote_count);
-            bot.send_message(msg.chat.id, stats)
-                .parse_mode(ParseMode::Html)
-                .await?;
+            bot.send_message(
+                msg.chat.id,
+                format!("📊 <b>Статистика</b>\n\nВсего голосов: {}", vote_count),
+            )
+            .parse_mode(ParseMode::Html)
+            .await?;
         }
         Command::Help => {
-            let help_text = Command::descriptions().to_string();
-            bot.send_message(msg.chat.id, help_text).await?;
+            bot.send_message(
+                msg.chat.id,
+                Command::descriptions().to_string(),
+            )
+            .await?;
         }
     }
-
     Ok(())
 }
 
-pub async fn handle_callback(
-    bot: Bot,
-    q: CallbackQuery,
-) -> Result<()> {
+pub async fn handle_callback(bot: Bot, q: CallbackQuery) -> Result<()> {
+    bot.answer_callback_query(q.id.clone()).await.ok();
+
     let user_id = q.from.id.0 as i64;
     let callback_data = q.data.clone().unwrap_or_default();
-
     info!("Callback from user {}: {}", user_id, callback_data);
 
     let conn = db::get_db().map_err(|e| {
         error!("DB error: {}", e);
         e
     })?;
-
     let mut session = db::get_user_session(&conn, user_id).map_err(|e| {
         error!("Session error: {}", e);
         e
@@ -118,19 +108,11 @@ pub async fn handle_callback(
             .unwrap()
             .parse()
             .unwrap_or(0);
-
         session.current_continent_id = Some(continent_id);
         session.current_state = "country".to_string();
-        db::update_user_session(&conn, &session).map_err(|e| {
-            error!("Session update error: {}", e);
-            e
-        })?;
+        db::update_user_session(&conn, &session)?;
 
-        let countries = db::get_countries_by_continent(&conn, continent_id).map_err(|e| {
-            error!("Countries fetch error: {}", e);
-            e
-        })?;
-
+        let countries = db::get_countries_by_continent(&conn, continent_id)?;
         let keyboard = InlineKeyboardMarkup::new(
             countries
                 .iter()
@@ -142,32 +124,18 @@ pub async fn handle_callback(
                 })
                 .collect::<Vec<_>>(),
         );
-
-        if let Some(msg_id) = q.message.as_ref().map(|m| m.id()) {
-            let chat_id = q.from.id;
-            bot.edit_message_text(ChatId(chat_id.0 as i64), msg_id, "🌍 Выберите страну:")
-                .reply_markup(keyboard)
-                .await?;
-        }
+        edit_msg(&bot, &q, "🌍 Выберите страну:", keyboard).await?;
     } else if callback_data.starts_with("country_") {
         let country_id: i32 = callback_data
             .strip_prefix("country_")
             .unwrap()
             .parse()
             .unwrap_or(0);
-
         session.current_country_id = Some(country_id);
         session.current_state = "city".to_string();
-        db::update_user_session(&conn, &session).map_err(|e| {
-            error!("Session update error: {}", e);
-            e
-        })?;
+        db::update_user_session(&conn, &session)?;
 
-        let cities = db::get_cities_by_country(&conn, country_id).map_err(|e| {
-            error!("Cities fetch error: {}", e);
-            e
-        })?;
-
+        let cities = db::get_cities_by_country(&conn, country_id)?;
         let keyboard = InlineKeyboardMarkup::new(
             cities
                 .iter()
@@ -179,233 +147,122 @@ pub async fn handle_callback(
                 })
                 .collect::<Vec<_>>(),
         );
-
-        if let Some(msg_id) = q.message.as_ref().map(|m| m.id()) {
-            let chat_id = q.from.id;
-            bot.edit_message_text(ChatId(chat_id.0 as i64), msg_id, "🏙️ Выберите город:")
-                .reply_markup(keyboard)
-                .await?;
-        }
+        edit_msg(&bot, &q, "🏙️ Выберите город:", keyboard).await?;
     } else if callback_data.starts_with("city_") {
         let city_id: i32 = callback_data
             .strip_prefix("city_")
             .unwrap()
             .parse()
             .unwrap_or(0);
-
         session.current_city_id = Some(city_id);
         session.current_state = "city_menu".to_string();
         session.current_menu_state = "city_menu".to_string();
-        db::update_user_session(&conn, &session).map_err(|e| {
-            error!("Session update error: {}", e);
-            e
-        })?;
-
+        db::update_user_session(&conn, &session)?;
         let city_name = db::get_city_name(&conn, city_id).unwrap_or_else(|_| "Город".to_string());
         show_city_menu_edit(&bot, &q, &city_name).await?;
-    } else if callback_data == "category_list" {
+    } else if callback_data == "back_to_city_menu" {
         if let Some(city_id) = session.current_city_id {
+            session.current_menu_state = "city_menu".to_string();
+            session.current_category_id = None;
+            db::update_user_session(&conn, &session)?;
+            let city_name = db::get_city_name(&conn, city_id).unwrap_or_else(|_| "Город".to_string());
+            show_city_menu_edit(&bot, &q, &city_name).await?;
+        }
+    } else if callback_data == "category_list" {
+        if session.current_city_id.is_some() {
             session.current_menu_state = "categories".to_string();
-            db::update_user_session(&conn, &session).map_err(|e| {
-                error!("Session update error: {}", e);
-                e
-            })?;
-
-            let categories = db::get_categories(&conn).map_err(|e| {
-                error!("Categories fetch error: {}", e);
-                e
-            })?;
-
-            let user_votes = db::get_user_votes_for_city(&conn, user_id, city_id).map_err(|e| {
-                error!("Votes fetch error: {}", e);
-                e
-            })?;
-
-            let keyboard = build_categories_keyboard(&categories, &user_votes);
-
-            if let Some(msg_id) = q.message.as_ref().map(|m| m.id()) {
-                let chat_id = q.from.id;
-                bot.edit_message_text(ChatId(chat_id.0 as i64), msg_id, "📂 Категории — нажмите для выбора:")
-                    .reply_markup(keyboard)
-                    .await?;
-            }
+            db::update_user_session(&conn, &session)?;
+            let categories = db::get_categories(&conn)?;
+            let keyboard = build_categories_keyboard(&categories);
+            edit_msg(&bot, &q, "📂 Выберите категорию:", keyboard).await?;
+        }
+    } else if callback_data.starts_with("cat_") {
+        let category_id: i32 = callback_data
+            .strip_prefix("cat_")
+            .unwrap()
+            .parse()
+            .unwrap_or(0);
+        if let Some(city_id) = session.current_city_id {
+            session.current_category_id = Some(category_id);
+            session.current_menu_state = "items".to_string();
+            db::update_user_session(&conn, &session)?;
+            show_items_edit(&bot, &q, &conn, user_id, city_id, category_id).await?;
+        }
+    } else if callback_data.starts_with("item_") {
+        let item_id: i32 = callback_data
+            .strip_prefix("item_")
+            .unwrap()
+            .parse()
+            .unwrap_or(0);
+        if let (Some(city_id), Some(category_id)) =
+            (session.current_city_id, session.current_category_id)
+        {
+            let _ = db::toggle_vote(&conn, user_id, city_id, item_id)?;
+            show_items_edit(&bot, &q, &conn, user_id, city_id, category_id).await?;
         }
     } else if callback_data == "city_stats" {
         if let Some(city_id) = session.current_city_id {
             session.current_menu_state = "stats".to_string();
-            db::update_user_session(&conn, &session).map_err(|e| {
-                error!("Session update error: {}", e);
-                e
-            })?;
-
-            let stats = db::get_city_stats(&conn, city_id).map_err(|e| {
-                error!("Stats fetch error: {}", e);
-                e
-            })?;
-
+            db::update_user_session(&conn, &session)?;
+            let stats = db::get_city_stats(&conn, city_id)?;
             let city_name = db::get_city_name(&conn, city_id).unwrap_or_else(|_| "Город".to_string());
             let mut text = format!("📊 <b>Статистика города {}</b>\n\n", city_name);
-            for (cat, count) in &stats {
-                text.push_str(&format!("• {} — {} голосов\n", cat, count));
+            if stats.is_empty() {
+                text.push_str("Пока нет отметок.");
+            } else {
+                for (name, count) in &stats {
+                    text.push_str(&format!("• {} — {}\n", name, count));
+                }
             }
-
-            let keyboard = InlineKeyboardMarkup::new(vec![vec![
-                InlineKeyboardButton::callback("◀️ Назад", "back_to_city_menu"),
-            ]]);
-
-            if let Some(msg_id) = q.message.as_ref().map(|m| m.id()) {
-                let chat_id = q.from.id;
-                bot.edit_message_text(ChatId(chat_id.0 as i64), msg_id, text)
-                    .parse_mode(ParseMode::Html)
-                    .reply_markup(keyboard)
-                    .await?;
-            }
+            let keyboard = InlineKeyboardMarkup::new(vec![vec![InlineKeyboardButton::callback(
+                "◀️ Назад",
+                "back_to_city_menu",
+            )]]);
+            edit_msg_html(&bot, &q, &text, keyboard).await?;
         }
     } else if callback_data == "my_marks" {
         if let Some(city_id) = session.current_city_id {
-            session.current_menu_state = "marks".to_string();
-            db::update_user_session(&conn, &session).map_err(|e| {
-                error!("Session update error: {}", e);
-                e
-            })?;
-
-            let user_votes = db::get_user_votes_for_city(&conn, user_id, city_id).map_err(|e| {
-                error!("Votes fetch error: {}", e);
-                e
-            })?;
-
-            let categories = db::get_categories(&conn).map_err(|e| {
-                error!("Categories fetch error: {}", e);
-                e
-            })?;
-
+            session.current_menu_state = "my_marks".to_string();
+            db::update_user_session(&conn, &session)?;
+            let marks = db::get_user_marks(&conn, user_id, city_id)?;
             let city_name = db::get_city_name(&conn, city_id).unwrap_or_else(|_| "Город".to_string());
             let mut text = format!("📌 <b>Мои отметки — {}</b>\n\n", city_name);
-            for cat in &categories {
-                let mark = if user_votes.contains(&cat.id) { "✅" } else { "▫️" };
-                text.push_str(&format!("{} {}\n", mark, cat.name));
+            if marks.is_empty() {
+                text.push_str("Вы ещё ничего не отметили.");
+            } else {
+                for (cat, item) in &marks {
+                    text.push_str(&format!("• <b>{}</b>: {}\n", cat, item));
+                }
             }
-
-            let keyboard = InlineKeyboardMarkup::new(vec![vec![
-                InlineKeyboardButton::callback("◀️ Назад", "back_to_city_menu"),
-            ]]);
-
-            if let Some(msg_id) = q.message.as_ref().map(|m| m.id()) {
-                let chat_id = q.from.id;
-                bot.edit_message_text(ChatId(chat_id.0 as i64), msg_id, text)
-                    .parse_mode(ParseMode::Html)
-                    .reply_markup(keyboard)
-                    .await?;
-            }
+            let keyboard = InlineKeyboardMarkup::new(vec![vec![InlineKeyboardButton::callback(
+                "◀️ Назад",
+                "back_to_city_menu",
+            )]]);
+            edit_msg_html(&bot, &q, &text, keyboard).await?;
         }
     } else if callback_data == "city_chat" {
-        session.current_menu_state = "chat".to_string();
-        db::update_user_session(&conn, &session).map_err(|e| {
-            error!("Session update error: {}", e);
-            e
-        })?;
-
-        let keyboard = InlineKeyboardMarkup::new(vec![vec![
-            InlineKeyboardButton::callback("◀️ Назад", "back_to_city_menu"),
-        ]]);
-
-        if let Some(msg_id) = q.message.as_ref().map(|m| m.id()) {
-            let chat_id = q.from.id;
-            bot.edit_message_text(ChatId(chat_id.0 as i64), msg_id, "💬 Чат города откроется позже")
-                .reply_markup(keyboard)
-                .await?;
-        }
-    } else if callback_data == "back_to_city_menu" {
-        session.current_menu_state = "city_menu".to_string();
-        db::update_user_session(&conn, &session).map_err(|e| {
-            error!("Session update error: {}", e);
-            e
-        })?;
-
-        let city_name = session
-            .current_city_id
-            .and_then(|id| db::get_city_name(&conn, id).ok())
-            .unwrap_or_else(|| "Город".to_string());
-
-        show_city_menu_edit(&bot, &q, &city_name).await?;
-    } else if callback_data.starts_with("toggle_") {
-        let category_id: i32 = callback_data
-            .strip_prefix("toggle_")
-            .unwrap()
-            .parse()
-            .unwrap_or(0);
-
-        if let Some(city_id) = session.current_city_id {
-            db::toggle_vote(&conn, user_id, city_id, category_id).map_err(|e| {
-                error!("Toggle vote error: {}", e);
-                e
-            })?;
-
-            let categories = db::get_categories(&conn).map_err(|e| {
-                error!("Categories fetch error: {}", e);
-                e
-            })?;
-
-            let user_votes = db::get_user_votes_for_city(&conn, user_id, city_id).map_err(|e| {
-                error!("Votes fetch error: {}", e);
-                e
-            })?;
-
-            let keyboard = build_categories_keyboard(&categories, &user_votes);
-
-            if let Some(msg_id) = q.message.as_ref().map(|m| m.id()) {
-                let chat_id = q.from.id;
-                bot.edit_message_text(ChatId(chat_id.0 as i64), msg_id, "📂 Категории — нажмите для выбора:")
-                    .reply_markup(keyboard)
-                    .await?;
-            }
-        }
-    }
-
-    bot.answer_callback_query(q.id).await?;
-
-    Ok(())
-}
-
-pub async fn handle_message(
-    bot: Bot,
-    msg: Message,
-) -> Result<()> {
-    if let Some(text) = msg.text() {
-        if !text.starts_with('/') {
-            bot.send_message(msg.chat.id, "👋 Привет! Используйте /start для начала или /help для справки.")
-                .await?;
-        }
+        let keyboard = InlineKeyboardMarkup::new(vec![vec![InlineKeyboardButton::callback(
+            "◀️ Назад",
+            "back_to_city_menu",
+        )]]);
+        edit_msg(
+            &bot,
+            &q,
+            "💬 Чат города — скоро. Пока используйте главный чат сообщества.",
+            keyboard,
+        )
+        .await?;
     }
 
     Ok(())
 }
 
-async fn show_continents(
-    bot: &Bot,
-    msg: Message,
-    user_id: i64,
-) -> Result<()> {
-    let conn = db::get_db().map_err(|e| {
-        error!("DB error: {}", e);
-        e
-    })?;
-
-    let continents = db::get_continents(&conn).map_err(|e| {
-        error!("Continents fetch error: {}", e);
-        e
-    })?;
-
-    let mut session = db::get_user_session(&conn, user_id).map_err(|e| {
-        error!("Session error: {}", e);
-        e
-    })?;
-
+async fn show_continents(bot: &Bot, msg: Message, user_id: i64) -> Result<()> {
+    let conn = db::get_db()?;
+    let continents = db::get_continents(&conn)?;
+    let mut session = db::get_user_session(&conn, user_id)?;
     session.current_state = "continent".to_string();
-    db::update_user_session(&conn, &session).map_err(|e| {
-        error!("Session update error: {}", e);
-        e
-    })?;
+    db::update_user_session(&conn, &session)?;
 
     let keyboard = InlineKeyboardMarkup::new(
         continents
@@ -422,7 +279,6 @@ async fn show_continents(
     bot.send_message(msg.chat.id, "🌍 Добро пожаловать! Выберите континент:")
         .reply_markup(keyboard)
         .await?;
-
     Ok(())
 }
 
@@ -433,37 +289,100 @@ async fn show_city_menu_edit(bot: &Bot, q: &CallbackQuery, city_name: &str) -> R
         vec![InlineKeyboardButton::callback("📌 Мои отметки", "my_marks")],
         vec![InlineKeyboardButton::callback("💬 Чат города", "city_chat")],
     ]);
+    edit_msg_html(
+        bot,
+        q,
+        &format!("🏙️ Город: <b>{}</b>\n\nВыберите раздел:", city_name),
+        keyboard,
+    )
+    .await
+}
 
-    if let Some(msg_id) = q.message.as_ref().map(|m| m.id()) {
-        let chat_id = q.from.id;
-        bot.edit_message_text(
-            ChatId(chat_id.0 as i64),
-            msg_id,
-            format!("🏙️ Город: <b>{}</b>\n\nВыберите раздел:", city_name),
-        )
-        .parse_mode(ParseMode::Html)
-        .reply_markup(keyboard)
-        .await?;
+async fn show_items_edit(
+    bot: &Bot,
+    q: &CallbackQuery,
+    conn: &rusqlite::Connection,
+    user_id: i64,
+    city_id: i32,
+    category_id: i32,
+) -> Result<()> {
+    let items = db::get_items_by_category(conn, category_id)?;
+    let voted = db::get_user_item_votes_for_category(conn, user_id, city_id, category_id)?;
+    let cat_name = db::get_category_name(conn, category_id).unwrap_or_else(|_| "Категория".into());
+    let keyboard = build_items_keyboard(&items, &voted);
+    let text = format!("📂 <b>{}</b>\nНажмите, чтобы отметить / снять:", cat_name);
+    edit_msg_html(bot, q, &text, keyboard).await
+}
+
+fn build_categories_keyboard(categories: &[crate::models::Category]) -> InlineKeyboardMarkup {
+    let mut rows: Vec<Vec<InlineKeyboardButton>> = categories
+        .iter()
+        .map(|c| {
+            vec![InlineKeyboardButton::callback(
+                c.name.clone(),
+                format!("cat_{}", c.id),
+            )]
+        })
+        .collect();
+    rows.push(vec![InlineKeyboardButton::callback(
+        "◀️ Назад",
+        "back_to_city_menu",
+    )]);
+    InlineKeyboardMarkup::new(rows)
+}
+
+fn build_items_keyboard(
+    items: &[crate::models::Item],
+    voted_ids: &[i32],
+) -> InlineKeyboardMarkup {
+    let mut rows: Vec<Vec<InlineKeyboardButton>> = items
+        .iter()
+        .map(|i| {
+            let mark = if voted_ids.contains(&i.id) {
+                "✅"
+            } else {
+                "▫️"
+            };
+            vec![InlineKeyboardButton::callback(
+                format!("{} {}", mark, i.name),
+                format!("item_{}", i.id),
+            )]
+        })
+        .collect();
+    rows.push(vec![InlineKeyboardButton::callback(
+        "◀️ К категориям",
+        "category_list",
+    )]);
+    InlineKeyboardMarkup::new(rows)
+}
+
+async fn edit_msg(
+    bot: &Bot,
+    q: &CallbackQuery,
+    text: &str,
+    keyboard: InlineKeyboardMarkup,
+) -> Result<()> {
+    if let Some(msg) = q.message.as_ref() {
+        let _ = bot
+            .edit_message_text(msg.chat().id, msg.id(), text)
+            .reply_markup(keyboard)
+            .await;
     }
     Ok(())
 }
 
-fn build_categories_keyboard(
-    categories: &[crate::models::Category],
-    user_votes: &[i32],
-) -> InlineKeyboardMarkup {
-    let mut rows: Vec<Vec<InlineKeyboardButton>> = categories
-        .iter()
-        .map(|c| {
-            let mark = if user_votes.contains(&c.id) { "✅" } else { "▫️" };
-            vec![InlineKeyboardButton::callback(
-                format!("{} {}", mark, c.name),
-                format!("toggle_{}", c.id),
-            )]
-        })
-        .collect();
-
-    rows.push(vec![InlineKeyboardButton::callback("◀️ Назад", "back_to_city_menu")]);
-
-    InlineKeyboardMarkup::new(rows)
+async fn edit_msg_html(
+    bot: &Bot,
+    q: &CallbackQuery,
+    text: &str,
+    keyboard: InlineKeyboardMarkup,
+) -> Result<()> {
+    if let Some(msg) = q.message.as_ref() {
+        let _ = bot
+            .edit_message_text(msg.chat().id, msg.id(), text)
+            .parse_mode(ParseMode::Html)
+            .reply_markup(keyboard)
+            .await;
+    }
+    Ok(())
 }
