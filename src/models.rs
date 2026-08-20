@@ -34,18 +34,18 @@ pub struct Vote {
     pub user_id: i64,
     pub city_id: i32,
     pub category_id: i32,
-    pub rating: i32,
     pub timestamp: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone)]
 pub struct UserSession {
     pub user_id: i64,
-    pub current_state: String, // "start", "continent", "country", "city", "category", "vote"
+    pub current_state: String,
     pub current_continent_id: Option<i32>,
     pub current_country_id: Option<i32>,
     pub current_city_id: Option<i32>,
     pub current_category_id: Option<i32>,
+    pub current_menu_state: String,
 }
 
 impl Default for UserSession {
@@ -57,6 +57,7 @@ impl Default for UserSession {
             current_country_id: None,
             current_city_id: None,
             current_category_id: None,
+            current_menu_state: "city_menu".to_string(),
         }
     }
 }
