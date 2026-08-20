@@ -4,12 +4,6 @@ use chrono::Utc;
 use log::*;
 use rusqlite::{params, Connection, OptionalExtension};
 use std::env;
-use std::sync::Mutex;
-
-lazy_static::lazy_static! {
-    static ref DB: Mutex<Option<Connection>> = Mutex::new(None);
-}
-
 pub fn get_db() -> Result<Connection> {
     let db_path = env::var("DATABASE_PATH").unwrap_or_else(|_| "./invesTG.db".to_string());
     Ok(Connection::open(&db_path)?)
