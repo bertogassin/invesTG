@@ -9,7 +9,7 @@ use teloxide::{
     types::{InlineKeyboardButton, InlineKeyboardMarkup, ParseMode},
 };
 
-#[derive(teloxide::utils::command::BotCommands, Clone)]
+#[derive(BotCommands, Clone)]
 #[command(rename_rule = "lowercase", description = "Доступные команды:")]
 pub enum Command {
     #[command(description = "Начать работу")]
@@ -26,48 +26,27 @@ pub async fn handle_command(bot: Bot, msg: Message, cmd: Command) -> Result<()> 
     let user_id = msg.from.as_ref().unwrap().id.0 as i64;
 
     match cmd {
-        Command::Start => {
-            show_continents(&bot, msg, user_id).await?;
-        }
+        Command::Start => show_continents(&bot, msg, user_id).await?,
         Command::Cancel => {
-            let conn = db::get_db().map_err(|e| {
-                error!("DB error: {}", e);
-                e
-            })?;
-            let mut session = db::get_user_session(&conn, user_id).map_err(|e| {
-                error!("Session error: {}", e);
-                e
-            })?;
+            let conn = db::get_db()?;
+            let mut session = db::get_user_session(&conn, user_id)?;
             session.current_state = "start".to_string();
             session.current_continent_id = None;
             session.current_country_id = None;
             session.current_city_id = None;
             session.current_category_id = None;
             session.current_menu_state = "city_menu".to_string();
-            db::update_user_session(&conn, &session).map_err(|e| {
-                error!("Session update error: {}", e);
-                e
-            })?;
-            bot.send_message(
-                msg.chat.id,
-                "❌ Операция отменена. Используйте /start для начала.",
-            )
-            .await?;
+            db::update_user_session(&conn, &session)?;
+            bot.send_message(msg.chat.id, "❌ Операция отменена. Используйте /start.")
+                .await?;
         }
         Command::Stats => {
             if !utils::is_admin(user_id) {
-                bot.send_message(msg.chat.id, "❌ У вас нет прав для просмотра статистики.")
-                    .await?;
+                bot.send_message(msg.chat.id, "❌ Нет прав для статистики.").await?;
                 return Ok(());
             }
-            let conn = db::get_db().map_err(|e| {
-                error!("DB error: {}", e);
-                e
-            })?;
-            let vote_count = db::get_vote_count(&conn).map_err(|e| {
-                error!("Vote count error: {}", e);
-                e
-            })?;
+            let conn = db::get_db()?;
+            let vote_count = db::get_vote_count(&conn)?;
             bot.send_message(
                 msg.chat.id,
                 format!("📊 <b>Статистика</b>\n\nВсего голосов: {}", vote_count),
@@ -76,9 +55,19 @@ pub async fn handle_command(bot: Bot, msg: Message, cmd: Command) -> Result<()> 
             .await?;
         }
         Command::Help => {
+            bot.send_message(msg.chat.id, Command::descriptions().to_string())
+                .await?;
+        }
+    }
+    Ok(())
+}
+
+pub async fn handle_message(bot: Bot, msg: Message) -> Result<()> {
+    if let Some(text) = msg.text() {
+        if !text.starts_with('/') {
             bot.send_message(
                 msg.chat.id,
-                Command::descriptions().to_string(),
+                "👋 Используйте /start для начала или /help для справки.",
             )
             .await?;
         }
@@ -87,20 +76,12 @@ pub async fn handle_command(bot: Bot, msg: Message, cmd: Command) -> Result<()> 
 }
 
 pub async fn handle_callback(bot: Bot, q: CallbackQuery) -> Result<()> {
-    bot.answer_callback_query(q.id.clone()).await.ok();
-
     let user_id = q.from.id.0 as i64;
     let callback_data = q.data.clone().unwrap_or_default();
     info!("Callback from user {}: {}", user_id, callback_data);
 
-    let conn = db::get_db().map_err(|e| {
-        error!("DB error: {}", e);
-        e
-    })?;
-    let mut session = db::get_user_session(&conn, user_id).map_err(|e| {
-        error!("Session error: {}", e);
-        e
-    })?;
+    let conn = db::get_db()?;
+    let mut session = db::get_user_session(&conn, user_id)?;
 
     if callback_data.starts_with("continent_") {
         let continent_id: i32 = callback_data
@@ -124,7 +105,11 @@ pub async fn handle_callback(bot: Bot, q: CallbackQuery) -> Result<()> {
                 })
                 .collect::<Vec<_>>(),
         );
-        edit_msg(&bot, &q, "🌍 Выберите страну:", keyboard).await?;
+        if let Some(msg_id) = q.message.as_ref().map(|m| m.id()) {
+            bot.edit_message_text(ChatId(q.from.id.0 as i64), msg_id, "🌍 Выберите страну:")
+                .reply_markup(keyboard)
+                .await?;
+        }
     } else if callback_data.starts_with("country_") {
         let country_id: i32 = callback_data
             .strip_prefix("country_")
@@ -147,7 +132,11 @@ pub async fn handle_callback(bot: Bot, q: CallbackQuery) -> Result<()> {
                 })
                 .collect::<Vec<_>>(),
         );
-        edit_msg(&bot, &q, "🏙️ Выберите город:", keyboard).await?;
+        if let Some(msg_id) = q.message.as_ref().map(|m| m.id()) {
+            bot.edit_message_text(ChatId(q.from.id.0 as i64), msg_id, "🏙️ Выберите город:")
+                .reply_markup(keyboard)
+                .await?;
+        }
     } else if callback_data.starts_with("city_") {
         let city_id: i32 = callback_data
             .strip_prefix("city_")
@@ -158,23 +147,26 @@ pub async fn handle_callback(bot: Bot, q: CallbackQuery) -> Result<()> {
         session.current_state = "city_menu".to_string();
         session.current_menu_state = "city_menu".to_string();
         db::update_user_session(&conn, &session)?;
-        let city_name = db::get_city_name(&conn, city_id).unwrap_or_else(|_| "Город".to_string());
+        let city_name = db::get_city_name(&conn, city_id).unwrap_or_else(|_| "Город".into());
         show_city_menu_edit(&bot, &q, &city_name).await?;
     } else if callback_data == "back_to_city_menu" {
-        if let Some(city_id) = session.current_city_id {
-            session.current_menu_state = "city_menu".to_string();
-            session.current_category_id = None;
-            db::update_user_session(&conn, &session)?;
-            let city_name = db::get_city_name(&conn, city_id).unwrap_or_else(|_| "Город".to_string());
-            show_city_menu_edit(&bot, &q, &city_name).await?;
-        }
+        session.current_menu_state = "city_menu".to_string();
+        session.current_category_id = None;
+        db::update_user_session(&conn, &session)?;
+        let city_name = session
+            .current_city_id
+            .and_then(|id| db::get_city_name(&conn, id).ok())
+            .unwrap_or_else(|| "Город".into());
+        show_city_menu_edit(&bot, &q, &city_name).await?;
     } else if callback_data == "category_list" {
-        if session.current_city_id.is_some() {
-            session.current_menu_state = "categories".to_string();
-            db::update_user_session(&conn, &session)?;
-            let categories = db::get_categories(&conn)?;
-            let keyboard = build_categories_keyboard(&categories);
-            edit_msg(&bot, &q, "📂 Выберите категорию:", keyboard).await?;
+        session.current_menu_state = "categories".to_string();
+        db::update_user_session(&conn, &session)?;
+        let categories = db::get_categories(&conn)?;
+        let keyboard = build_categories_keyboard(&categories);
+        if let Some(msg_id) = q.message.as_ref().map(|m| m.id()) {
+            bot.edit_message_text(ChatId(q.from.id.0 as i64), msg_id, "📂 Выберите категорию:")
+                .reply_markup(keyboard)
+                .await?;
         }
     } else if callback_data.starts_with("cat_") {
         let category_id: i32 = callback_data
@@ -205,7 +197,7 @@ pub async fn handle_callback(bot: Bot, q: CallbackQuery) -> Result<()> {
             session.current_menu_state = "stats".to_string();
             db::update_user_session(&conn, &session)?;
             let stats = db::get_city_stats(&conn, city_id)?;
-            let city_name = db::get_city_name(&conn, city_id).unwrap_or_else(|_| "Город".to_string());
+            let city_name = db::get_city_name(&conn, city_id).unwrap_or_else(|_| "Город".into());
             let mut text = format!("📊 <b>Статистика города {}</b>\n\n", city_name);
             if stats.is_empty() {
                 text.push_str("Пока нет отметок.");
@@ -218,14 +210,19 @@ pub async fn handle_callback(bot: Bot, q: CallbackQuery) -> Result<()> {
                 "◀️ Назад",
                 "back_to_city_menu",
             )]]);
-            edit_msg_html(&bot, &q, &text, keyboard).await?;
+            if let Some(msg_id) = q.message.as_ref().map(|m| m.id()) {
+                bot.edit_message_text(ChatId(q.from.id.0 as i64), msg_id, text)
+                    .parse_mode(ParseMode::Html)
+                    .reply_markup(keyboard)
+                    .await?;
+            }
         }
     } else if callback_data == "my_marks" {
         if let Some(city_id) = session.current_city_id {
             session.current_menu_state = "my_marks".to_string();
             db::update_user_session(&conn, &session)?;
             let marks = db::get_user_marks(&conn, user_id, city_id)?;
-            let city_name = db::get_city_name(&conn, city_id).unwrap_or_else(|_| "Город".to_string());
+            let city_name = db::get_city_name(&conn, city_id).unwrap_or_else(|_| "Город".into());
             let mut text = format!("📌 <b>Мои отметки — {}</b>\n\n", city_name);
             if marks.is_empty() {
                 text.push_str("Вы ещё ничего не отметили.");
@@ -238,22 +235,30 @@ pub async fn handle_callback(bot: Bot, q: CallbackQuery) -> Result<()> {
                 "◀️ Назад",
                 "back_to_city_menu",
             )]]);
-            edit_msg_html(&bot, &q, &text, keyboard).await?;
+            if let Some(msg_id) = q.message.as_ref().map(|m| m.id()) {
+                bot.edit_message_text(ChatId(q.from.id.0 as i64), msg_id, text)
+                    .parse_mode(ParseMode::Html)
+                    .reply_markup(keyboard)
+                    .await?;
+            }
         }
     } else if callback_data == "city_chat" {
         let keyboard = InlineKeyboardMarkup::new(vec![vec![InlineKeyboardButton::callback(
             "◀️ Назад",
             "back_to_city_menu",
         )]]);
-        edit_msg(
-            &bot,
-            &q,
-            "💬 Чат города — скоро. Пока используйте главный чат сообщества.",
-            keyboard,
-        )
-        .await?;
+        if let Some(msg_id) = q.message.as_ref().map(|m| m.id()) {
+            bot.edit_message_text(
+                ChatId(q.from.id.0 as i64),
+                msg_id,
+                "💬 Чат города — скоро. Пока главный чат сообщества.",
+            )
+            .reply_markup(keyboard)
+            .await?;
+        }
     }
 
+    bot.answer_callback_query(q.id).await?;
     Ok(())
 }
 
@@ -289,13 +294,17 @@ async fn show_city_menu_edit(bot: &Bot, q: &CallbackQuery, city_name: &str) -> R
         vec![InlineKeyboardButton::callback("📌 Мои отметки", "my_marks")],
         vec![InlineKeyboardButton::callback("💬 Чат города", "city_chat")],
     ]);
-    edit_msg_html(
-        bot,
-        q,
-        &format!("🏙️ Город: <b>{}</b>\n\nВыберите раздел:", city_name),
-        keyboard,
-    )
-    .await
+    if let Some(msg_id) = q.message.as_ref().map(|m| m.id()) {
+        bot.edit_message_text(
+            ChatId(q.from.id.0 as i64),
+            msg_id,
+            format!("🏙️ Город: <b>{}</b>\n\nВыберите раздел:", city_name),
+        )
+        .parse_mode(ParseMode::Html)
+        .reply_markup(keyboard)
+        .await?;
+    }
+    Ok(())
 }
 
 async fn show_items_edit(
@@ -310,8 +319,17 @@ async fn show_items_edit(
     let voted = db::get_user_item_votes_for_category(conn, user_id, city_id, category_id)?;
     let cat_name = db::get_category_name(conn, category_id).unwrap_or_else(|_| "Категория".into());
     let keyboard = build_items_keyboard(&items, &voted);
-    let text = format!("📂 <b>{}</b>\nНажмите, чтобы отметить / снять:", cat_name);
-    edit_msg_html(bot, q, &text, keyboard).await
+    if let Some(msg_id) = q.message.as_ref().map(|m| m.id()) {
+        bot.edit_message_text(
+            ChatId(q.from.id.0 as i64),
+            msg_id,
+            format!("📂 <b>{}</b>\nНажмите, чтобы отметить / снять:", cat_name),
+        )
+        .parse_mode(ParseMode::Html)
+        .reply_markup(keyboard)
+        .await?;
+    }
+    Ok(())
 }
 
 fn build_categories_keyboard(categories: &[crate::models::Category]) -> InlineKeyboardMarkup {
@@ -354,35 +372,4 @@ fn build_items_keyboard(
         "category_list",
     )]);
     InlineKeyboardMarkup::new(rows)
-}
-
-async fn edit_msg(
-    bot: &Bot,
-    q: &CallbackQuery,
-    text: &str,
-    keyboard: InlineKeyboardMarkup,
-) -> Result<()> {
-    if let Some(msg) = q.message.as_ref() {
-        let _ = bot
-            .edit_message_text(msg.chat().id, msg.id(), text)
-            .reply_markup(keyboard)
-            .await;
-    }
-    Ok(())
-}
-
-async fn edit_msg_html(
-    bot: &Bot,
-    q: &CallbackQuery,
-    text: &str,
-    keyboard: InlineKeyboardMarkup,
-) -> Result<()> {
-    if let Some(msg) = q.message.as_ref() {
-        let _ = bot
-            .edit_message_text(msg.chat().id, msg.id(), text)
-            .parse_mode(ParseMode::Html)
-            .reply_markup(keyboard)
-            .await;
-    }
-    Ok(())
 }
