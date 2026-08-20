@@ -1,6 +1,6 @@
 use crate::db;
 use crate::utils;
-use anyhow::Result;
+use anyhow::Result as AnyResult;
 use log::*;
 use teloxide::utils::command::BotCommands;
 use teloxide::{
@@ -22,7 +22,14 @@ pub enum Command {
     Help,
 }
 
-pub async fn handle_command(bot: Bot, msg: Message, cmd: Command) -> Result<()> {
+pub async fn handle_command(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
+    if let Err(e) = handle_command_inner(bot, msg, cmd).await {
+        error!("Command error: {:#}", e);
+    }
+    Ok(())
+}
+
+async fn handle_command_inner(bot: Bot, msg: Message, cmd: Command) -> AnyResult<()> {
     let user_id = msg.from.as_ref().unwrap().id.0 as i64;
 
     match cmd {
@@ -62,7 +69,7 @@ pub async fn handle_command(bot: Bot, msg: Message, cmd: Command) -> Result<()> 
     Ok(())
 }
 
-pub async fn handle_message(bot: Bot, msg: Message) -> Result<()> {
+pub async fn handle_message(bot: Bot, msg: Message) -> ResponseResult<()> {
     if let Some(text) = msg.text() {
         if !text.starts_with('/') {
             bot.send_message(
@@ -75,7 +82,14 @@ pub async fn handle_message(bot: Bot, msg: Message) -> Result<()> {
     Ok(())
 }
 
-pub async fn handle_callback(bot: Bot, q: CallbackQuery) -> Result<()> {
+pub async fn handle_callback(bot: Bot, q: CallbackQuery) -> ResponseResult<()> {
+    if let Err(e) = handle_callback_inner(bot, q).await {
+        error!("Callback error: {:#}", e);
+    }
+    Ok(())
+}
+
+async fn handle_callback_inner(bot: Bot, q: CallbackQuery) -> AnyResult<()> {
     let user_id = q.from.id.0 as i64;
     let callback_data = q.data.clone().unwrap_or_default();
     info!("Callback from user {}: {}", user_id, callback_data);
@@ -262,7 +276,7 @@ pub async fn handle_callback(bot: Bot, q: CallbackQuery) -> Result<()> {
     Ok(())
 }
 
-async fn show_continents(bot: &Bot, msg: Message, user_id: i64) -> Result<()> {
+async fn show_continents(bot: &Bot, msg: Message, user_id: i64) -> AnyResult<()> {
     let conn = db::get_db()?;
     let continents = db::get_continents(&conn)?;
     let mut session = db::get_user_session(&conn, user_id)?;
@@ -287,7 +301,7 @@ async fn show_continents(bot: &Bot, msg: Message, user_id: i64) -> Result<()> {
     Ok(())
 }
 
-async fn show_city_menu_edit(bot: &Bot, q: &CallbackQuery, city_name: &str) -> Result<()> {
+async fn show_city_menu_edit(bot: &Bot, q: &CallbackQuery, city_name: &str) -> AnyResult<()> {
     let keyboard = InlineKeyboardMarkup::new(vec![
         vec![InlineKeyboardButton::callback("📂 Категории", "category_list")],
         vec![InlineKeyboardButton::callback("📊 Статистика города", "city_stats")],
@@ -314,7 +328,7 @@ async fn show_items_edit(
     user_id: i64,
     city_id: i32,
     category_id: i32,
-) -> Result<()> {
+) -> AnyResult<()> {
     let items = db::get_items_by_category(conn, category_id)?;
     let voted = db::get_user_item_votes_for_category(conn, user_id, city_id, category_id)?;
     let cat_name = db::get_category_name(conn, category_id).unwrap_or_else(|_| "Категория".into());
