@@ -29,11 +29,19 @@ pub struct Category {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Item {
+    pub id: i32,
+    pub category_id: i32,
+    pub name: String,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Vote {
     pub id: i32,
     pub user_id: i64,
     pub city_id: i32,
-    pub category_id: i32,
+    pub item_id: i32,
     pub timestamp: DateTime<Utc>,
 }
 

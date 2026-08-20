@@ -42,15 +42,22 @@ pub fn init_db() -> Result<()> {
             description TEXT
         );
 
+        CREATE TABLE IF NOT EXISTS items (
+            id INTEGER PRIMARY KEY,
+            category_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            FOREIGN KEY(category_id) REFERENCES categories(id)
+        );
+
         CREATE TABLE IF NOT EXISTS votes (
             id INTEGER PRIMARY KEY,
             user_id INTEGER NOT NULL,
             city_id INTEGER NOT NULL,
-            category_id INTEGER NOT NULL,
+            item_id INTEGER NOT NULL,
             timestamp TEXT NOT NULL,
             FOREIGN KEY(city_id) REFERENCES cities(id),
-            FOREIGN KEY(category_id) REFERENCES categories(id),
-            UNIQUE(user_id, city_id, category_id)
+            FOREIGN KEY(item_id) REFERENCES items(id),
+            UNIQUE(user_id, city_id, item_id)
         );
 
         CREATE TABLE IF NOT EXISTS user_sessions (
@@ -159,7 +166,8 @@ fn seed_data(conn: &Connection) -> Result<()> {
         ("Финансы", Some("Банки и финансовые услуги")),
         ("Команда", Some("Командная работа и нетворкинг")),
         ("Жильё", Some("Недвижимость и аренда")),
-        ("Инфраструктура", Some("Транспорт и инфраструктура")),
+        ("Транспорт", Some("Транспорт и перевозки")),
+        ("Инфраструктура", Some("Инфраструктура города")),
         ("Образование", Some("Образование и наука")),
         ("Здравоохранение", Some("Медицина и здоровье")),
         ("Развлечения", Some("Культура и досуг")),
@@ -169,6 +177,62 @@ fn seed_data(conn: &Connection) -> Result<()> {
         conn.execute(
             "INSERT OR IGNORE INTO categories (name, description) VALUES (?1, ?2)",
             params![category, desc],
+        )?;
+    }
+
+    // Items (Russian) per category
+    // category IDs are assigned by insertion order above
+    let items: Vec<(&str, &str)> = vec![
+        // Профессии
+        ("Профессии", "Водитель"),
+        ("Профессии", "Охранник"),
+        ("Профессии", "Электрик"),
+        ("Профессии", "Сантехник"),
+        ("Профессии", "Программист"),
+        ("Профессии", "Повар"),
+        ("Профессии", "Строитель"),
+        // Финансы
+        ("Финансы", "Капитал до 1000€"),
+        ("Финансы", "1000–5000€"),
+        ("Финансы", "5000–10000€"),
+        ("Финансы", "10000€+"),
+        // Команда
+        ("Команда", "Готов собрать команду"),
+        ("Команда", "Ищу единомышленников"),
+        // Жильё
+        ("Жильё", "Сдаю квартиру"),
+        ("Жильё", "Ищу квартиру"),
+        ("Жильё", "Есть помещение"),
+        // Транспорт
+        ("Транспорт", "Есть авто"),
+        ("Транспорт", "Ищу водителя"),
+        ("Транспорт", "Грузоперевозки"),
+        // Инфраструктура
+        ("Инфраструктура", "Интернет кафе"),
+        ("Инфраструктура", "Коворкинг"),
+        ("Инфраструктура", "Общественный транспорт"),
+        ("Инфраструктура", "Парковка"),
+        // Образование
+        ("Образование", "Школа"),
+        ("Образование", "Университет"),
+        ("Образование", "Языковые курсы"),
+        ("Образование", "ПТУ"),
+        // Здравоохранение
+        ("Здравоохранение", "Больница"),
+        ("Здравоохранение", "Аптека"),
+        ("Здравоохранение", "Стоматолог"),
+        ("Здравоохранение", "Поликлиника"),
+        // Развлечения
+        ("Развлечения", "Бар"),
+        ("Развлечения", "Ресторан"),
+        ("Развлечения", "Кино"),
+        ("Развлечения", "Клуб"),
+    ];
+
+    for (cat_name, item_name) in &items {
+        conn.execute(
+            "INSERT OR IGNORE INTO items (category_id, name) SELECT id, ?1 FROM categories WHERE name = ?2",
+            params![item_name, cat_name],
         )?;
     }
 
@@ -281,42 +345,59 @@ pub fn update_user_session(conn: &Connection, session: &UserSession) -> Result<(
     Ok(())
 }
 
+pub fn get_items_by_category(conn: &Connection, category_id: i32) -> Result<Vec<crate::models::Item>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, category_id, name FROM items WHERE category_id = ?1 ORDER BY id",
+    )?;
+    let items = stmt.query_map(params![category_id], |row| {
+        Ok(crate::models::Item {
+            id: row.get(0)?,
+            category_id: row.get(1)?,
+            name: row.get(2)?,
+        })
+    })?
+    .collect::<Result<Vec<_>, _>>()?;
+    Ok(items)
+}
+
+pub fn check_vote_exists(conn: &Connection, user_id: i64, city_id: i32, item_id: i32) -> Result<bool> {
+    let count: i32 = conn.query_row(
+        "SELECT COUNT(*) FROM votes WHERE user_id = ?1 AND city_id = ?2 AND item_id = ?3",
+        params![user_id, city_id, item_id],
+        |row| row.get(0),
+    )?;
+    Ok(count > 0)
+}
+
 pub fn toggle_vote(
     conn: &Connection,
     user_id: i64,
     city_id: i32,
-    category_id: i32,
+    item_id: i32,
 ) -> Result<bool> {
-    let existing: Option<i32> = conn
-        .query_row(
-            "SELECT id FROM votes WHERE user_id = ?1 AND city_id = ?2 AND category_id = ?3",
-            params![user_id, city_id, category_id],
-            |row| row.get(0),
-        )
-        .optional()?;
-
-    if existing.is_some() {
+    let exists = check_vote_exists(conn, user_id, city_id, item_id)?;
+    if exists {
         conn.execute(
-            "DELETE FROM votes WHERE user_id = ?1 AND city_id = ?2 AND category_id = ?3",
-            params![user_id, city_id, category_id],
+            "DELETE FROM votes WHERE user_id = ?1 AND city_id = ?2 AND item_id = ?3",
+            params![user_id, city_id, item_id],
         )?;
         Ok(false)
     } else {
         conn.execute(
-            "INSERT INTO votes (user_id, city_id, category_id, timestamp) VALUES (?1, ?2, ?3, ?4)",
-            params![user_id, city_id, category_id, Utc::now().to_rfc3339()],
+            "INSERT INTO votes (user_id, city_id, item_id, timestamp) VALUES (?1, ?2, ?3, ?4)",
+            params![user_id, city_id, item_id, Utc::now().to_rfc3339()],
         )?;
         Ok(true)
     }
 }
 
-pub fn get_user_votes_for_city(
+pub fn get_city_votes(
     conn: &Connection,
     user_id: i64,
     city_id: i32,
 ) -> Result<Vec<i32>> {
     let mut stmt = conn.prepare(
-        "SELECT category_id FROM votes WHERE user_id = ?1 AND city_id = ?2",
+        "SELECT item_id FROM votes WHERE user_id = ?1 AND city_id = ?2",
     )?;
     let ids = stmt
         .query_map(params![user_id, city_id], |row| row.get(0))?
@@ -331,19 +412,10 @@ pub fn get_vote_count(conn: &Connection) -> Result<i32> {
 
 pub fn get_city_stats(conn: &Connection, city_id: i32) -> Result<Vec<(String, i32)>> {
     let mut stmt = conn.prepare(
-        "SELECT c.name, COUNT(v.id) FROM categories c LEFT JOIN votes v ON c.id = v.category_id AND v.city_id = ?1 GROUP BY c.id ORDER BY c.name",
+        "SELECT i.name, COUNT(v.id) FROM items i LEFT JOIN votes v ON i.id = v.item_id AND v.city_id = ?1 GROUP BY i.id ORDER BY i.category_id, i.id",
     )?;
     let rows = stmt
         .query_map(params![city_id], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i32>(1)?)))?
         .collect::<Result<Vec<_>, _>>()?;
     Ok(rows)
-}
-
-pub fn get_votes_by_city(conn: &Connection, city_id: i32) -> Result<i32> {
-    let count: i32 = conn.query_row(
-        "SELECT COUNT(*) FROM votes WHERE city_id = ?1",
-        params![city_id],
-        |row| row.get(0),
-    )?;
-    Ok(count)
 }

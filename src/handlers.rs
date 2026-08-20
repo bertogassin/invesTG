@@ -2,6 +2,7 @@ use crate::db;
 use crate::utils;
 use anyhow::Result;
 use log::*;
+use rusqlite::Connection;
 use teloxide::utils::command::BotCommands;
 use teloxide::{
     payloads::SendMessageSetters,
@@ -216,16 +217,50 @@ pub async fn handle_callback(
                 e
             })?;
 
-            let user_votes = db::get_user_votes_for_city(&conn, user_id, city_id).map_err(|e| {
+            let user_votes = db::get_city_votes(&conn, user_id, city_id).map_err(|e| {
                 error!("Votes fetch error: {}", e);
                 e
             })?;
 
-            let keyboard = build_categories_keyboard(&categories, &user_votes);
+            let keyboard = build_categories_keyboard(&categories, &user_votes, &conn);
 
             if let Some(msg_id) = q.message.as_ref().map(|m| m.id()) {
                 let chat_id = q.from.id;
-                bot.edit_message_text(ChatId(chat_id.0 as i64), msg_id, "📂 Категории — нажмите для выбора:")
+                bot.edit_message_text(ChatId(chat_id.0 as i64), msg_id, "📂 Выберите категорию:")
+                    .reply_markup(keyboard)
+                    .await?;
+            }
+        }
+    } else if callback_data.starts_with("category_select_") {
+        let category_id: i32 = callback_data
+            .strip_prefix("category_select_")
+            .unwrap()
+            .parse()
+            .unwrap_or(0);
+
+        if let Some(city_id) = session.current_city_id {
+            session.current_category_id = Some(category_id);
+            session.current_menu_state = "items".to_string();
+            db::update_user_session(&conn, &session).map_err(|e| {
+                error!("Session update error: {}", e);
+                e
+            })?;
+
+            let items = db::get_items_by_category(&conn, category_id).map_err(|e| {
+                error!("Items fetch error: {}", e);
+                e
+            })?;
+
+            let user_votes = db::get_city_votes(&conn, user_id, city_id).map_err(|e| {
+                error!("Votes fetch error: {}", e);
+                e
+            })?;
+
+            let keyboard = build_items_keyboard(&items, &user_votes);
+
+            if let Some(msg_id) = q.message.as_ref().map(|m| m.id()) {
+                let chat_id = q.from.id;
+                bot.edit_message_text(ChatId(chat_id.0 as i64), msg_id, "📋 Выберите пункт:")
                     .reply_markup(keyboard)
                     .await?;
             }
@@ -269,7 +304,7 @@ pub async fn handle_callback(
                 e
             })?;
 
-            let user_votes = db::get_user_votes_for_city(&conn, user_id, city_id).map_err(|e| {
+            let user_votes = db::get_city_votes(&conn, user_id, city_id).map_err(|e| {
                 error!("Votes fetch error: {}", e);
                 e
             })?;
@@ -282,8 +317,18 @@ pub async fn handle_callback(
             let city_name = db::get_city_name(&conn, city_id).unwrap_or_else(|_| "Город".to_string());
             let mut text = format!("📌 <b>Мои отметки — {}</b>\n\n", city_name);
             for cat in &categories {
-                let mark = if user_votes.contains(&cat.id) { "✅" } else { "▫️" };
-                text.push_str(&format!("{} {}\n", mark, cat.name));
+                let items = db::get_items_by_category(&conn, cat.id).unwrap_or_default();
+                let voted: Vec<_> = items.iter().filter(|i| user_votes.contains(&i.id)).collect();
+                if !voted.is_empty() {
+                    text.push_str(&format!("<b>{}</b>\n", cat.name));
+                    for item in voted {
+                        text.push_str(&format!("✅ {}\n", item.name));
+                    }
+                    text.push('\n');
+                }
+            }
+            if text == format!("📌 <b>Мои отметки — {}</b>\n\n", city_name) {
+                text.push_str("Нет отметок");
             }
 
             let keyboard = InlineKeyboardMarkup::new(vec![vec![
@@ -328,34 +373,35 @@ pub async fn handle_callback(
             .unwrap_or_else(|| "Город".to_string());
 
         show_city_menu_edit(&bot, &q, &city_name).await?;
-    } else if callback_data.starts_with("toggle_") {
-        let category_id: i32 = callback_data
-            .strip_prefix("toggle_")
+    } else if callback_data.starts_with("toggle_item_") {
+        let item_id: i32 = callback_data
+            .strip_prefix("toggle_item_")
             .unwrap()
             .parse()
             .unwrap_or(0);
 
         if let Some(city_id) = session.current_city_id {
-            db::toggle_vote(&conn, user_id, city_id, category_id).map_err(|e| {
+            db::toggle_vote(&conn, user_id, city_id, item_id).map_err(|e| {
                 error!("Toggle vote error: {}", e);
                 e
             })?;
 
-            let categories = db::get_categories(&conn).map_err(|e| {
-                error!("Categories fetch error: {}", e);
+            let category_id = session.current_category_id.unwrap_or(0);
+            let items = db::get_items_by_category(&conn, category_id).map_err(|e| {
+                error!("Items fetch error: {}", e);
                 e
             })?;
 
-            let user_votes = db::get_user_votes_for_city(&conn, user_id, city_id).map_err(|e| {
+            let user_votes = db::get_city_votes(&conn, user_id, city_id).map_err(|e| {
                 error!("Votes fetch error: {}", e);
                 e
             })?;
 
-            let keyboard = build_categories_keyboard(&categories, &user_votes);
+            let keyboard = build_items_keyboard(&items, &user_votes);
 
             if let Some(msg_id) = q.message.as_ref().map(|m| m.id()) {
                 let chat_id = q.from.id;
-                bot.edit_message_text(ChatId(chat_id.0 as i64), msg_id, "📂 Категории — нажмите для выбора:")
+                bot.edit_message_text(ChatId(chat_id.0 as i64), msg_id, "📋 Выберите пункт:")
                     .reply_markup(keyboard)
                     .await?;
             }
@@ -451,19 +497,43 @@ async fn show_city_menu_edit(bot: &Bot, q: &CallbackQuery, city_name: &str) -> R
 fn build_categories_keyboard(
     categories: &[crate::models::Category],
     user_votes: &[i32],
+    conn: &Connection,
 ) -> InlineKeyboardMarkup {
     let mut rows: Vec<Vec<InlineKeyboardButton>> = categories
         .iter()
         .map(|c| {
-            let mark = if user_votes.contains(&c.id) { "✅" } else { "▫️" };
+            // count voted items in this category
+            let items = db::get_items_by_category(conn, c.id).unwrap_or_default();
+            let voted_count = items.iter().filter(|i| user_votes.contains(&i.id)).count();
+            let mark = if voted_count > 0 { format!("✅ {} ({})", c.name, voted_count) } else { format!("▫️ {}", c.name) };
             vec![InlineKeyboardButton::callback(
-                format!("{} {}", mark, c.name),
-                format!("toggle_{}", c.id),
+                mark,
+                format!("category_select_{}", c.id),
             )]
         })
         .collect();
 
     rows.push(vec![InlineKeyboardButton::callback("◀️ Назад", "back_to_city_menu")]);
+
+    InlineKeyboardMarkup::new(rows)
+}
+
+fn build_items_keyboard(
+    items: &[crate::models::Item],
+    user_votes: &[i32],
+) -> InlineKeyboardMarkup {
+    let mut rows: Vec<Vec<InlineKeyboardButton>> = items
+        .iter()
+        .map(|i| {
+            let mark = if user_votes.contains(&i.id) { "✅" } else { "▫️" };
+            vec![InlineKeyboardButton::callback(
+                format!("{} {}", mark, i.name),
+                format!("toggle_item_{}", i.id),
+            )]
+        })
+        .collect();
+
+    rows.push(vec![InlineKeyboardButton::callback("◀️ Назад", "category_list")]);
 
     InlineKeyboardMarkup::new(rows)
 }
