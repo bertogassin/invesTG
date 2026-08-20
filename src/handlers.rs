@@ -1,7 +1,8 @@
 use crate::db;
-use crate::models::*;
 use crate::utils;
+use anyhow::Result;
 use log::*;
+use teloxide::utils::command::BotCommands;
 use teloxide::{
     payloads::SendMessageSetters,
     prelude::*,
@@ -28,8 +29,8 @@ pub async fn handle_command(
     bot: Bot,
     msg: Message,
     cmd: Command,
-) -> ResponseResult<()> {
-    let user_id = msg.from.unwrap().id.0 as i64;
+) -> Result<()> {
+    let user_id = msg.from.as_ref().unwrap().id.0 as i64;
 
     match cmd {
         Command::Start => {
@@ -38,12 +39,12 @@ pub async fn handle_command(
         Command::Cancel => {
             let conn = db::get_db().map_err(|e| {
                 error!("DB error: {}", e);
-                ResponseError::Other(Box::new(e))
+                e
             })?;
 
             let mut session = db::get_user_session(&conn, user_id).map_err(|e| {
                 error!("Session error: {}", e);
-                ResponseError::Other(Box::new(e))
+                e
             })?;
 
             session.current_state = "start".to_string();
@@ -54,7 +55,7 @@ pub async fn handle_command(
 
             db::update_user_session(&conn, &session).map_err(|e| {
                 error!("Session update error: {}", e);
-                ResponseError::Other(Box::new(e))
+                e
             })?;
 
             bot.send_message(msg.chat.id, "❌ Operation cancelled. Use /start to begin again.")
@@ -69,17 +70,17 @@ pub async fn handle_command(
 
             let conn = db::get_db().map_err(|e| {
                 error!("DB error: {}", e);
-                ResponseError::Other(Box::new(e))
+                e
             })?;
 
             let vote_count = db::get_vote_count(&conn).map_err(|e| {
                 error!("Vote count error: {}", e);
-                ResponseError::Other(Box::new(e))
+                e
             })?;
 
             let stats = format!("📊 **Voting Statistics**\n\nTotal votes: {}", vote_count);
             bot.send_message(msg.chat.id, stats)
-                .parse_mode(ParseMode::Markdown)
+                .parse_mode(ParseMode::Html)
                 .await?;
         }
         Command::Help => {
@@ -94,7 +95,7 @@ pub async fn handle_command(
 pub async fn handle_callback(
     bot: Bot,
     q: CallbackQuery,
-) -> ResponseResult<()> {
+) -> Result<()> {
     let user_id = q.from.id.0 as i64;
     let callback_data = q.data.unwrap_or_default();
 
@@ -102,12 +103,12 @@ pub async fn handle_callback(
 
     let conn = db::get_db().map_err(|e| {
         error!("DB error: {}", e);
-        ResponseError::Other(Box::new(e))
+        e
     })?;
 
     let mut session = db::get_user_session(&conn, user_id).map_err(|e| {
         error!("Session error: {}", e);
-        ResponseError::Other(Box::new(e))
+        e
     })?;
 
     if callback_data.starts_with("continent_") {
@@ -121,12 +122,12 @@ pub async fn handle_callback(
         session.current_state = "country".to_string();
         db::update_user_session(&conn, &session).map_err(|e| {
             error!("Session update error: {}", e);
-            ResponseError::Other(Box::new(e))
+            e
         })?;
 
         let countries = db::get_countries_by_continent(&conn, continent_id).map_err(|e| {
             error!("Countries fetch error: {}", e);
-            ResponseError::Other(Box::new(e))
+            e
         })?;
 
         let keyboard = InlineKeyboardMarkup::new(
@@ -141,7 +142,7 @@ pub async fn handle_callback(
                 .collect::<Vec<_>>(),
         );
 
-        if let Some(msg_id) = q.message.as_ref().map(|m| m.id) {
+        if let Some(msg_id) = q.message.as_ref().map(|m| m.id()) {
             let chat_id = q.from.id;
             bot.edit_message_text(ChatId(chat_id.0 as i64), msg_id, "🌍 Select a country:")
                 .reply_markup(keyboard)
@@ -158,12 +159,12 @@ pub async fn handle_callback(
         session.current_state = "city".to_string();
         db::update_user_session(&conn, &session).map_err(|e| {
             error!("Session update error: {}", e);
-            ResponseError::Other(Box::new(e))
+            e
         })?;
 
         let cities = db::get_cities_by_country(&conn, country_id).map_err(|e| {
             error!("Cities fetch error: {}", e);
-            ResponseError::Other(Box::new(e))
+            e
         })?;
 
         let keyboard = InlineKeyboardMarkup::new(
@@ -178,7 +179,7 @@ pub async fn handle_callback(
                 .collect::<Vec<_>>(),
         );
 
-        if let Some(msg_id) = q.message.as_ref().map(|m| m.id) {
+        if let Some(msg_id) = q.message.as_ref().map(|m| m.id()) {
             let chat_id = q.from.id;
             bot.edit_message_text(ChatId(chat_id.0 as i64), msg_id, "🏙️ Select a city:")
                 .reply_markup(keyboard)
@@ -195,12 +196,12 @@ pub async fn handle_callback(
         session.current_state = "category".to_string();
         db::update_user_session(&conn, &session).map_err(|e| {
             error!("Session update error: {}", e);
-            ResponseError::Other(Box::new(e))
+            e
         })?;
 
         let categories = db::get_categories(&conn).map_err(|e| {
             error!("Categories fetch error: {}", e);
-            ResponseError::Other(Box::new(e))
+            e
         })?;
 
         let keyboard = InlineKeyboardMarkup::new(
@@ -215,7 +216,7 @@ pub async fn handle_callback(
                 .collect::<Vec<_>>(),
         );
 
-        if let Some(msg_id) = q.message.as_ref().map(|m| m.id) {
+        if let Some(msg_id) = q.message.as_ref().map(|m| m.id()) {
             let chat_id = q.from.id;
             bot.edit_message_text(
                 ChatId(chat_id.0 as i64),
@@ -236,7 +237,7 @@ pub async fn handle_callback(
         session.current_state = "vote".to_string();
         db::update_user_session(&conn, &session).map_err(|e| {
             error!("Session update error: {}", e);
-            ResponseError::Other(Box::new(e))
+            e
         })?;
 
         let keyboard = InlineKeyboardMarkup::new(vec![
@@ -251,7 +252,7 @@ pub async fn handle_callback(
             ],
         ]);
 
-        if let Some(msg_id) = q.message.as_ref().map(|m| m.id) {
+        if let Some(msg_id) = q.message.as_ref().map(|m| m.id()) {
             let chat_id = q.from.id;
             bot.edit_message_text(ChatId(chat_id.0 as i64), msg_id, "⭐ Rate (1-5 stars):")
                 .reply_markup(keyboard)
@@ -267,7 +268,7 @@ pub async fn handle_callback(
         if let (Some(city_id), Some(category_id)) = (session.current_city_id, session.current_category_id) {
             db::save_vote(&conn, user_id, city_id, category_id, rating).map_err(|e| {
                 error!("Vote save error: {}", e);
-                ResponseError::Other(Box::new(e))
+                e
             })?;
 
             info!(
@@ -283,10 +284,10 @@ pub async fn handle_callback(
             session.current_category_id = None;
             db::update_user_session(&conn, &session).map_err(|e| {
                 error!("Session update error: {}", e);
-                ResponseError::Other(Box::new(e))
+                e
             })?;
 
-            if let Some(msg_id) = q.message.as_ref().map(|m| m.id) {
+            if let Some(msg_id) = q.message.as_ref().map(|m| m.id()) {
                 let chat_id = q.from.id;
                 bot.edit_message_text(
                     ChatId(chat_id.0 as i64),
@@ -298,7 +299,7 @@ pub async fn handle_callback(
         }
     }
 
-    bot.answer_callback_query(&q.id).await?;
+    bot.answer_callback_query(q.id).await?;
 
     Ok(())
 }
@@ -306,7 +307,7 @@ pub async fn handle_callback(
 pub async fn handle_message(
     bot: Bot,
     msg: Message,
-) -> ResponseResult<()> {
+) -> Result<()> {
     if let Some(text) = msg.text() {
         if !text.starts_with('/') {
             bot.send_message(msg.chat.id, "👋 Hello! Use /start to begin or /help for commands.")
@@ -321,26 +322,26 @@ async fn show_continents(
     bot: &Bot,
     msg: Message,
     user_id: i64,
-) -> ResponseResult<()> {
+) -> Result<()> {
     let conn = db::get_db().map_err(|e| {
         error!("DB error: {}", e);
-        ResponseError::Other(Box::new(e))
+        e
     })?;
 
     let continents = db::get_continents(&conn).map_err(|e| {
         error!("Continents fetch error: {}", e);
-        ResponseError::Other(Box::new(e))
+        e
     })?;
 
     let mut session = db::get_user_session(&conn, user_id).map_err(|e| {
         error!("Session error: {}", e);
-        ResponseError::Other(Box::new(e))
+        e
     })?;
 
     session.current_state = "continent".to_string();
     db::update_user_session(&conn, &session).map_err(|e| {
         error!("Session update error: {}", e);
-        ResponseError::Other(Box::new(e))
+        e
     })?;
 
     let keyboard = InlineKeyboardMarkup::new(
