@@ -6,7 +6,7 @@ Interactive Telegram bot built with Rust, teloxide, and SQLite for collecting in
 
 - 🤖 Async Telegram bot using `teloxide` framework
 - 💾 SQLite database with pre-populated geography data
-- 🗺️ Interactive flow: `/start` → Continent → Country → City → Category → Vote
+- 🗺️ Interactive flow: `/start` → Континент → Страна → Город → Меню города → Категория → Пункты (✅/▫️)
 - 🔐 Admin controls via environment variables
 - 📊 Vote tracking and statistics
 
@@ -66,9 +66,9 @@ cargo run --release
 2. Bot displays continent buttons (inline keyboard)
 3. User selects continent → shows countries
 4. User selects country → shows cities
-5. User selects city → shows categories
-6. User selects category → can submit vote (1-5 stars)
-7. Vote saved to SQLite database
+5. User selects city → shows city menu
+6. User selects category → sees item list with toggle marks (✅/▫️)
+7. Vote toggle saved to SQLite database per item
 
 ## Database
 
@@ -76,8 +76,8 @@ Database is automatically initialized on first run with seed data:
 - **5 Continents**: Africa, Asia, Europe, North America, South America
 - **20+ Countries**: Distributed across continents
 - **50+ Cities**: Distributed across countries
-- **10+ Categories**: Various investment sectors
-- **Votes Table**: Tracks all user votes with timestamps
+- **Categories + Items**: Categories with item-level voting options
+- **Votes Table**: Tracks toggle votes by `(user_id, city_id, item_id)`
 - **User Sessions**: Maintains user state during navigation
 
 ## Project Structure

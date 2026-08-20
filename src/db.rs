@@ -42,15 +42,23 @@ pub fn init_db() -> Result<()> {
             description TEXT
         );
 
+        CREATE TABLE IF NOT EXISTS items (
+            id INTEGER PRIMARY KEY,
+            category_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            FOREIGN KEY(category_id) REFERENCES categories(id),
+            UNIQUE(category_id, name)
+        );
+
         CREATE TABLE IF NOT EXISTS votes (
             id INTEGER PRIMARY KEY,
             user_id INTEGER NOT NULL,
             city_id INTEGER NOT NULL,
-            category_id INTEGER NOT NULL,
+            item_id INTEGER NOT NULL,
             timestamp TEXT NOT NULL,
             FOREIGN KEY(city_id) REFERENCES cities(id),
-            FOREIGN KEY(category_id) REFERENCES categories(id),
-            UNIQUE(user_id, city_id, category_id)
+            FOREIGN KEY(item_id) REFERENCES items(id),
+            UNIQUE(user_id, city_id, item_id)
         );
 
         CREATE TABLE IF NOT EXISTS user_sessions (
@@ -66,30 +74,25 @@ pub fn init_db() -> Result<()> {
     "#,
     )?;
 
+    migrate_votes_table(&conn)?;
+
     // Seed data if tables are empty
-    let continent_count: i32 = conn.query_row(
-        "SELECT COUNT(*) FROM continents",
-        [],
-        |row| row.get(0),
-    )?;
+    let continent_count: i32 =
+        conn.query_row("SELECT COUNT(*) FROM continents", [], |row| row.get(0))?;
 
     if continent_count == 0 {
         seed_data(&conn)?;
         info!("Database seeded with initial data");
     }
 
+    seed_categories_and_items(&conn)?;
+
     Ok(())
 }
 
 fn seed_data(conn: &Connection) -> Result<()> {
     // Continents (Russian)
-    let continents = vec![
-        "Европа",
-        "Азия",
-        "Африка",
-        "Америка",
-        "Океания",
-    ];
+    let continents = vec!["Европа", "Азия", "Африка", "Америка", "Океания"];
 
     for continent in &continents {
         conn.execute(
@@ -153,16 +156,17 @@ fn seed_data(conn: &Connection) -> Result<()> {
         )?;
     }
 
-    // Categories (Russian)
+    seed_categories_and_items(conn)?;
+    Ok(())
+}
+
+fn seed_categories_and_items(conn: &Connection) -> Result<()> {
     let categories = vec![
-        ("Профессии", Some("Рынок труда и профессии")),
-        ("Финансы", Some("Банки и финансовые услуги")),
-        ("Команда", Some("Командная работа и нетворкинг")),
-        ("Жильё", Some("Недвижимость и аренда")),
-        ("Инфраструктура", Some("Транспорт и инфраструктура")),
-        ("Образование", Some("Образование и наука")),
-        ("Здравоохранение", Some("Медицина и здоровье")),
-        ("Развлечения", Some("Культура и досуг")),
+        ("Профессии", Some("Специалисты и рабочие профессии")),
+        ("Финансы", Some("Финансовые возможности")),
+        ("Команда", Some("Поиск команды и партнёров")),
+        ("Жильё", Some("Аренда и помещения")),
+        ("Транспорт", Some("Транспорт и перевозки")),
     ];
 
     for (category, desc) in &categories {
@@ -172,18 +176,120 @@ fn seed_data(conn: &Connection) -> Result<()> {
         )?;
     }
 
+    let items = vec![
+        (
+            "Профессии",
+            vec![
+                "Водитель",
+                "Охранник",
+                "Электрик",
+                "Сантехник",
+                "Программист",
+                "Повар",
+                "Строитель",
+            ],
+        ),
+        (
+            "Финансы",
+            vec!["Капитал до 1000€", "1000–5000€", "5000–10000€", "10000€+"],
+        ),
+        (
+            "Команда",
+            vec!["Готов собрать команду", "Ищу единомышленников"],
+        ),
+        (
+            "Жильё",
+            vec!["Сдаю квартиру", "Ищу квартиру", "Есть помещение"],
+        ),
+        (
+            "Транспорт",
+            vec!["Есть авто", "Ищу водителя", "Грузоперевозки"],
+        ),
+    ];
+
+    for (category_name, category_items) in &items {
+        let category_id: i32 = conn.query_row(
+            "SELECT id FROM categories WHERE name = ?1",
+            params![category_name],
+            |row| row.get(0),
+        )?;
+
+        for item_name in category_items {
+            conn.execute(
+                "INSERT OR IGNORE INTO items (category_id, name) VALUES (?1, ?2)",
+                params![category_id, item_name],
+            )?;
+        }
+    }
+
+    Ok(())
+}
+
+fn migrate_votes_table(conn: &Connection) -> Result<()> {
+    let votes_exists: Option<String> = conn
+        .query_row(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'votes'",
+            [],
+            |row| row.get(0),
+        )
+        .optional()?;
+
+    if votes_exists.is_none() {
+        return Ok(());
+    }
+
+    let mut stmt = conn.prepare("PRAGMA table_info(votes)")?;
+    let columns = stmt
+        .query_map([], |row| row.get::<_, String>(1))?
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let has_item_id = columns.iter().any(|c| c == "item_id");
+    let has_category_id = columns.iter().any(|c| c == "category_id");
+    let has_rating = columns.iter().any(|c| c == "rating");
+    let needs_recreate = !has_item_id || has_category_id || has_rating;
+
+    if !needs_recreate {
+        return Ok(());
+    }
+
+    conn.execute("ALTER TABLE votes RENAME TO votes_old", [])?;
+    conn.execute_batch(
+        r#"
+        CREATE TABLE votes (
+            id INTEGER PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            city_id INTEGER NOT NULL,
+            item_id INTEGER NOT NULL,
+            timestamp TEXT NOT NULL,
+            FOREIGN KEY(city_id) REFERENCES cities(id),
+            FOREIGN KEY(item_id) REFERENCES items(id),
+            UNIQUE(user_id, city_id, item_id)
+        );
+    "#,
+    )?;
+
+    if has_item_id {
+        conn.execute(
+            "INSERT INTO votes (id, user_id, city_id, item_id, timestamp)
+             SELECT id, user_id, city_id, item_id, timestamp FROM votes_old",
+            [],
+        )?;
+    }
+
+    conn.execute("DROP TABLE votes_old", [])?;
     Ok(())
 }
 
 pub fn get_continents(conn: &Connection) -> Result<Vec<Continent>> {
     let mut stmt = conn.prepare("SELECT id, name FROM continents ORDER BY name")?;
-    let continents = stmt.query_map([], |row| {
-        Ok(Continent {
-            id: row.get(0)?,
-            name: row.get(1)?,
-        })
-    })?
-    .collect::<Result<Vec<_>, _>>()?;
+    let continents = stmt
+        .query_map([], |row| {
+            Ok(Continent {
+                id: row.get(0)?,
+                name: row.get(1)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
     Ok(continents)
 }
 
@@ -191,29 +297,30 @@ pub fn get_countries_by_continent(conn: &Connection, continent_id: i32) -> Resul
     let mut stmt = conn.prepare(
         "SELECT id, name, continent_id FROM countries WHERE continent_id = ?1 ORDER BY name",
     )?;
-    let countries = stmt.query_map(params![continent_id], |row| {
-        Ok(Country {
-            id: row.get(0)?,
-            name: row.get(1)?,
-            continent_id: row.get(2)?,
-        })
-    })?
-    .collect::<Result<Vec<_>, _>>()?;
+    let countries = stmt
+        .query_map(params![continent_id], |row| {
+            Ok(Country {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                continent_id: row.get(2)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
     Ok(countries)
 }
 
 pub fn get_cities_by_country(conn: &Connection, country_id: i32) -> Result<Vec<City>> {
-    let mut stmt = conn.prepare(
-        "SELECT id, name, country_id FROM cities WHERE country_id = ?1 ORDER BY name",
-    )?;
-    let cities = stmt.query_map(params![country_id], |row| {
-        Ok(City {
-            id: row.get(0)?,
-            name: row.get(1)?,
-            country_id: row.get(2)?,
-        })
-    })?
-    .collect::<Result<Vec<_>, _>>()?;
+    let mut stmt = conn
+        .prepare("SELECT id, name, country_id FROM cities WHERE country_id = ?1 ORDER BY name")?;
+    let cities = stmt
+        .query_map(params![country_id], |row| {
+            Ok(City {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                country_id: row.get(2)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
     Ok(cities)
 }
 
@@ -227,16 +334,46 @@ pub fn get_city_name(conn: &Connection, city_id: i32) -> Result<String> {
 }
 
 pub fn get_categories(conn: &Connection) -> Result<Vec<Category>> {
-    let mut stmt = conn.prepare("SELECT id, name, description FROM categories ORDER BY name")?;
-    let categories = stmt.query_map([], |row| {
-        Ok(Category {
-            id: row.get(0)?,
-            name: row.get(1)?,
-            description: row.get(2)?,
-        })
-    })?
-    .collect::<Result<Vec<_>, _>>()?;
+    let mut stmt = conn.prepare(
+        "SELECT c.id, c.name, c.description
+         FROM categories c
+         WHERE EXISTS (SELECT 1 FROM items i WHERE i.category_id = c.id)
+         ORDER BY c.name",
+    )?;
+    let categories = stmt
+        .query_map([], |row| {
+            Ok(Category {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                description: row.get(2)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
     Ok(categories)
+}
+
+pub fn get_items_by_category(conn: &Connection, category_id: i32) -> Result<Vec<Item>> {
+    let mut stmt = conn
+        .prepare("SELECT id, category_id, name FROM items WHERE category_id = ?1 ORDER BY name")?;
+    let items = stmt
+        .query_map(params![category_id], |row| {
+            Ok(Item {
+                id: row.get(0)?,
+                category_id: row.get(1)?,
+                name: row.get(2)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(items)
+}
+
+pub fn get_category_name(conn: &Connection, category_id: i32) -> Result<String> {
+    let name: String = conn.query_row(
+        "SELECT name FROM categories WHERE id = ?1",
+        params![category_id],
+        |row| row.get(0),
+    )?;
+    Ok(name)
 }
 
 pub fn get_user_session(conn: &Connection, user_id: i64) -> Result<UserSession> {
@@ -281,43 +418,32 @@ pub fn update_user_session(conn: &Connection, session: &UserSession) -> Result<(
     Ok(())
 }
 
-pub fn toggle_vote(
-    conn: &Connection,
-    user_id: i64,
-    city_id: i32,
-    category_id: i32,
-) -> Result<bool> {
+pub fn toggle_vote(conn: &Connection, user_id: i64, city_id: i32, item_id: i32) -> Result<bool> {
     let existing: Option<i32> = conn
         .query_row(
-            "SELECT id FROM votes WHERE user_id = ?1 AND city_id = ?2 AND category_id = ?3",
-            params![user_id, city_id, category_id],
+            "SELECT id FROM votes WHERE user_id = ?1 AND city_id = ?2 AND item_id = ?3",
+            params![user_id, city_id, item_id],
             |row| row.get(0),
         )
         .optional()?;
 
     if existing.is_some() {
         conn.execute(
-            "DELETE FROM votes WHERE user_id = ?1 AND city_id = ?2 AND category_id = ?3",
-            params![user_id, city_id, category_id],
+            "DELETE FROM votes WHERE user_id = ?1 AND city_id = ?2 AND item_id = ?3",
+            params![user_id, city_id, item_id],
         )?;
         Ok(false)
     } else {
         conn.execute(
-            "INSERT INTO votes (user_id, city_id, category_id, timestamp) VALUES (?1, ?2, ?3, ?4)",
-            params![user_id, city_id, category_id, Utc::now().to_rfc3339()],
+            "INSERT INTO votes (user_id, city_id, item_id, timestamp) VALUES (?1, ?2, ?3, ?4)",
+            params![user_id, city_id, item_id, Utc::now().to_rfc3339()],
         )?;
         Ok(true)
     }
 }
 
-pub fn get_user_votes_for_city(
-    conn: &Connection,
-    user_id: i64,
-    city_id: i32,
-) -> Result<Vec<i32>> {
-    let mut stmt = conn.prepare(
-        "SELECT category_id FROM votes WHERE user_id = ?1 AND city_id = ?2",
-    )?;
+pub fn get_user_votes_for_city(conn: &Connection, user_id: i64, city_id: i32) -> Result<Vec<i32>> {
+    let mut stmt = conn.prepare("SELECT item_id FROM votes WHERE user_id = ?1 AND city_id = ?2")?;
     let ids = stmt
         .query_map(params![user_id, city_id], |row| row.get(0))?
         .collect::<Result<Vec<_>, _>>()?;
@@ -331,10 +457,39 @@ pub fn get_vote_count(conn: &Connection) -> Result<i32> {
 
 pub fn get_city_stats(conn: &Connection, city_id: i32) -> Result<Vec<(String, i32)>> {
     let mut stmt = conn.prepare(
-        "SELECT c.name, COUNT(v.id) FROM categories c LEFT JOIN votes v ON c.id = v.category_id AND v.city_id = ?1 GROUP BY c.id ORDER BY c.name",
+        "SELECT c.name, COUNT(v.id)
+         FROM categories c
+         LEFT JOIN items i ON i.category_id = c.id
+         LEFT JOIN votes v ON v.item_id = i.id AND v.city_id = ?1
+         WHERE EXISTS (SELECT 1 FROM items i2 WHERE i2.category_id = c.id)
+         GROUP BY c.id
+         ORDER BY c.name",
     )?;
     let rows = stmt
-        .query_map(params![city_id], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i32>(1)?)))?
+        .query_map(params![city_id], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, i32>(1)?))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
+pub fn get_user_marked_items_for_city(
+    conn: &Connection,
+    user_id: i64,
+    city_id: i32,
+) -> Result<Vec<(String, String)>> {
+    let mut stmt = conn.prepare(
+        "SELECT c.name, i.name
+         FROM votes v
+         JOIN items i ON i.id = v.item_id
+         JOIN categories c ON c.id = i.category_id
+         WHERE v.user_id = ?1 AND v.city_id = ?2
+         ORDER BY c.name, i.name",
+    )?;
+    let rows = stmt
+        .query_map(params![user_id, city_id], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?
         .collect::<Result<Vec<_>, _>>()?;
     Ok(rows)
 }
