@@ -1,0 +1,703 @@
+use axum::{
+    extract::{Path, Query, State},
+    response::Html,
+    routing::{get, post},
+    Json, Router,
+};
+use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
+use std::sync::Mutex;
+use rusqlite::{params, Connection};
+use std::net::SocketAddr;
+use tower_http::services::ServeDir;
+
+fn world() -> BTreeMap<&'static str, BTreeMap<&'static str, Vec<&'static str>>> {
+    let mut w = BTreeMap::new();
+
+    let mut eu = BTreeMap::new();
+    eu.insert("Франция", vec!["Париж", "Марсель", "Лион", "Тулуза", "Ницца", "Нант", "Монпелье", "Страсбург", "Бордо", "Лилль", "Ренн", "Реимс"]);
+    eu.insert("Германия", vec!["Берлин", "Гамбург", "Мюнхен", "Кёльн", "Франкфурт", "Штутгарт", "Дюссельдорф", "Лейпциг", "Дортмунд", "Эссен", "Бремен", "Дрезден"]);
+    eu.insert("Великобритания", vec!["Лондон", "Бирмингем", "Манчестер", "Глазго", "Ливерпуль", "Бристоль", "Лидс", "Эдинбург", "Шеффилд", "Кардифф"]);
+    eu.insert("Италия", vec!["Рим", "Милан", "Неаполь", "Турин", "Палермо", "Генуя", "Болонья", "Флоренция", "Бари", "Катания"]);
+    eu.insert("Испания", vec!["Мадрид", "Барселона", "Валенсия", "Севилья", "Сарагоса", "Малага", "Бильбао", "Мурсия", "Пальма"]);
+    eu.insert("Польша", vec!["Варшава", "Краков", "Лодзь", "Вроцлав", "Познань", "Гданьск", "Щецин", "Быдгощ", "Люблин"]);
+    eu.insert("Нидерланды", vec!["Амстердам", "Роттердам", "Гаага", "Утрехт", "Эйндховен", "Гронинген"]);
+    eu.insert("Бельгия", vec!["Брюссель", "Антверпен", "Гент", "Шарлеруа", "Льеж", "Брюгге"]);
+    eu.insert("Австрия", vec!["Вена", "Грац", "Линц", "Зальцбург", "Инсбрук"]);
+    eu.insert("Швейцария", vec!["Цюрих", "Женева", "Базель", "Берн", "Лозанна"]);
+    eu.insert("Португалия", vec!["Лиссабон", "Порту", "Брага", "Коимбра"]);
+    eu.insert("Швеция", vec!["Стокгольм", "Гётеборг", "Мальмё", "Уппсала"]);
+    eu.insert("Норвегия", vec!["Осло", "Берген", "Тронхейм", "Ставангер"]);
+    eu.insert("Дания", vec!["Копенгаген", "Орхус", "Оденсе"]);
+    eu.insert("Финляндия", vec!["Хельсинки", "Эспоо", "Тампере", "Турку"]);
+    eu.insert("Чехия", vec!["Прага", "Брно", "Острава", "Пльзень"]);
+    eu.insert("Румыния", vec!["Бухарест", "Клуж-Напока", "Тимишоара", "Яссы", "Констанца"]);
+    eu.insert("Греция", vec!["Афины", "Салоники", "Патра", "Ираклион"]);
+    eu.insert("Венгрия", vec!["Будапешт", "Дебрецен", "Сегед", "Мишкольц"]);
+    eu.insert("Ирландия", vec!["Дублин", "Корк", "Лимерик", "Голуэй"]);
+    eu.insert("Украина", vec!["Киев", "Харьков", "Одесса", "Днепр", "Львов"]);
+    eu.insert("Беларусь", vec!["Минск", "Гомель", "Могилёв", "Витебск", "Гродно"]);
+    eu.insert("Молдова", vec!["Кишинёв", "Бельцы", "Тирасполь"]);
+    eu.insert("Сербия", vec!["Белград", "Нови-Сад", "Ниш"]);
+    eu.insert("Хорватия", vec!["Загреб", "Сплит", "Риека"]);
+    eu.insert("Болгария", vec!["София", "Пловдив", "Варна", "Бургас"]);
+    w.insert("Европа", eu);
+
+    let mut kau = BTreeMap::new();
+    kau.insert("Россия", vec!["Москва", "Санкт-Петербург", "Новосибирск", "Екатеринбург", "Казань", "Нижний Новгород", "Челябинск", "Самара", "Ростов-на-Дону", "Уфа", "Краснодар", "Воронеж", "Пермь", "Волгоград", "Красноярск", "Тюмень", "Сочи", "Астрахань"]);
+    kau.insert("Грузия", vec!["Тбилиси", "Батуми", "Кутаиси"]);
+    kau.insert("Армения", vec!["Ереван", "Гюмри", "Ванадзор"]);
+    kau.insert("Азербайджан", vec!["Баку", "Гянджа", "Сумгайыт"]);
+    kau.insert("Чечня", vec!["Грозный"]);
+    kau.insert("Дагестан", vec!["Махачкала", "Дербент", "Хасавюрт"]);
+    kau.insert("Ингушетия", vec!["Магас", "Назрань"]);
+    kau.insert("Северная Осетия", vec!["Владикавказ"]);
+    kau.insert("Кабардино-Балкария", vec!["Нальчик"]);
+    kau.insert("Карачаево-Черкесия", vec!["Черкесск"]);
+    kau.insert("Адыгея", vec!["Майкоп"]);
+    kau.insert("Калмыкия", vec!["Элиста"]);
+    w.insert("Кавказ и РФ", kau);
+
+    let mut as_ = BTreeMap::new();
+    as_.insert("Турция", vec!["Стамбул", "Анкара", "Измир", "Бурса", "Анталья", "Адана"]);
+    as_.insert("Казахстан", vec!["Алматы", "Астана", "Шымкент", "Караганда"]);
+    as_.insert("Узбекистан", vec!["Ташкент", "Самарканд", "Наманган", "Бухара"]);
+    as_.insert("Кыргызстан", vec!["Бишкек", "Ош"]);
+    as_.insert("Таджикистан", vec!["Душанбе", "Худжанд"]);
+    as_.insert("ОАЭ", vec!["Дубай", "Абу-Даби", "Шарджа"]);
+    as_.insert("Таиланд", vec!["Бангкок", "Чиангмай", "Пхукет"]);
+    as_.insert("Вьетнам", vec!["Ханой", "Хошимин", "Дананг"]);
+    as_.insert("Индия", vec!["Дели", "Мумбаи", "Бангалор", "Ченнаи", "Хайдарабад"]);
+    as_.insert("Китай", vec!["Пекин", "Шанхай", "Гуанчжоу", "Шэньчжэнь"]);
+    as_.insert("Япония", vec!["Токио", "Осака", "Иокогама", "Нагоя"]);
+    as_.insert("Южная Корея", vec!["Сеул", "Пусан", "Инчхон"]);
+    w.insert("Азия", as_);
+
+    let mut am = BTreeMap::new();
+    am.insert("США", vec!["Нью-Йорк", "Лос-Анджелес", "Чикаго", "Хьюстон", "Майами", "Сан-Франциско", "Сиэтл"]);
+    am.insert("Канада", vec!["Торонто", "Монреаль", "Ванкувер", "Калгари", "Оттава"]);
+    am.insert("Мексика", vec!["Мехико", "Гвадалахара", "Монтеррей", "Канкун"]);
+    am.insert("Бразилия", vec!["Сан-Паулу", "Рио-де-Жанейро", "Бразилиа", "Салвадор"]);
+    am.insert("Аргентина", vec!["Буэнос-Айрес", "Кордова", "Росарио"]);
+    am.insert("Колумбия", vec!["Богота", "Медельин", "Кали"]);
+    am.insert("Чили", vec!["Сантьяго", "Вальпараисо"]);
+    w.insert("Америка", am);
+
+    let mut oth = BTreeMap::new();
+    oth.insert("Египет", vec!["Каир", "Александрия", "Гиза"]);
+    oth.insert("Марокко", vec!["Касабланка", "Рабат", "Марракеш"]);
+    oth.insert("ЮАР", vec!["Йоханнесбург", "Кейптаун", "Дурбан"]);
+    oth.insert("Австралия", vec!["Сидней", "Мельбурн", "Брисбен", "Перт"]);
+    oth.insert("Новая Зеландия", vec!["Окленд", "Веллингтон"]);
+    w.insert("Другие", oth);
+
+    w
+}
+
+fn categories() -> Vec<(&'static str, &'static str, Vec<&'static str>)> {
+    vec![
+        ("Профессии", "/static/icons/work.svg", vec!["Водитель", "Охранник", "Электрик", "Сантехник", "Строитель", "Повар", "Программист", "Дизайнер", "Маркетолог", "Переводчик", "Юрист", "Врач", "Медсестра", "Учитель", "Парикмахер", "Сварщик", "Механик", "Логист", "Продавец", "Администратор"]),
+        ("Бизнес", "/static/icons/biz.svg", vec!["Есть бизнес", "Ищу партнёра", "Готов открыть точку", "Франшиза", "Онлайн-проект"]),
+        ("Финансы", "/static/icons/money.svg", vec!["До 1 000 €", "1–5 000 €", "5–10 000 €", "10 000 €+", "Готов инвестировать", "Ищу инвестора"]),
+        ("Жильё", "/static/icons/home.svg", vec!["Сдаю жильё", "Сниму жильё", "Комната", "Квартира", "Дом", "Посуточно / туризм"]),
+        ("Транспорт", "/static/icons/car.svg", vec!["Легковой", "Грузовой", "Микроавтобус", "Мото", "Готов возить", "Ищу водителя"]),
+        ("Команда", "/static/icons/team.svg", vec!["Готов в команду", "Собираю команду", "Ищу единомышленников", "Удалённо", "На месте"]),
+        ("Услуги", "/static/icons/service.svg", vec!["Ремонт", "Уборка", "Доставка", "Красота", "IT-помощь", "Юр. консультация"]),
+    ]
+}
+
+
+
+#[derive(Clone)]
+struct AppState {
+    db: std::sync::Arc<Mutex<Connection>>,
+}
+
+fn db_open() -> Connection {
+    let conn = Connection::open("data/votes.db").expect("db open");
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS votes (
+            client_id TEXT NOT NULL,
+            city TEXT NOT NULL,
+            category TEXT NOT NULL,
+            item TEXT NOT NULL,
+            PRIMARY KEY (client_id, city, category, item)
+        );
+        CREATE INDEX IF NOT EXISTS idx_votes_city ON votes(city);"
+    ).ok();
+    conn
+}
+
+
+fn webapp_user_id(init_data: &str, bot_token: &str) -> Option<i64> {
+    use hmac::{Hmac, Mac};
+    use sha2::Sha256;
+    type HmacSha256 = Hmac<Sha256>;
+
+    if init_data.is_empty() || bot_token.is_empty() {
+        return None;
+    }
+    let mut hash = None;
+    let mut pairs: Vec<(String, String)> = Vec::new();
+    for part in init_data.split('&') {
+        let mut kv = part.splitn(2, '=');
+        let k = kv.next()?.to_string();
+        let v = urlencoding_decode(kv.next().unwrap_or(""));
+        if k == "hash" {
+            hash = Some(v);
+        } else {
+            pairs.push((k, v));
+        }
+    }
+    let hash = hash?;
+    pairs.sort_by(|a, b| a.0.cmp(&b.0));
+    let data_check = pairs
+        .iter()
+        .map(|(k, v)| format!("{k}={v}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let mut secret = HmacSha256::new_from_slice(b"WebAppData").ok()?;
+    secret.update(bot_token.as_bytes());
+    let secret_key = secret.finalize().into_bytes();
+
+    let mut mac = HmacSha256::new_from_slice(&secret_key).ok()?;
+    mac.update(data_check.as_bytes());
+    let expect = mac.finalize().into_bytes();
+    let expect_hex = hex::encode(expect);
+    if expect_hex != hash {
+        return None;
+    }
+    // parse user json
+    let user_v = pairs.into_iter().find(|(k, _)| k == "user").map(|(_, v)| v)?;
+    let u: serde_json::Value = serde_json::from_str(&user_v).ok()?;
+    u.get("id").and_then(|x| x.as_i64())
+}
+
+fn urlencoding_decode(s: &str) -> String {
+    // minimal decode
+    let mut out = String::new();
+    let b = s.as_bytes();
+    let mut i = 0;
+    while i < b.len() {
+        if b[i] == b'%' && i + 2 < b.len() {
+            let h = std::str::from_utf8(&b[i+1..i+3]).ok();
+            if let Some(h) = h {
+                if let Ok(v) = u8::from_str_radix(h, 16) {
+                    out.push(v as char);
+                    i += 3;
+                    continue;
+                }
+            }
+        }
+        if b[i] == b'+' {
+            out.push(' ');
+        } else {
+            out.push(b[i] as char);
+        }
+        i += 1;
+    }
+    out
+}
+
+fn city_chat(city: &str) -> Option<String> {
+    let data = std::fs::read_to_string("data/city_chats.json").ok()?;
+    let map: std::collections::HashMap<String, String> =
+        serde_json::from_str(&data).ok()?;
+    map.get(city).cloned()
+}
+
+fn shell(title: &str, body: &str) -> Html<String> {
+    Html(format!(
+        r##"<!DOCTYPE html>
+<html lang="ru"><head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<title>{title}</title>
+<script src="https://telegram.org/js/telegram-web-app.js">
+window.rmClient=function(){{
+  try{{
+    var u=window.Telegram&&Telegram.WebApp&&Telegram.WebApp.initDataUnsafe&&Telegram.WebApp.initDataUnsafe.user;
+    if(u&&u.id){{var tid='tg:'+String(u.id);localStorage.setItem('rm_cid',tid);return tid;}}
+  }}catch(e){{}}
+  var id=localStorage.getItem('rm_cid');
+  if(!id){{id='c'+Math.random().toString(36).slice(2)+Date.now().toString(36);localStorage.setItem('rm_cid',id);}}
+  return id;
+}};
+window.rmToggle=function(name,on){{
+  var city=window.__rmCity||''; var cat=window.__rmCat||'';
+  if(!city||!cat) return;
+  var k='rm:'+city+'|'+cat;
+  var arr=[]; try{{arr=JSON.parse(localStorage.getItem(k)||'[]');}}catch(e){{}}
+  if(on){{ if(arr.indexOf(name)<0) arr.push(name); }}
+  else arr=arr.filter(function(x){{return x!==name;}});
+  if(arr.length) localStorage.setItem(k,JSON.stringify(arr)); else localStorage.removeItem(k);
+  try{{
+    fetch('/api/vote',{{method:'POST',headers:{{'Content-Type':'application/json'}},
+      body:JSON.stringify({{
+        client_id:rmClient(),city:city,category:cat,item:name,on:!!on,
+        init_data:(window.Telegram&&Telegram.WebApp&&Telegram.WebApp.initData)||''
+      }})}}).then(function(){{ if(window.rmLoadStats) rmLoadStats(city); }});
+  }}catch(e){{}}
+}};
+window.rmRestore=function(){{
+  var city=window.__rmCity||''; var cat=window.__rmCat||'';
+  if(!city||!cat) return;
+  var k='rm:'+city+'|'+cat; var arr=[];
+  try{{arr=JSON.parse(localStorage.getItem(k)||'[]');}}catch(e){{}}
+  document.querySelectorAll('input[data-item]').forEach(function(el){{
+    el.checked = arr.indexOf(el.dataset.item)>=0;
+  }});
+}};
+
+</script>
+<style>
+*{{box-sizing:border-box}}
+body{{font-family:system-ui,-apple-system,sans-serif;background:#0f1419;color:#fff;margin:0;padding:0 0 32px;line-height:1.45}}
+.wrap{{padding:16px}}
+.top{{position:sticky;top:0;background:#0f1419ee;backdrop-filter:blur(8px);padding:12px 16px;border-bottom:1px solid #243044;z-index:10}}
+.brand{{font-weight:700;font-size:1rem}}
+.nav{{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}}
+.nav a{{font-size:.8rem;color:#6ab2f2;text-decoration:none;padding:6px 10px;background:#1a2332;border-radius:999px}}
+h1{{font-size:1.35rem;margin:8px 0 4px}}
+.sub{{color:#9aa7b8;font-size:.88rem;margin:0 0 14px}}
+a.item,button.item{{display:block;width:100%;text-align:left;background:#1a2332;color:#fff;text-decoration:none;border:0;padding:14px 16px;border-radius:14px;margin:0 0 8px;font-weight:600;font-size:1rem;cursor:pointer}}
+a.item:active,button.item:active{{background:#243044}}
+.chip{{display:inline-block;background:#243044;color:#c5d0e0;padding:4px 10px;border-radius:999px;font-size:.75rem;margin:0 6px 6px 0}}
+.card{{background:#1a2332;border-radius:14px;padding:14px 16px;margin-bottom:12px}}
+.cta{{display:block;text-align:center;background:#2aabee;color:#fff;text-decoration:none;font-weight:700;padding:14px;border-radius:14px;margin:12px 0}}
+.cta2{{display:block;text-align:center;background:#243044;color:#fff;text-decoration:none;font-weight:600;padding:12px;border-radius:14px;margin:8px 0}}
+.search{{width:100%;padding:12px 14px;border-radius:12px;border:1px solid #243044;background:#121820;color:#fff;font-size:1rem;margin-bottom:12px}}
+.row{{display:flex;justify-content:space-between;align-items:center;gap:8px}}
+.muted{{color:#9aa7b8;font-size:.85rem;font-weight:500}}
+.tag{{font-size:.75rem;color:#6ab2f2}}
+img.ic{{vertical-align:middle;margin-right:6px}}
+#city-stats .item{{padding:8px 0;border-bottom:1px solid #1e2d3d}}
+#city-stats .item:last-child{{border-bottom:0}}
+.muted{{color:#8b9bb0;font-size:.85rem}}
+</style></head><body>
+<div class="top">
+  <div class="brand" style="display:flex;align-items:center;gap:8px">
+    <img src="/static/icons/globe.svg" width="20" height="20" alt=""/>
+    <span>Карта ресурсов</span>
+  </div>
+  <div class="nav">
+    <a href="/app/" style="display:inline-flex;align-items:center;gap:6px"><img src="/static/icons/globe.svg" width="14" height="14" alt=""/> Континенты</a>
+    <a href="/app/search" style="display:inline-flex;align-items:center;gap:6px"><img src="/static/icons/search.svg" width="14" height="14" alt=""/> Поиск</a>
+    <a href="/app/me">Мои</a>
+    <a href="/">О проекте</a>
+  </div>
+</div>
+<main>
+{body}
+</main>
+<script>
+const tg=window.Telegram&&window.Telegram.WebApp;
+if(tg){{try{{tg.ready();tg.expand();tg.setHeaderColor('#0f1419');tg.setBackgroundColor('#0f1419');}}catch(e){{}}}}
+</script>
+</body></html>"##
+    ))
+}
+
+async fn home() -> Html<String> {
+    shell(
+        "Карта ресурсов",
+        r#"<h1>Карта людей и ресурсов</h1>
+<p class="sub">Города → профессии, жильё, капитал, команды. Сначала карта — потом проекты.</p>
+<a class="cta" href="/app/">Открыть карту</a>
+<a class="cta2" href="https://t.me/ResursWork_bot">Telegram-бот</a>
+<a class="cta2" href="https://t.me/+3t_HTJT51Hs4ODM0">Главный чат</a>
+<div class="card"><span class="chip">Европа</span><span class="chip">Кавказ</span><span class="chip">Азия</span><span class="chip">Америка</span>
+<p class="muted" style="margin:10px 0 0">Демо для презентации. Голоса и чаты городов подключим к общей базе.</p></div>"#,
+    )
+}
+
+async fn app_root() -> Html<String> {
+    let w = world();
+    let mut items = String::new();
+    for (i, name) in w.keys().enumerate() {
+        let n = w[name].len();
+        items.push_str(&format!(
+            r#"<a class="item" href="/app/{i}"><span class="row"><span>{name}</span><span class="muted">{n} стран</span></span></a>"#
+        ));
+    }
+    shell(
+        "Континенты",
+        &format!(
+            r#"<h1>Континенты</h1>
+<p class="sub">Выберите регион</p>
+<a class="cta2" href="/app/search">🔎 Найти город</a>
+{items}"#
+        ),
+    )
+}
+
+async fn app_continent(Path(ci): Path<usize>) -> Html<String> {
+    let w = world();
+    let Some((cname, countries)) = w.iter().nth(ci) else {
+        return shell("Ошибка", r#"<p>Не найдено</p><a class="cta2" href="/app/">Назад</a>"#);
+    };
+    let mut items = String::new();
+    for (si, (sname, cities)) in countries.iter().enumerate() {
+        items.push_str(&format!(
+            r#"<a class="item" href="/app/{ci}/{si}"><span class="row"><span>{sname}</span><span class="muted">{} городов</span></span></a>"#,
+            cities.len()
+        ));
+    }
+    shell(
+        cname,
+        &format!(
+            r#"<p class="tag"><a href="/app/" style="color:#6ab2f2;text-decoration:none">← Континенты</a></p>
+<h1>{cname}</h1>
+<p class="sub">Страны</p>
+{items}"#
+        ),
+    )
+}
+
+async fn app_country(Path((ci, si)): Path<(usize, usize)>) -> Html<String> {
+    let w = world();
+    let Some((cname, countries)) = w.iter().nth(ci) else {
+        return shell("Ошибка", r#"<a class="cta2" href="/app/">Назад</a>"#);
+    };
+    let Some((sname, cities)) = countries.iter().nth(si) else {
+        return shell("Ошибка", &format!(r#"<a class="cta2" href="/app/{ci}">Назад</a>"#));
+    };
+    let mut items = String::new();
+    for (zi, city) in cities.iter().enumerate() {
+        items.push_str(&format!(
+            r#"<a class="item" href="/app/{ci}/{si}/{zi}"><img class="ic" src="/static/icons/pin.svg" width="18" height="18" alt=""/> {city}</a>"#
+        ));
+    }
+    shell(
+        sname,
+        &format!(
+            r#"<p class="tag"><a href="/app/{ci}" style="color:#6ab2f2;text-decoration:none">← {cname}</a></p>
+<h1>{sname}</h1>
+<p class="sub">Города</p>
+{items}"#
+        ),
+    )
+}
+
+async fn app_city(Path((ci, si, zi)): Path<(usize, usize, usize)>) -> Html<String> {
+    let w = world();
+    let Some((cname, countries)) = w.iter().nth(ci) else {
+        return shell("Ошибка", r#"<a class="cta2" href="/app/">Назад</a>"#);
+    };
+    let Some((sname, cities)) = countries.iter().nth(si) else {
+        return shell("Ошибка", &format!(r#"<a class="cta2" href="/app/{ci}">Назад</a>"#));
+    };
+    let Some(city) = cities.get(zi) else {
+        return shell("Ошибка", &format!(r#"<a class="cta2" href="/app/{ci}/{si}">Назад</a>"#));
+    };
+    let mut cats = String::new();
+    for (k, (title, icon, _)) in categories().iter().enumerate() {
+        cats.push_str(&format!(
+            r#"<a class="item" href="/app/{ci}/{si}/{zi}/cat/{k}"><img class="ic" src="{icon}" width="18" height="18" alt=""/> {title}</a>"#
+        ));
+    }
+    
+    let chat = city_chat(city)
+        .map(|u| format!(r#"<a class="cta" href="{u}">Чат города</a>"#))
+        .unwrap_or_else(|| r#"<p class="muted">Чат города появится позже</p>"#.to_string());
+
+    let mut cats = String::new();
+    for (k, (title, icon, _)) in categories().iter().enumerate() {
+        cats.push_str(&format!(
+            r#"<a class="item" href="/app/{ci}/{si}/{zi}/cat/{k}"><img class="ic" src="{icon}" width="18" height="18" alt=""/> {title}</a>"#,
+            ci = ci, si = si, zi = zi, k = k, icon = icon, title = title
+        ));
+    }
+
+    // JS braces doubled for format!
+    shell(
+        city,
+        &format!(
+            r#"<p class="tag"><a href="/app/{ci}/{si}" style="color:#6ab2f2;text-decoration:none">← {sname}</a> · {cname}</p>
+<h1 style="display:flex;align-items:center;gap:8px"><img src="/static/icons/pin.svg" width="22" height="22" alt=""/> {city}</h1>
+<script>window.__rmCity="{city}";</script>
+<p class="sub">Ресурсы и возможности в городе</p>
+{chat}
+<a class="cta2" href="https://t.me/+3t_HTJT51Hs4ODM0">Главный чат сообщества</a>
+<a class="cta2" href="https://t.me/ResursWork_bot">Бот карты</a>
+<div class="card" id="city-stats"><p class="muted">Статистика города</p></div>
+<script>
+(function(){{
+  var el=document.getElementById("city-stats");
+  var city={city_js};
+  if(!el||!city) return;
+  fetch("/api/stats?city="+encodeURIComponent(city))
+    .then(function(r){{return r.json();}})
+    .then(function(rows){{
+      if(!rows.length){{
+        el.innerHTML="<p class=\"muted\">Пока нет общих отметок</p>";
+        return;
+      }}
+      el.innerHTML="<p class=\"tag\">Статистика</p>"+rows.slice(0,15).map(function(x){{
+        return "<div class=\"item\">"+x.item+" · "+x.category+" — <b>"+x.n+"</b></div>";
+      }}).join("");
+    }})
+    .catch(function(){{}});
+}})();
+</script>
+<div class="card">{cats}</div>"#,
+            ci = ci,
+            si = si,
+            sname = sname,
+            cname = cname,
+            city = city,
+            chat = chat,
+            cats = cats,
+            city_js = format!("{:?}", city),
+        ),
+    )
+}
+
+
+async fn app_cat(Path((ci, si, zi, k)): Path<(usize, usize, usize, usize)>) -> Html<String> {
+    let w = world();
+    let Some((cname, countries)) = w.iter().nth(ci) else {
+        return shell("Ошибка", r#"<a class="cta2" href="/app/">Назад</a>"#);
+    };
+    let Some((sname, cities)) = countries.iter().nth(si) else {
+        return shell("Ошибка", &format!(r#"<a class="cta2" href="/app/{ci}">Назад</a>"#));
+    };
+    let Some(city) = cities.get(zi).copied() else {
+        return shell("Ошибка", &format!(r#"<a class="cta2" href="/app/{ci}/{si}">Назад</a>"#));
+    };
+    let cats = categories();
+    let Some((title, icon, items)) = cats.get(k) else {
+        return shell("Ошибка", &format!(r#"<a class="cta2" href="/app/{ci}/{si}/{zi}">Назад</a>"#));
+    };
+
+    let mut list = String::new();
+    for it in items {
+        list.push_str(&format!(
+            r#"<label class="item" style="cursor:pointer;display:flex;align-items:center;gap:10px">
+<input type="checkbox" data-item="{it}" onchange="rmToggle(this.dataset.item,this.checked)"/> {it}</label>"#,
+            it = it
+        ));
+    }
+
+    shell(
+        title,
+        &format!(
+            r#"<p class="tag"><a href="/app/{ci}/{si}/{zi}" style="color:#6ab2f2;text-decoration:none">← {city}</a> · {sname}</p>
+<script>window.__rmCity="{city}";window.__rmCat="{title}";document.addEventListener("DOMContentLoaded",function(){{try{{rmRestore();}}catch(e){{}}}});</script>
+<h1 style="display:flex;align-items:center;gap:8px"><img src="{icon}" width="22" height="22" alt=""/> {title}</h1>
+<p class="sub">Отметьте, что актуально для вас в этом городе</p>
+<div class="card">{list}</div>
+<a class="cta2" href="/app/me">Мои отметки</a>"#,
+            ci = ci,
+            si = si,
+            zi = zi,
+            city = city,
+            sname = sname,
+            title = title,
+            icon = icon,
+            list = list,
+        ),
+    )
+}
+
+#[derive(Deserialize)]
+struct SearchQ {
+    q: Option<String>,
+}
+
+async fn app_search(Query(q): Query<SearchQ>) -> Html<String> {
+    let qstr = q.q.unwrap_or_default();
+    let qn = qstr.trim().to_lowercase();
+    let mut hits = String::new();
+    if qn.chars().count() >= 2 {
+        let w = world();
+        for (ci, (cname, countries)) in w.iter().enumerate() {
+            for (si, (sname, cities)) in countries.iter().enumerate() {
+                for (zi, city) in cities.iter().enumerate() {
+                    if city.to_lowercase().contains(&qn) {
+                        hits.push_str(&format!(
+                            r#"<a class="item" href="/app/{ci}/{si}/{zi}">📍 {city}<div class="muted">{sname} · {cname}</div></a>"#
+                        ));
+                    }
+                }
+            }
+        }
+        if hits.is_empty() {
+            hits = r#"<p class="muted">Ничего не найдено. Попробуйте «Париж», «Берлин», «Грозный».</p>"#.into();
+        }
+    } else if !qstr.is_empty() {
+        hits = r#"<p class="muted">Введите минимум 2 буквы</p>"#.into();
+    } else {
+        hits = r#"<p class="muted">Например: Ницца, Баку, Стамбул</p>"#.into();
+    }
+    shell(
+        "Поиск",
+        &format!(
+            r#"<h1>Поиск города</h1>
+<form action="/app/search" method="get">
+<input class="search" type="search" name="q" value="{qstr}" placeholder="Название города…" autofocus/>
+<button class="cta" type="submit">Найти</button>
+</form>
+{hits}"#
+        ),
+    )
+}
+
+async fn health(State(st): State<AppState>) -> String {
+    let db_ok = st.db.lock().map(|c| c.execute_batch("SELECT 1").is_ok()).unwrap_or(false);
+    if db_ok {
+        "ok".into()
+    } else {
+        "degraded".into()
+    }
+}
+
+
+async fn app_me() -> Html<String> {
+    shell(
+        "Мои отметки",
+        r#"<h1>Мои отметки</h1>
+<p class="sub">Сохраняются на этом устройстве. Общая база — следующий этап.</p>
+<div id="list"></div>
+<p style="margin-top:16px">
+  <button type="button" id="clr" class="cta2" style="width:100%;border:0;cursor:pointer">Убрать пустые группы</button>
+</p>
+<script>
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);}
+function render(){
+  var data = window.RM ? RM.all() : {};
+  var keys = Object.keys(data).sort();
+  var html = '';
+  keys.forEach(function(k){
+    var items = data[k]||[];
+    if(!items.length) return;
+    var parts = k.replace(/^rm:/,'').split('|');
+    var city = parts[0]||'';
+    var cat = parts[1]||'';
+    html += '<div class="card" style="margin-bottom:12px"><div class="tag">'+esc(city)+' · '+esc(cat)+'</div>';
+    items.forEach(function(it){
+      html += '<label class="item" style="cursor:pointer"><input type="checkbox" checked data-k="'+esc(k)+'" data-v="'+esc(it)+'"/> '+esc(it)+'</label>';
+    });
+    html += '</div>';
+  });
+  if(!html) html = '<p class="muted">Пока пусто — отметьте пункты в категориях города.</p>';
+  document.getElementById('list').innerHTML = html;
+  document.querySelectorAll('#list input[type=checkbox]').forEach(function(cb){
+    cb.addEventListener('change', function(){
+      var k = cb.getAttribute('data-k');
+      var v = cb.getAttribute('data-v');
+      var arr = [];
+      try{ arr = JSON.parse(localStorage.getItem(k)||'[]'); }catch(e){}
+      if(!cb.checked) arr = arr.filter(function(x){ return x!==v; });
+      else if(arr.indexOf(v)<0) arr.push(v);
+      localStorage.setItem(k, JSON.stringify(arr));
+      if(!arr.length) localStorage.removeItem(k);
+      render();
+    });
+  });
+}
+document.getElementById('clr').onclick = function(){
+  if(window.RM) RM.clearEmpty();
+  render();
+};
+render();
+</script>"#,
+    )
+}
+
+
+#[derive(Deserialize)]
+struct VoteIn {
+    client_id: String,
+    city: String,
+    category: String,
+    item: String,
+    on: bool,
+    #[serde(default)]
+    init_data: String,
+}
+
+#[derive(Serialize)]
+struct OkMsg { ok: bool }
+
+async fn api_vote(State(st): State<AppState>, Json(v): Json<VoteIn>) -> Json<OkMsg> {
+    let token = std::env::var("TELEGRAM_BOT_TOKEN").or_else(|_| std::env::var("BOT_TOKEN")).unwrap_or_default();
+    let cid = if let Some(uid) = webapp_user_id(&v.init_data, &token) {
+        format!("tg:{uid}")
+    } else {
+        // without valid initData only allow anonymous client_id that does NOT pretend to be tg:
+        let c = v.client_id.chars().take(64).collect::<String>();
+        if c.starts_with("tg:") {
+            return Json(OkMsg { ok: false });
+        }
+        c
+    };
+    if cid.len() < 8 || v.city.is_empty() || v.item.is_empty() {
+        return Json(OkMsg { ok: false });
+    }
+    let db = st.db.lock().unwrap();
+    if v.on {
+        let _ = db.execute(
+            "INSERT OR IGNORE INTO votes (client_id, city, category, item) VALUES (?1,?2,?3,?4)",
+            params![cid, v.city, v.category, v.item],
+        );
+    } else {
+        let _ = db.execute(
+            "DELETE FROM votes WHERE client_id=?1 AND city=?2 AND category=?3 AND item=?4",
+            params![cid, v.city, v.category, v.item],
+        );
+    }
+    Json(OkMsg { ok: true })
+}
+
+#[derive(Deserialize)]
+struct StatsQ { city: String }
+
+#[derive(Serialize)]
+struct StatRow { category: String, item: String, n: i64 }
+
+async fn api_stats(State(st): State<AppState>, Query(q): Query<StatsQ>) -> Json<Vec<StatRow>> {
+    let db = st.db.lock().unwrap();
+    let mut stmt = db
+        .prepare("SELECT category, item, COUNT(*) FROM votes WHERE city=?1 GROUP BY category, item ORDER BY n DESC LIMIT 100")
+        .unwrap();
+    let rows = stmt
+        .query_map(params![q.city], |r| {
+            Ok(StatRow {
+                category: r.get(0)?,
+                item: r.get(1)?,
+                n: r.get(2)?,
+            })
+        })
+        .unwrap()
+        .filter_map(|x| x.ok())
+        .collect();
+    Json(rows)
+}
+
+
+#[tokio::main]
+async fn main() {
+    let state = AppState { db: std::sync::Arc::new(Mutex::new(db_open())) };
+    let app = Router::new()
+        .route("/", get(home))
+        .route("/app", get(app_root))
+        .route("/app/", get(app_root))
+        .route("/app/search", get(app_search))
+        .route("/app/me", get(app_me))
+        .route("/app/{ci}", get(app_continent))
+        .route("/app/{ci}/{si}", get(app_country))
+        .route("/app/{ci}/{si}/{zi}", get(app_city))
+        .route("/app/{ci}/{si}/{zi}/cat/{k}", get(app_cat))
+        .route("/health", get(health))
+        .route("/api/vote", post(api_vote))
+        .route("/api/stats", get(api_stats))
+        .nest_service("/static", ServeDir::new("static"))
+        .with_state(state);
+
+    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    println!("resursmap listening on http://{addr}");
+    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+    axum::serve(listener, app).await.unwrap();
+}
