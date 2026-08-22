@@ -640,6 +640,7 @@ body::before {
 
 pub fn render_continents() -> String {
     let w = world();
+
     let mut cards = String::new();
 
     for (ci, (continent, countries)) in w.iter().enumerate() {
@@ -647,14 +648,18 @@ pub fn render_continents() -> String {
             cards.push_str(&format!(
                 r#"
 <a class="card" href="/app/{ci}/{si}">
-    <div class="card-icon">{building}</div>
+    <div class="card-icon">
+        {building}
+    </div>
 
     <div class="card-content">
         <div class="card-title">{country}</div>
         <div class="card-meta">{continent} · страна</div>
     </div>
 
-    <div class="card-arrow">{arrow}</div>
+    <div class="card-arrow">
+        {arrow}
+    </div>
 </a>
 "#,
                 building = icon("building"),
@@ -670,15 +675,19 @@ pub fn render_continents() -> String {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ResursMap</title>
-<style>{style}</style>
+<style>{}</style>
 </head>
 
 <body>
+
 <main class="page">
 
 <header class="topbar">
     <a class="brand" href="/app">
-        <div class="brand-mark">{logo}</div>
+        <div class="brand-mark">
+            {}
+        </div>
+
         <div>
             <div class="brand-name">RESURSMAP</div>
             <div class="brand-sub">RESOURCE NETWORK</div>
@@ -687,6 +696,7 @@ pub fn render_continents() -> String {
 </header>
 
 <section class="hero">
+
     <div class="eyebrow">
         <span class="eyebrow-dot"></span>
         ResursMap
@@ -700,13 +710,14 @@ pub fn render_continents() -> String {
     </p>
 
     <div class="search">
-        {search_icon}
+        {}
         <input
             type="text"
             placeholder="Найти город, услугу или ресурс..."
             onkeydown="if(event.key==='Enter') window.location='/app/search?q='+encodeURIComponent(this.value)"
         >
     </div>
+
 </section>
 
 <div class="section-head">
@@ -717,7 +728,7 @@ pub fn render_continents() -> String {
 </div>
 
 <div class="grid">
-    {cards}
+    {}
 </div>
 
 <div class="section-head">
@@ -728,62 +739,68 @@ pub fn render_continents() -> String {
 </div>
 
 <div class="feature-grid">
+
     <div class="feature">
-        {map_icon}
+        {}
         <strong>Ресурсы</strong>
         <span>Находите полезные места и услуги.</span>
     </div>
 
     <div class="feature">
-        {heart_icon}
+        {}
         <strong>Сообщество</strong>
         <span>Люди и возможности вашего города.</span>
     </div>
 
     <div class="feature">
-        {user_icon}
+        {}
         <strong>Профиль</strong>
         <span>Ваши данные, голоса и активность.</span>
     </div>
+
 </div>
 
 </main>
 
 <nav class="bottom-nav">
+
     <a class="nav-item active" href="/app">
-        {nav_map}
+        {}
         <span>Карта</span>
     </a>
 
     <a class="nav-item" href="/app/search">
-        {nav_search}
+        {}
         <span>Поиск</span>
     </a>
 
     <a class="nav-item" href="/app/me">
-        {nav_user}
+        {}
         <span>Профиль</span>
     </a>
 
     <a class="nav-item" href="/app">
-        {nav_menu}
+        {}
         <span>Меню</span>
     </a>
+
 </nav>
 
 </body>
 </html>"#,
-        style = base_style(),
-        logo = icon("globe"),
-        search_icon = icon("search"),
-        cards = cards,
-        map_icon = icon("map"),
-        heart_icon = icon("heart"),
-        user_icon = icon("user"),
-        nav_map = icon("map"),
-        nav_search = icon("search"),
-        nav_user = icon("user"),
-        nav_menu = icon("menu"),
+        base_style(),
+        icon("globe"),
+        icon("search"),
+        cards,
+
+        icon("map"),
+        icon("heart"),
+        icon("user"),
+
+        icon("map"),
+        icon("search"),
+        icon("user"),
+        icon("menu"),
     )
 }
 
