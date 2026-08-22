@@ -137,7 +137,9 @@ CREATE TABLE IF NOT EXISTS profiles (
   client_id TEXT PRIMARY KEY,
   username TEXT NOT NULL DEFAULT '',
   open_contact INTEGER NOT NULL DEFAULT 0,
-  updated_at INTEGER NOT NULL DEFAULT 0
+  updated_at INTEGER NOT NULL DEFAULT 0,
+  intent_text TEXT NOT NULL DEFAULT '',
+  intent_until INTEGER NOT NULL DEFAULT 0
 );"  
     ).ok();
     conn
@@ -627,14 +629,20 @@ async fn app_city(Path((ci, si, zi)): Path<(usize, usize, usize)>) -> Html<Strin
             r#"<p class="tag"><a href="/app/{ci}/{si}" style="color:#6ab2f2;text-decoration:none">← {sname}</a> · {cname}</p>
 <h1 style="display:flex;align-items:center;gap:8px"><img src="/static/icons/pin.svg" width="22" height="22" alt=""/> {city}</h1>
 <script>window.__rmCity="{city}";try{{localStorage.setItem("rm_last_city","{city}");}}catch(e){{}}</script>
-<p class="sub">Категории ниже · чат и сводка по городу</p>
+<p class="sub">Категории ниже · сводку можно фильтровать · шаблон объявления → в чат города</p>
 {chat}
 <a class="cta2" href="https://t.me/+3t_HTJT51Hs4ODM0">🏠 Главный чат сообщества</a>
 <div class="card" id="openBox" style="margin:12px 0">
-  <p class="tag" style="margin:0">🤝 Открыты к связи в городе: <b id="openN">…</b></p>
-  <p class="muted" style="font-size:.85rem;margin:6px 0">Пишите в чат города. Список людей не публикуем.</p>
-  <button type="button" class="cta2" id="copyAd" style="width:100%">📋 Скопировать текст объявления</button>
-  <p class="muted" id="copyMsg" style="margin-top:6px"></p>
+  <p class="tag" style="margin:0">Связь в городе: <b id="openN">…</b> открыты к контакту</p>
+  <p class="muted" style="font-size:.85rem;margin:6px 0 10px">Договорённости — в чате города. Список людей не публикуем.</p>
+  <p class="tag" style="margin:0 0 6px">Шаблоны объявления</p>
+  <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">
+    <button type="button" class="cta2 adTpl" data-tpl="job" style="flex:1;min-width:42%;padding:8px;font-size:.85rem">Ищу работу</button>
+    <button type="button" class="cta2 adTpl" data-tpl="svc" style="flex:1;min-width:42%;padding:8px;font-size:.85rem">Предлагаю услугу</button>
+    <button type="button" class="cta2 adTpl" data-tpl="rent" style="flex:1;min-width:42%;padding:8px;font-size:.85rem">Ищу жильё</button>
+    <button type="button" class="cta2 adTpl" data-tpl="offer" style="flex:1;min-width:42%;padding:8px;font-size:.85rem">Сдаю / транспорт</button>
+  </div>
+  <p class="muted" id="copyMsg" style="margin:0"></p>
 </div>
 <script>
 (function(){{
@@ -643,42 +651,71 @@ async fn app_city(Path((ci, si, zi)): Path<(usize, usize, usize)>) -> Html<Strin
     .then(function(r){{return r.json();}})
     .then(function(x){{ var n=document.getElementById("openN"); if(n) n.textContent=String(x.n||0); }})
     .catch(function(){{ var n=document.getElementById("openN"); if(n) n.textContent="0"; }});
-  var btn=document.getElementById("copyAd");
-  if(btn) btn.onclick=function(){{
-    var txt="["+city+"] Ищу / предлагаю: …\nНапишите в чат города.";
+  function copyTxt(txt){{
+    var m=document.getElementById("copyMsg");
+    function ok(){{ if(m) m.textContent="Скопировано — вставьте в чат города"; }}
     if(navigator.clipboard&&navigator.clipboard.writeText){{
-      navigator.clipboard.writeText(txt).then(function(){{
-        var m=document.getElementById("copyMsg"); if(m) m.textContent="Скопировано — вставьте в чат города";
-      }}).catch(function(){{ prompt("Скопируйте:", txt); }});
+      navigator.clipboard.writeText(txt).then(ok).catch(function(){{ prompt("Скопируйте:", txt); }});
     }} else {{ prompt("Скопируйте:", txt); }}
+  }}
+  var tpls={{
+    job: "["+city+"] Ищу работу / подработку: …\\nОпыт: …\\nГрафик: …\\nПишите в чат города или в личку.",
+    svc: "["+city+"] Предлагаю услугу: …\\nУсловия: …\\nПишите в чат города.",
+    rent: "["+city+"] Ищу жильё: комната/квартира, срок …\\nБюджет: …\\nПишите в чат города.",
+    offer: "["+city+"] Предлагаю: жильё / транспорт / перевозка\\nДетали: …\\nПишите в чат города."
   }};
+  document.querySelectorAll(".adTpl").forEach(function(b){{
+    b.onclick=function(){{ copyTxt(tpls[b.getAttribute("data-tpl")]||tpls.job); }};
+  }});
 }})();
 </script>
 <div class="card" id="city-stats" style="margin:12px 0">
-  <p class="tag" style="margin:0 0 8px">📊 В этом городе отмечают</p>
-  <p class="muted" id="stats-loading">Загрузка…</p>
+  <p class="tag" style="margin:0 0 8px">Сводка по городу</p>
+  <div id="statFilters" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">
+    <button type="button" class="cta2 sf" data-f="all" style="padding:6px 10px;font-size:.8rem">Все</button>
+    <button type="button" class="cta2 sf" data-f="Профессии" style="padding:6px 10px;font-size:.8rem">Работа</button>
+    <button type="button" class="cta2 sf" data-f="Жильё" style="padding:6px 10px;font-size:.8rem">Жильё</button>
+    <button type="button" class="cta2 sf" data-f="Транспорт" style="padding:6px 10px;font-size:.8rem">Транспорт</button>
+    <button type="button" class="cta2 sf" data-f="Услуги" style="padding:6px 10px;font-size:.8rem">Услуги</button>
+    <button type="button" class="cta2 sf" data-f="Бизнес" style="padding:6px 10px;font-size:.8rem">Бизнес</button>
+    <button type="button" class="cta2 sf" data-f="Финансы" style="padding:6px 10px;font-size:.8rem">Финансы</button>
+  </div>
+  <div id="statsBody"><p class="muted">Загрузка…</p></div>
 </div>
 <script>
 (function(){{
-  var el=document.getElementById("city-stats");
+  var el=document.getElementById("statsBody");
   var city={city_js};
+  var allRows=[];
+  var filter="all";
   if(!el||!city) return;
+  function paint(){{
+    var rows=allRows;
+    if(filter!=="all"){{
+      rows=allRows.filter(function(x){{ return (x.category||"")===filter; }});
+    }}
+    if(!rows.length){{
+      el.innerHTML="<p class=\"muted\">Нет отметок в этом фильтре. Откройте категорию ниже и отметьте пункты.</p>";
+      return;
+    }}
+    var html="";
+    rows.slice(0,20).forEach(function(x){{
+      html+="<div class=\"item\" style=\"display:flex;justify-content:space-between;gap:8px\"><span><b>"+
+        (x.item||"")+"</b><div class=\"muted\">"+(x.category||"")+"</div></span><span style=\"opacity:.9\">"+x.n+"</span></div>";
+    }});
+    el.innerHTML=html;
+  }}
+  document.querySelectorAll(".sf").forEach(function(b){{
+    b.onclick=function(){{ filter=b.getAttribute("data-f")||"all"; paint(); }};
+  }});
   fetch("/api/stats?city="+encodeURIComponent(city))
     .then(function(r){{return r.json();}})
     .then(function(rows){{
-      if(!rows||!rows.length){{
-        el.innerHTML="<p class=\"tag\">📊 В этом городе отмечают</p><p class=\"muted\">Пока пусто — будьте первым: откройте категорию и поставьте галочки.</p>";
-        return;
-      }}
-      var html="<p class=\"tag\">📊 В этом городе отмечают</p>";
-      rows.slice(0,12).forEach(function(x){{
-        html+="<div class=\"item\" style=\"display:flex;justify-content:space-between;gap:8px\"><span><b>"+
-          (x.item||"")+"</b><div class=\"muted\">"+(x.category||"")+"</div></span><span style=\"opacity:.9\">"+x.n+"</span></div>";
-      }});
-      el.innerHTML=html;
+      allRows=rows||[];
+      paint();
     }})
     .catch(function(){{
-      el.innerHTML="<p class=\"muted\">Не удалось загрузить статистику</p>";
+      el.innerHTML="<p class=\"muted\">Не удалось загрузить сводку</p>";
     }});
 }})();
 </script>
@@ -837,7 +874,11 @@ async fn app_me() -> Html<String> {
   <p class="muted" style="font-size:.85rem;margin:0 0 10px">Ник не светится всем списком. В городе виден только счётчик «открыты к связи». Договорённости — в чате города.</p>
   <label style="display:flex;gap:8px;align-items:center;margin:8px 0">
     <input type="checkbox" id="openContact"/> Открыт к связи
-  </label>
+  
+  <label class="muted" style="display:block;margin-top:12px">Сейчас актуально (до 14 дней)</label>
+  <input id="intentText" maxlength="120" placeholder="Напр.: ищу работу водителем / сдаю комнату" style="width:100%;padding:10px;border-radius:10px;border:1px solid #333;background:#111;color:#eee;margin-top:4px"/>
+  <p class="muted" id="intentUntil" style="margin:6px 0 0;font-size:.8rem"></p>
+</label>
   <input id="tgUser" placeholder="@username" maxlength="32"
     style="width:100%;padding:10px;border-radius:10px;border:1px solid #333;background:#111;color:#eee;box-sizing:border-box"/>
   <button type="button" class="cta2" id="saveProfile" style="margin-top:8px;width:100%;text-align:center">Сохранить</button>
@@ -863,6 +904,15 @@ async fn app_me() -> Html<String> {
     .then(function(p){
       if(openEl) openEl.checked=!!p.open_contact;
       if(userEl&&p.username) userEl.value="@"+p.username;
+      var it=document.getElementById("intentText");
+      var iu=document.getElementById("intentUntil");
+      if(it) it.value=p.intent_text||"";
+      if(iu){
+        if(p.intent_until){
+          var d=new Date(p.intent_until*1000);
+          iu.textContent="Актуально до: "+d.toLocaleDateString();
+        } else iu.textContent="";
+      }
     }).catch(function(){});
   var btn=document.getElementById("saveProfile");
   if(btn) btn.onclick=function(){
@@ -873,10 +923,24 @@ async fn app_me() -> Html<String> {
         client_id:cid(),
         init_data:initData(),
         username:(userEl&&userEl.value)||"",
-        open_contact:!!(openEl&&openEl.checked)
+        open_contact:!!(openEl&&openEl.checked),
+        intent_text:(document.getElementById("intentText")&&document.getElementById("intentText").value)||""
       })
     }).then(function(r){return r.json();})
-      .then(function(x){ if(msg) msg.textContent=x.ok?"Сохранено":"Ошибка"; })
+      .then(function(x){
+        if(msg) msg.textContent=x.ok?"Сохранено":"Ошибка";
+        if(x.ok){
+          var it=document.getElementById("intentText");
+          var iu=document.getElementById("intentUntil");
+          if(iu){
+            var txt=(it&&it.value||"").trim();
+            if(txt){
+              var d=new Date(Date.now()+14*24*3600*1000);
+              iu.textContent="Актуально до: "+d.toLocaleDateString();
+            } else iu.textContent="";
+          }
+        }
+      })
       .catch(function(){ if(msg) msg.textContent="Ошибка сети"; });
   };
 })();
@@ -1191,6 +1255,10 @@ struct ProfileQ {
 struct ProfileOut {
     username: String,
     open_contact: bool,
+    #[serde(default)]
+    intent_text: String,
+    #[serde(default)]
+    intent_until: i64,
 }
 
 fn resolve_cid(client_id: &str, init_data: &str) -> String {
@@ -1213,16 +1281,37 @@ async fn api_profile_get(State(st): State<AppState>, Query(q): Query<ProfileQ>) 
         q.init_data.as_deref().unwrap_or(""),
     );
     if cid.len() < 8 {
-        return Json(ProfileOut { username: String::new(), open_contact: false });
+        return Json(ProfileOut { username: String::new(), open_contact: false, intent_text: String::new(), intent_until: 0 });
     }
     let db = st.db.lock().expect("db");
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
     match db.query_row(
-        "SELECT username, open_contact FROM profiles WHERE client_id=?1",
+        "SELECT username, open_contact, intent_text, intent_until FROM profiles WHERE client_id=?1",
         [&cid],
-        |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?)),
+        |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?, r.get::<_, String>(2)?, r.get::<_, i64>(3)?)),
     ) {
-        Ok((u, o)) => Json(ProfileOut { username: u, open_contact: o != 0 }),
-        Err(_) => Json(ProfileOut { username: String::new(), open_contact: false }),
+        Ok((u, o, it, until)) => {
+            let (it, until) = if until > now {
+                (it, until)
+            } else {
+                (String::new(), 0)
+            };
+            Json(ProfileOut {
+                username: u,
+                open_contact: o != 0,
+                intent_text: it,
+                intent_until: until,
+            })
+        }
+        Err(_) => Json(ProfileOut {
+            username: String::new(),
+            open_contact: false,
+            intent_text: String::new(),
+            intent_until: 0,
+        }),
     }
 }
 
@@ -1235,6 +1324,8 @@ struct ProfileIn {
     username: String,
     #[serde(default)]
     open_contact: bool,
+    #[serde(default)]
+    intent_text: String,
 }
 
 async fn api_profile_set(State(st): State<AppState>, Json(v): Json<ProfileIn>) -> Json<OkMsg> {
@@ -1250,13 +1341,24 @@ async fn api_profile_set(State(st): State<AppState>, Json(v): Json<ProfileIn>) -
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0);
     let db = st.db.lock().expect("db");
+    let intent: String = v
+        .intent_text
+        .chars()
+        .take(120)
+        .collect::<String>()
+        .trim()
+        .to_string();
+    let intent_until = if intent.is_empty() { 0i64 } else { now + 14 * 24 * 3600 };
     let _ = db.execute(
-        "INSERT INTO profiles (client_id, username, open_contact, updated_at) VALUES (?1,?2,?3,?4)
+        "INSERT INTO profiles (client_id, username, open_contact, updated_at, intent_text, intent_until)
+         VALUES (?1,?2,?3,?4,?5,?6)
          ON CONFLICT(client_id) DO UPDATE SET
            username=excluded.username,
            open_contact=excluded.open_contact,
-           updated_at=excluded.updated_at",
-        rusqlite::params![cid, user, open, now],
+           updated_at=excluded.updated_at,
+           intent_text=excluded.intent_text,
+           intent_until=excluded.intent_until",
+        rusqlite::params![cid, user, open, now, intent, intent_until],
     );
     Json(OkMsg { ok: true })
 }
