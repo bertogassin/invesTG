@@ -3,7 +3,6 @@ use axum::{
     Router,
 };
 use super::handlers::*;
-use super::templates::*;
 use crate::state::app_state::AppState;
 
 pub fn routes(state: AppState) -> Router {
