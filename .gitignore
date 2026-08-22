@@ -1,8 +1,0 @@
-/target/
-/data/*.db
-/data/*.db-*
-.env
-.env.*
-!.env.example
-*.log
-.env
