@@ -29,7 +29,7 @@ pub fn world() -> BTreeMap<&'static str, BTreeMap<&'static str, Vec<&'static str
 // LUCIDE SVG
 // ============================================================
 
-fn icon(name: &str) -> &'static str {
+pub(crate) fn icon(name: &str) -> &'static str {
     match name {
         "globe" => {
             r#"<svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.5 2.5 3.5 5.5 3.5 9s-1 6.5-3.5 9c-2.5-2.5-3.5-5.5-3.5-9S9.5 5.5 12 3Z"/></svg>"#
@@ -83,7 +83,7 @@ fn icon(name: &str) -> &'static str {
 // GLOBAL DESIGN
 // ============================================================
 
-fn base_style() -> &'static str {
+pub(crate) fn base_style() -> &'static str {
     r#"
 :root {
     --bg: #080a0d;
@@ -598,6 +598,238 @@ body::before {
 /* -----------------------------------------------------------
    MOBILE
 ----------------------------------------------------------- */
+
+
+/* ============================================================
+   RESURSMAP LUXURY LAYER
+   ============================================================ */
+
+.topbar {
+    position: relative;
+    z-index: 5;
+}
+
+.brand {
+    transition: transform .25s ease, opacity .25s ease;
+}
+
+.brand:hover {
+    transform: translateY(-1px);
+    opacity: .92;
+}
+
+.brand-mark {
+    background:
+        radial-gradient(circle at 30% 25%,
+            rgba(240,214,156,.28),
+            transparent 48%),
+        linear-gradient(145deg,
+            rgba(214,183,122,.18),
+            rgba(101,184,201,.08));
+    border: 1px solid rgba(214,183,122,.28);
+    box-shadow:
+        0 8px 30px rgba(0,0,0,.35),
+        inset 0 1px 0 rgba(255,255,255,.10);
+    backdrop-filter: blur(18px);
+}
+
+.hero {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,.08);
+    box-shadow:
+        0 24px 70px rgba(0,0,0,.28),
+        inset 0 1px 0 rgba(255,255,255,.05);
+}
+
+.hero::before {
+    content: "";
+    position: absolute;
+    width: 280px;
+    height: 280px;
+    top: -160px;
+    right: -100px;
+    border-radius: 50%;
+    background: rgba(101,184,201,.10);
+    filter: blur(45px);
+    pointer-events: none;
+}
+
+.hero::after {
+    content: "";
+    position: absolute;
+    width: 220px;
+    height: 220px;
+    bottom: -150px;
+    left: -80px;
+    border-radius: 50%;
+    background: rgba(214,183,122,.08);
+    filter: blur(45px);
+    pointer-events: none;
+}
+
+.search {
+    position: relative;
+    z-index: 2;
+    border: 1px solid rgba(255,255,255,.10);
+    background: rgba(255,255,255,.045);
+    box-shadow:
+        inset 0 1px 0 rgba(255,255,255,.05),
+        0 12px 35px rgba(0,0,0,.18);
+    transition:
+        border-color .25s ease,
+        box-shadow .25s ease,
+        background .25s ease;
+}
+
+.search:focus-within {
+    border-color: rgba(214,183,122,.45);
+    background: rgba(255,255,255,.065);
+    box-shadow:
+        0 0 0 4px rgba(214,183,122,.06),
+        0 16px 45px rgba(0,0,0,.25);
+}
+
+.card {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,.075);
+    background:
+        linear-gradient(
+            145deg,
+            rgba(255,255,255,.055),
+            rgba(255,255,255,.018)
+        );
+    box-shadow:
+        0 12px 35px rgba(0,0,0,.18),
+        inset 0 1px 0 rgba(255,255,255,.045);
+    backdrop-filter: blur(14px);
+    transition:
+        transform .25s ease,
+        border-color .25s ease,
+        box-shadow .25s ease,
+        background .25s ease;
+}
+
+.card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+        linear-gradient(
+            120deg,
+            transparent 20%,
+            rgba(255,255,255,.035) 50%,
+            transparent 80%
+        );
+    transform: translateX(-100%);
+    transition: transform .55s ease;
+    pointer-events: none;
+}
+
+.card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(214,183,122,.25);
+    background:
+        linear-gradient(
+            145deg,
+            rgba(255,255,255,.075),
+            rgba(255,255,255,.025)
+        );
+    box-shadow:
+        0 20px 50px rgba(0,0,0,.30),
+        0 0 35px rgba(214,183,122,.055),
+        inset 0 1px 0 rgba(255,255,255,.07);
+}
+
+.card:hover::before {
+    transform: translateX(100%);
+}
+
+.card-icon {
+    color: var(--gold-light);
+    transition: transform .25s ease, color .25s ease;
+}
+
+.card:hover .card-icon {
+    transform: scale(1.08);
+    color: var(--sea-light);
+}
+
+.card-arrow {
+    color: rgba(214,183,122,.70);
+    transition: transform .25s ease, color .25s ease;
+}
+
+.card:hover .card-arrow {
+    transform: translateX(4px);
+    color: var(--gold-light);
+}
+
+.feature {
+    border: 1px solid rgba(255,255,255,.07);
+    background:
+        linear-gradient(
+            145deg,
+            rgba(255,255,255,.045),
+            rgba(255,255,255,.015)
+        );
+    box-shadow:
+        0 12px 35px rgba(0,0,0,.16),
+        inset 0 1px 0 rgba(255,255,255,.04);
+    backdrop-filter: blur(12px);
+    transition:
+        transform .25s ease,
+        border-color .25s ease,
+        box-shadow .25s ease;
+}
+
+.feature:hover {
+    transform: translateY(-3px);
+    border-color: rgba(101,184,201,.22);
+    box-shadow:
+        0 18px 45px rgba(0,0,0,.25),
+        0 0 30px rgba(101,184,201,.045);
+}
+
+.feature .icon {
+    color: var(--gold-light);
+}
+
+.bottom-nav {
+    border-top: 1px solid rgba(255,255,255,.08);
+    background: rgba(8,10,13,.78);
+    box-shadow:
+        0 -12px 40px rgba(0,0,0,.25),
+        inset 0 1px 0 rgba(255,255,255,.04);
+    backdrop-filter: blur(22px);
+}
+
+.nav-item {
+    transition:
+        color .2s ease,
+        transform .2s ease;
+}
+
+.nav-item:hover {
+    transform: translateY(-2px);
+}
+
+.nav-item.active {
+    color: var(--gold-light);
+}
+
+.nav-item.active .icon {
+    filter: drop-shadow(0 0 8px rgba(214,183,122,.25));
+}
+
+.section-title {
+    letter-spacing: -.02em;
+}
+
+.section-caption {
+    color: rgba(255,255,255,.48);
+}
 
 @media (max-width: 620px) {
     .page {
@@ -1387,8 +1619,126 @@ pub fn render_category(
     si: usize,
     zi: usize,
     category: &str,
+    resources: Vec<(i64, String, String, String, String, f64, i64, i64, i64)>,
 ) -> String {
-    let city_page = render_city(ci, si, zi);
+    let city_url = format!("/app/{}/{}/{}", ci, si, zi);
+
+    let cards = if resources.is_empty() {
+        r#"
+        <div class="feature">
+            <div class="card-icon">+</div>
+            <strong>Пока ресурсов нет</strong>
+            <span>Будьте первым — добавьте ресурс в эту категорию.</span>
+        </div>
+        "#.to_string()
+    } else {
+        resources
+            .iter()
+            .map(|(id, title, description, contact, address, rating, votes, verified, premium)| {
+                let verified_badge = if *verified != 0 {
+                    r#"<span style="
+                        color:#16a34a;
+                        font-size:12px;
+                        font-weight:700;
+                    ">✓ Проверен</span>"#
+                } else {
+                    ""
+                };
+
+                let premium_badge = if *premium != 0 {
+                    r#"<span style="
+                        display:inline-flex;
+                        align-items:center;
+                        gap:5px;
+                        padding:4px 9px;
+                        border-radius:999px;
+                        background:rgba(214,183,122,.12);
+                        border:1px solid rgba(214,183,122,.45);
+                        color:#b88932;
+                        font-size:10px;
+                        font-weight:800;
+                        letter-spacing:.10em;
+                    ">★ PREMIUM</span>"#
+                } else {
+                    ""
+                };
+
+                let card_style = if *premium != 0 {
+                    "margin-bottom:16px;                    border:1px solid rgba(214,183,122,.55);                    background:linear-gradient(145deg,rgba(255,255,255,1),rgba(250,246,238,.98));                    box-shadow:0 10px 32px rgba(214,183,122,.14),0 0 0 1px rgba(214,183,122,.06);                    position:relative;                    overflow:hidden;"
+                } else {
+                    "margin-bottom:14px;"
+                };
+
+                format!(
+                    r#"
+                    <a href="/app/resource/{}" class="card" style="{}text-decoration:none;color:inherit;">
+                        {}
+                        <div class="card-icon">{}</div>
+
+                        <div class="card-content">
+
+                            <div style="
+                                display:flex;
+                                align-items:center;
+                                gap:8px;
+                                flex-wrap:wrap;
+                                margin-bottom:6px;
+                            ">
+                                <div class="card-title">
+                                    {}
+                                </div>
+
+                                {}
+                            </div>
+
+                            <div class="card-meta">
+                                {}
+                            </div>
+
+                            <div class="card-meta">
+                                ⭐ {:.1} · {} голосов
+                            </div>
+
+                            <div class="card-meta">
+                                📍 {}
+                            </div>
+
+                            <div class="card-meta">
+                                📞 {}
+                            </div>
+
+                            <div style="margin-top:6px;">
+                                {}
+                            </div>
+
+                        </div>
+
+                        <div class="card-arrow">›</div>
+                    </a>
+                    "#,
+                    id,
+                    card_style,
+                    if *premium != 0 {
+                        r#"<div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,#d6b77a,transparent);"></div>"#
+                    } else {
+                        ""
+                    },
+                    icon("map-pin"),
+                    title,
+                    premium_badge,
+                    description,
+                    rating,
+                    votes,
+                    address,
+                    contact,
+                    verified_badge
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("")
+    };
+
+    let count = resources.len();
 
     format!(
         r#"<!DOCTYPE html>
@@ -1396,7 +1746,382 @@ pub fn render_category(
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+
 <title>{category} · ResursMap</title>
+
+<style>{style}</style>
+</head>
+
+<body>
+
+<main class="page">
+
+<header class="topbar">
+    <a class="brand" href="/app">
+        <div class="brand-mark">{logo}</div>
+
+        <div>
+            <div class="brand-name">RESURSMAP</div>
+            <div class="brand-sub">RESOURCE NETWORK</div>
+        </div>
+    </a>
+</header>
+
+<section class="hero">
+
+    <a href="{city_url}"
+       style="display:inline-flex;align-items:center;gap:8px;
+              color:var(--muted);text-decoration:none;margin-bottom:20px;">
+        {back}
+        <span>Вернуться к городу</span>
+    </a>
+
+    <div class="eyebrow">
+        {category_icon}
+        Категория
+    </div>
+
+    <h1>{category}</h1>
+
+    <p>
+        Ресурсы города в выбранной категории.
+    </p>
+
+</section>
+
+<div class="section-head">
+
+    <div>
+        <h2 class="section-title">Ресурсы</h2>
+        <p class="section-caption">
+            Найдено: {count}
+        </p>
+    </div>
+
+</div>
+
+<div>
+    {cards}
+</div>
+
+<div class="section-head" style="margin-top:34px;">
+
+    <div>
+        <h2 class="section-title">Ваш город</h2>
+
+        <p class="section-caption">
+            Все направления и категории
+        </p>
+    </div>
+
+</div>
+
+<a class="card"
+   href="{city_url}"
+   style="text-decoration:none;">
+
+    <div class="card-icon">
+        {city_icon}
+    </div>
+
+    <div class="card-content">
+
+        <div class="card-title">
+            Открыть карту города
+        </div>
+
+        <div class="card-meta">
+            Вернуться ко всем категориям
+        </div>
+
+    </div>
+
+    <div class="card-arrow">
+        ›
+    </div>
+
+</a>
+
+</main>
+
+<nav class="bottom-nav">
+
+    <a class="nav-item active" href="/app">
+        {nav_map}
+        <span>Карта</span>
+    </a>
+
+    <a class="nav-item" href="/app/search">
+        {nav_search}
+        <span>Поиск</span>
+    </a>
+
+    <a class="nav-item" href="/app/me">
+        {nav_user}
+        <span>Профиль</span>
+    </a>
+
+    <a class="nav-item" href="/app">
+        {nav_menu}
+        <span>Меню</span>
+    </a>
+
+</nav>
+
+</body>
+</html>"#,
+        style = base_style(),
+        logo = icon("globe"),
+        back = icon("chevron"),
+        category_icon = icon("map"),
+        city_icon = icon("map"),
+        nav_map = icon("map"),
+        nav_search = icon("search"),
+        nav_user = icon("user"),
+        nav_menu = icon("menu"),
+        category = category,
+        city_url = city_url,
+        count = count,
+        cards = cards,
+    )
+}
+
+// ============================================================
+// ADD RESOURCE
+// ============================================================
+
+
+// ============================================================
+// ПРОФИЛЬ РЕСУРСА
+// ============================================================
+pub fn render_resource_profile(
+    id: i64,
+    title: &str,
+    description: &str,
+    contact: &str,
+    address: &str,
+    rating: f64,
+    votes: i64,
+    premium: i64,
+    verified: i64,
+    category: &str,
+    created_at: i64,
+) -> String {
+    let premium_badge = if premium != 0 {
+        r#"<span style="
+            display:inline-flex;
+            align-items:center;
+            gap:6px;
+            padding:6px 11px;
+            border-radius:999px;
+            background:rgba(214,183,122,.12);
+            border:1px solid rgba(214,183,122,.45);
+            color:#b88932;
+            font-size:11px;
+            font-weight:800;
+            letter-spacing:.08em;
+        ">★ PREMIUM</span>"#
+    } else {
+        ""
+    };
+
+    let verified_badge = if verified != 0 {
+        r#"<span style="
+            display:inline-flex;
+            align-items:center;
+            gap:5px;
+            color:#16a34a;
+            font-size:12px;
+            font-weight:700;
+        ">✓ Проверен</span>"#
+    } else {
+        ""
+    };
+
+    let premium_style = if premium != 0 {
+        "border:1px solid rgba(214,183,122,.55);background:linear-gradient(145deg,#fff,#faf6ee);box-shadow:0 12px 38px rgba(214,183,122,.14);"
+    } else {
+        "border:1px solid rgba(0,0,0,.07);"
+    };
+
+    format!(
+        r#"<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<title>{title} · ResursMap</title>
+
+<style>{style}</style>
+</head>
+
+<body>
+
+<main class="page">
+
+<header class="topbar">
+    <a class="brand" href="/app">
+        <div class="brand-mark">{logo}</div>
+        <div>
+            <div class="brand-name">RESURSMAP</div>
+            <div class="brand-sub">RESOURCE NETWORK</div>
+        </div>
+    </a>
+</header>
+
+<section class="hero">
+
+    <a href="/app"
+       style="display:inline-flex;align-items:center;gap:8px;
+              color:var(--muted);text-decoration:none;margin-bottom:20px;">
+        {back}
+        <span>Вернуться к карте</span>
+    </a>
+
+    <div class="eyebrow">
+        {category_icon}
+        {category}
+    </div>
+
+    <div style="
+        margin-top:14px;
+        display:flex;
+        align-items:center;
+        gap:9px;
+        flex-wrap:wrap;
+    ">
+        {premium_badge}
+        {verified_badge}
+    </div>
+
+    <h1 style="margin-top:14px;">{title}</h1>
+
+    <p>
+        ⭐ <strong>{rating:.1}</strong> · {votes} голосов
+    </p>
+
+</section>
+
+<section
+    class="card"
+    style="
+        {premium_style}
+        margin-bottom:16px;
+        position:relative;
+        overflow:hidden;
+    "
+>
+
+    <div style="
+        font-size:12px;
+        color:var(--muted);
+        margin-bottom:8px;
+        text-transform:uppercase;
+        letter-spacing:.08em;
+        font-weight:700;
+    ">
+        О ресурсе
+    </div>
+
+    <div style="
+        font-size:17px;
+        line-height:1.65;
+        white-space:pre-wrap;
+    ">
+        {description}
+    </div>
+
+</section>
+
+<section
+    class="card"
+    style="margin-bottom:16px;"
+>
+
+    <div style="
+        font-size:12px;
+        color:var(--muted);
+        margin-bottom:12px;
+        text-transform:uppercase;
+        letter-spacing:.08em;
+        font-weight:700;
+    ">
+        Контакты
+    </div>
+
+    <div class="card-meta" style="margin-bottom:10px;">
+        📍 {address}
+    </div>
+
+    <div class="card-meta">
+        📞 {contact}
+    </div>
+
+</section>
+
+<section
+    class="card"
+    style="margin-bottom:16px;"
+>
+
+    <div style="
+        font-size:12px;
+        color:var(--muted);
+        margin-bottom:12px;
+        text-transform:uppercase;
+        letter-spacing:.08em;
+        font-weight:700;
+    ">
+        ResursMap ID
+    </div>
+
+    <div style="font-size:18px;font-weight:700;">
+        #{id}
+    </div>
+
+</section>
+
+</main>
+
+</body>
+</html>"#,
+        style = base_style(),
+        logo = icon("map"),
+        back = icon("arrow-left"),
+        category_icon = icon("map-pin"),
+        category = category,
+        title = title,
+        description = description,
+        rating = rating,
+        votes = votes,
+        address = address,
+        contact = contact,
+        premium_badge = premium_badge,
+        verified_badge = verified_badge,
+        premium_style = premium_style,
+        id = id,
+
+    )
+}
+
+pub fn render_add_resource(
+    ci: usize,
+    si: usize,
+    zi: usize,
+    category: &str,
+) -> String {
+    let back_url = format!("/app/{}/{}/{}", ci, si, zi);
+
+    format!(
+        r#"<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<title>Добавить ресурс · ResursMap</title>
+
 <style>{}</style>
 </head>
 
@@ -1409,36 +2134,115 @@ pub fn render_category(
         <div class="brand-mark">{}</div>
         <div>
             <div class="brand-name">RESURSMAP</div>
-            <div class="brand-sub">CATEGORY</div>
+            <div class="brand-sub">ADD RESOURCE</div>
         </div>
     </a>
 </header>
 
 <section class="hero">
 
+    <a href="{}"
+       style="display:inline-flex;align-items:center;gap:8px;
+              color:var(--muted);text-decoration:none;margin-bottom:20px;">
+        {}
+        <span>Вернуться</span>
+    </a>
+
     <div class="eyebrow">
         {}
-        Категория
+        Добавление ресурса
     </div>
 
-    <h1>{category}</h1>
+    <h1>Добавить ресурс</h1>
 
     <p>
-        Ресурсы города в выбранной категории.
+        Категория: <strong>{}</strong>
     </p>
 
 </section>
 
-<div style="margin-top:24px">
-    {city_page}
-</div>
+<form method="post"
+      action="/app/{}/{}/{}/cat/{}/add"
+      style="display:flex;flex-direction:column;gap:16px;">
+
+    <label>
+        <div style="margin-bottom:7px;font-weight:600;">
+            Название
+        </div>
+
+        <input
+            name="title"
+            required
+            maxlength="120"
+            placeholder="Например: Охранная компания"
+            style="width:100%;padding:15px;border-radius:14px;
+                   border:1px solid #ddd;font-size:16px;box-sizing:border-box;">
+    </label>
+
+    <label>
+        <div style="margin-bottom:7px;font-weight:600;">
+            Описание
+        </div>
+
+        <textarea
+            name="description"
+            required
+            maxlength="1000"
+            rows="5"
+            placeholder="Расскажите о ресурсе..."
+            style="width:100%;padding:15px;border-radius:14px;
+                   border:1px solid #ddd;font-size:16px;
+                   box-sizing:border-box;resize:vertical;"></textarea>
+    </label>
+
+    <label>
+        <div style="margin-bottom:7px;font-weight:600;">
+            Телефон или Telegram
+        </div>
+
+        <input
+            name="contact"
+            maxlength="120"
+            placeholder="+33... или @username"
+            style="width:100%;padding:15px;border-radius:14px;
+                   border:1px solid #ddd;font-size:16px;box-sizing:border-box;">
+    </label>
+
+    <label>
+        <div style="margin-bottom:7px;font-weight:600;">
+            Адрес
+        </div>
+
+        <input
+            name="address"
+            maxlength="200"
+            placeholder="Город, улица..."
+            style="width:100%;padding:15px;border-radius:14px;
+                   border:1px solid #ddd;font-size:16px;box-sizing:border-box;">
+    </label>
+
+    <button
+        type="submit"
+        style="margin-top:8px;padding:16px;border:0;border-radius:16px;
+               font-size:17px;font-weight:700;cursor:pointer;">
+        ➕ Добавить ресурс
+    </button>
+
+</form>
 
 </main>
 
 </body>
 </html>"#,
         base_style(),
-        icon("map"),
-        icon("map"),
+        icon("globe"),
+        back_url,
+        icon("chevron"),
+        icon("plus"),
+        category,
+        ci,
+        si,
+        zi,
+        category,
     )
 }
