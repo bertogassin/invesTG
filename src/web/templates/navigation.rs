@@ -229,36 +229,14 @@ pub fn render_continent(ci: usize) -> String {
 
 </main>
 
-<nav class="bottom-nav">
-    <a class="nav-item active" href="/app">
-        {}
-        <span>Карта</span>
-    </a>
-
-    <a class="nav-item" href="/app/search">
-        {}
-        <span>Поиск</span>
-    </a>
-
-    <a class="nav-item" href="/app/me">
-        {}
-        <span>Профиль</span>
-    </a>
-
-    <a class="nav-item" href="/app">
-        {count}
-        <span>Меню</span>
-    </a>
-</nav>
+{bottom_nav}
 
 </body>
 </html>"#,
             base_style(),
             icon("globe"),
             icon("map"),
-            icon("search"),
-            icon("user"),
-            icon("menu"),
+            bottom_nav = bottom_nav("map"),
             count = countries.len(),
         );
     }
@@ -346,36 +324,14 @@ pub fn render_country(ci: usize, si: usize) -> String {
 
 </main>
 
-<nav class="bottom-nav">
-    <a class="nav-item active" href="/app">
-        {}
-        <span>Карта</span>
-    </a>
-
-    <a class="nav-item" href="/app/search">
-        {}
-        <span>Поиск</span>
-    </a>
-
-    <a class="nav-item" href="/app/me">
-        {}
-        <span>Профиль</span>
-    </a>
-
-    <a class="nav-item" href="/app">
-        {count}
-        <span>Меню</span>
-    </a>
-</nav>
+{bottom_nav}
 
 </body>
 </html>"#,
                 base_style(),
                 icon("globe"),
                 icon("map-pin"),
-                icon("search"),
-                icon("user"),
-                icon("menu"),
+                bottom_nav = bottom_nav("map"),
                 count = cities.len(),
             );
         }
@@ -484,29 +440,7 @@ pub fn render_city(ci: usize, si: usize, zi: usize) -> String {
 
 </main>
 
-<nav class="bottom-nav">
-
-    <a class="nav-item active" href="/app">
-        {}
-        <span>Карта</span>
-    </a>
-
-    <a class="nav-item" href="/app/search">
-        {}
-        <span>Поиск</span>
-    </a>
-
-    <a class="nav-item" href="/app/me">
-        {}
-        <span>Профиль</span>
-    </a>
-
-    <a class="nav-item" href="/app">
-        {}
-        <span>Меню</span>
-    </a>
-
-</nav>
+{bottom_nav}
 
 </body>
 </html>"#,
@@ -521,10 +455,7 @@ pub fn render_city(ci: usize, si: usize, zi: usize) -> String {
                     icon("chevron"),
                     icon("user"),
                     icon("chevron"),
-                    icon("map"),
-                    icon("search"),
-                    icon("user"),
-                    icon("menu"),
+                    bottom_nav = bottom_nav("map"),
                 );
             }
         }
