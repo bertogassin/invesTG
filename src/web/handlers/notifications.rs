@@ -1,4 +1,5 @@
-use super::*;
+use super::{templates, verify_user_session, AppState};
+use axum::{extract::State, http::HeaderMap, response::Html};
 
 pub async fn notifications_page(State(state): State<AppState>, headers: HeaderMap) -> Html<String> {
     let user_id = match verify_user_session(&state, &headers) {
