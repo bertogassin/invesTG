@@ -22,6 +22,9 @@ pub use admin::*;
 mod navigation;
 pub use navigation::*;
 
+mod types;
+pub use types::*;
+
 mod common;
 use common::{
     csrf_rejected_response, input_text_is_valid, rate_limit_retry_after, request_is_cross_site,
@@ -42,7 +45,6 @@ use axum::{
     response::{Html, IntoResponse, Response},
     Json,
 };
-use serde::Deserialize;
 use serde_json::json;
 use std::collections::BTreeMap;
 
@@ -55,16 +57,6 @@ use sha2::Sha256;
 // ============================================================
 // ДОБАВЛЕНИЕ РЕСУРСА
 // ============================================================
-
-#[derive(Debug, Deserialize)]
-pub struct AddResourceForm {
-    pub title: String,
-    pub description: String,
-    pub contact: String,
-    pub address: String,
-    #[serde(default)]
-    pub init_data: String,
-}
 
 // ============================================================
 // PUBLIC USER PROFILE
@@ -89,19 +81,6 @@ pub struct AddResourceForm {
 // TASK 7.22F-E — INTERNAL CHAT
 // ============================================================
 
-#[derive(Debug, Deserialize)]
-pub struct ChatMessageForm {
-    pub message: String,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct EditResourceForm {
-    pub title: String,
-    pub description: String,
-    pub contact: String,
-    pub address: String,
-}
-
 pub async fn health() -> &'static str {
     "ok"
 }
@@ -109,22 +88,6 @@ pub async fn health() -> &'static str {
 // ------------------------------------------------------------
 // API-обработчики (реальная логика)
 // ------------------------------------------------------------
-#[derive(Debug, serde::Deserialize)]
-pub struct ReportResourcePayload {
-    pub reason: String,
-}
-
-#[derive(Debug, serde::Deserialize)]
-pub struct ContactRequestPayload {
-    pub public_id: String,
-    pub message: String,
-}
-
 // ============================================================
 // TASK 7.3B — MODERATION APPROVE / REJECT
 // ============================================================
-
-#[derive(serde::Deserialize)]
-pub struct RejectResourceForm {
-    pub reason: String,
-}
