@@ -1,3 +1,12 @@
+pub fn escape_html(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
+}
+
 use std::collections::BTreeMap;
 
 pub fn world() -> BTreeMap<&'static str, BTreeMap<&'static str, Vec<&'static str>>> {
@@ -4816,6 +4825,8 @@ pub fn render_category(
     resources: Vec<(i64, String, String, String, String, f64, i64, i64, i64)>,
 ) -> String {
     let city_url = format!("/app/{}/{}/{}", ci, si, zi);
+    let safe_category = escape_html(category);
+    let category_url = urlencoding::encode(category);
 
     let cards = if resources.is_empty() {
         format!(
@@ -4828,12 +4839,17 @@ pub fn render_category(
             <span>Будьте первым — добавьте ресурс в эту категорию.</span>
         </a>
         "#,
-            ci, si, zi, category
+            ci, si, zi, category_url
         )
     } else {
         resources
             .iter()
             .map(|(id, title, description, contact, address, rating, votes, verified, premium)| {
+                let safe_title = escape_html(title);
+                let safe_description = escape_html(description);
+                let safe_contact = escape_html(contact);
+                let safe_address = escape_html(address);
+
                 let verified_badge = if *verified != 0 {
                     r#"<span style="
                         color:#16a34a;
@@ -4923,13 +4939,13 @@ pub fn render_category(
                         ""
                     },
                     icon("map-pin"),
-                    title,
+                    safe_title,
                     premium_badge,
-                    description,
+                    safe_description,
                     rating,
                     votes,
-                    address,
-                    contact,
+                    safe_address,
+                    safe_contact,
                     verified_badge
                 )
             })
@@ -5078,7 +5094,7 @@ pub fn render_category(
         nav_search = icon("search"),
         nav_user = icon("user"),
         nav_menu = icon("menu"),
-        category = category,
+        category = safe_category,
         city_url = city_url,
         count = count,
         cards = cards,
@@ -5167,7 +5183,7 @@ pub fn render_public_user_profile(
         .to_string()
     };
 
-    let safe_public_id = escape_html(public_id);
+    let public_id_js = serde_json::to_string(public_id).unwrap_or_else(|_| "\"\"".to_string());
 
     let internal_contact_html = if let Some(chat_user_id) = chat_user_id {
         format!(
@@ -5693,7 +5709,7 @@ pub fn render_public_user_profile(
 
 <script>
 (function() {{
-    const publicId = "{public_id}";
+    const publicId = {public_id_js};
 
     const openButton =
         document.getElementById("contact-request-open");
@@ -5871,7 +5887,7 @@ pub fn render_public_user_profile(
         contact_html = contact_html,
         intent_html = intent_html,
         internal_contact_html = internal_contact_html,
-        public_id = safe_public_id,
+        public_id_js = public_id_js,
         cards = cards,
         nav_map = icon("map"),
         nav_search = icon("search"),
@@ -5968,6 +5984,12 @@ pub fn render_resource_profile(
     _created_at: i64,
     owner_public_id: &str,
 ) -> String {
+    let safe_title = escape_html(title);
+    let safe_description = escape_html(description);
+    let safe_contact = escape_html(contact);
+    let safe_address = escape_html(address);
+    let safe_category = escape_html(category);
+
     let premium_badge = if premium != 0 {
         r#"<span style="
             display:inline-flex;
@@ -6088,16 +6110,19 @@ pub fn render_resource_profile(
 </section>
 "#,
             owner_icon = icon("user"),
-            public_id = owner_public_id,
+            public_id = urlencoding::encode(owner_public_id),
         )
     };
 
-    let map_query = address.trim().replace(' ', "+");
+    let map_query = urlencoding::encode(address.trim());
 
     let map_href = format!(
         "https://www.google.com/maps/search/?api=1&query={}",
         map_query
     );
+
+    let safe_contact_href = escape_html(&contact_href);
+    let safe_map_href = escape_html(&map_href);
 
     format!(
         r##"<!DOCTYPE html>
@@ -6763,16 +6788,16 @@ pub fn render_resource_profile(
         logo = icon("map"),
         back = icon("arrow-left"),
         category_icon = icon("map-pin"),
-        category = category,
-        title = title,
-        description = description,
+        category = safe_category,
+        title = safe_title,
+        description = safe_description,
         owner_profile_html = owner_profile_html,
         rating = rating,
         votes = votes,
-        address = address,
-        contact = contact,
-        contact_href = contact_href,
-        map_href = map_href,
+        address = safe_address,
+        contact = safe_contact,
+        contact_href = safe_contact_href,
+        map_href = safe_map_href,
         premium_badge = premium_badge,
         verified_badge = verified_badge,
         premium_style = premium_style,
@@ -7064,6 +7089,11 @@ pub fn render_my_resources(
                 rejection_reason,
                 is_active
             )| {
+                let safe_title = escape_html(title);
+                let safe_category = escape_html(category);
+                let safe_description = escape_html(description);
+                let safe_rejection_reason = escape_html(rejection_reason);
+
                 let premium_badge = if *premium != 0 {
                     r#"<span style="font-size:11px;font-weight:800;color:#b88932;">★ PREMIUM</span>"#
                 } else {
@@ -7122,7 +7152,7 @@ pub fn render_my_resources(
                                 font-size:12px;
                                 line-height:1.5;
                             "><strong>Причина отказа:</strong> {}</div>"#,
-                            rejection_reason
+                            safe_rejection_reason
                         )
                     } else {
                         String::new()
@@ -7267,9 +7297,9 @@ pub fn render_my_resources(
                     "#,
                     id = id,
                     icon = icon("map-pin"),
-                    title = title,
-                    category = category,
-                    description = description,
+                    title = safe_title,
+                    category = safe_category,
+                    description = safe_description,
                     rating = rating,
                     votes = votes,
                     premium_badge = premium_badge,
@@ -7349,6 +7379,12 @@ pub fn render_edit_resource(
     address: &str,
     category: &str,
 ) -> String {
+    let safe_title = escape_html(title);
+    let safe_description = escape_html(description);
+    let safe_contact = escape_html(contact);
+    let safe_address = escape_html(address);
+    let safe_category = escape_html(category);
+
     format!(
         r##"<!DOCTYPE html>
 <html lang="ru">
@@ -7460,11 +7496,11 @@ pub fn render_edit_resource(
         back = icon("arrow-left"),
         edit_icon = icon("user"),
         id = id,
-        title = title,
-        description = description,
-        contact = contact,
-        address = address,
-        category = category,
+        title = safe_title,
+        description = safe_description,
+        contact = safe_contact,
+        address = safe_address,
+        category = safe_category,
     )
 }
 

@@ -1,7 +1,29 @@
 use rusqlite::{Connection, Result};
+use std::time::Duration;
 
 pub fn init_db() -> Result<Connection> {
     let conn = Connection::open("data/votes.db")?;
+
+    // SQLite production settings.
+    //
+    // foreign_keys:
+    //   реально включает FOREIGN KEY / ON DELETE CASCADE
+    //   для этого соединения.
+    //
+    // WAL:
+    //   уменьшает блокировки чтения/записи и лучше подходит
+    //   для работающего web-приложения.
+    //
+    // synchronous=NORMAL:
+    //   рекомендуемый баланс надёжности и скорости вместе с WAL.
+    //
+    // busy_timeout:
+    //   SQLite ждёт освобождения блокировки вместо мгновенной
+    //   ошибки "database is locked".
+    conn.pragma_update(None, "foreign_keys", "ON")?;
+    conn.pragma_update(None, "journal_mode", "WAL")?;
+    conn.pragma_update(None, "synchronous", "NORMAL")?;
+    conn.busy_timeout(Duration::from_secs(5))?;
 
     conn.execute(
         "CREATE TABLE IF NOT EXISTS profiles (

@@ -61,6 +61,23 @@ fn verify_telegram_init_data(init_data: &str, bot_token: &str) -> Option<i64> {
         return None;
     }
 
+    // Telegram initData нельзя принимать бесконечно долго.
+    // Проверяем auth_date после успешной проверки подписи.
+    //
+    // Разрешаем максимум 10 минут с момента выдачи.
+    // Небольшой запас в будущее (60 секунд) нужен на возможную
+    // рассинхронизацию часов между Telegram и сервером.
+    let auth_date: i64 = pairs
+        .iter()
+        .find(|(k, _)| k == "auth_date")
+        .and_then(|(_, v)| v.parse::<i64>().ok())?;
+
+    let now = unix_now();
+
+    if auth_date <= 0 || auth_date > now + 60 || now.saturating_sub(auth_date) > 600 {
+        return None;
+    }
+
     let user_json = pairs.iter().find(|(k, _)| k == "user").map(|(_, v)| v)?;
 
     let user: serde_json::Value = serde_json::from_str(user_json).ok()?;
@@ -116,6 +133,23 @@ fn telegram_owner_user_id(client_id: &str) -> Option<i64> {
         .and_then(|value| value.parse::<i64>().ok())
 }
 
+fn input_text_is_valid(value: &str, min_chars: usize, max_chars: usize) -> bool {
+    let length = value.chars().count();
+
+    if length < min_chars || length > max_chars {
+        return false;
+    }
+
+    // Запрещаем управляющие символы, которые не нужны
+    // обычному пользовательскому тексту.
+    //
+    // Перевод строки / CR / TAB разрешаем:
+    // они нужны описаниям, сообщениям и статусам.
+    !value
+        .chars()
+        .any(|c| c.is_control() && c != '\n' && c != '\r' && c != '\t')
+}
+
 fn unix_now() -> i64 {
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -123,6 +157,85 @@ fn unix_now() -> i64 {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0)
+}
+
+async fn rate_limit_retry_after(
+    state: &AppState,
+    user_id: i64,
+    action: &str,
+    max_requests: usize,
+    window_seconds: i64,
+) -> Option<u64> {
+    let now = unix_now();
+    let cutoff = now.saturating_sub(window_seconds);
+    let key = format!("{}:{}", action, user_id);
+
+    let mut limits = state.rate_limits.lock().await;
+    let events = limits.entry(key).or_default();
+
+    // Sliding window:
+    // забываем только запросы, вышедшие за текущее окно.
+    while let Some(timestamp) = events.front().copied() {
+        if timestamp <= cutoff {
+            events.pop_front();
+        } else {
+            break;
+        }
+    }
+
+    if events.len() >= max_requests {
+        let oldest = events.front().copied().unwrap_or(now);
+
+        let retry_after = oldest
+            .saturating_add(window_seconds)
+            .saturating_sub(now)
+            .max(1);
+
+        return Some(retry_after as u64);
+    }
+
+    events.push_back(now);
+
+    None
+}
+
+fn request_is_cross_site(headers: &HeaderMap) -> bool {
+    // Современные браузеры прямо сообщают происхождение запроса.
+    // Если они говорят cross-site — такой state-changing запрос
+    // с cookie-сессией нам не нужен.
+    if let Some(value) = headers.get("sec-fetch-site").and_then(|v| v.to_str().ok()) {
+        if value.eq_ignore_ascii_case("cross-site") {
+            return true;
+        }
+    }
+
+    // Дополнительная проверка Origin.
+    //
+    // Заголовок может отсутствовать у curl, некоторых WebView и
+    // старых клиентов — отсутствие Origin само по себе НЕ блокируем.
+    if let Some(origin) = headers.get(header::ORIGIN).and_then(|v| v.to_str().ok()) {
+        let origin = origin.trim_end_matches('/');
+
+        if origin != "https://resursmap.de"
+            && origin != "https://www.resursmap.de"
+            && origin != "http://127.0.0.1:3000"
+        {
+            return true;
+        }
+    }
+
+    false
+}
+
+fn csrf_rejected_response() -> Response {
+    (
+        StatusCode::FORBIDDEN,
+        Json(json!({
+            "ok": false,
+            "error": "cross_site_request_rejected"
+        })),
+    )
+        .into_response()
 }
 
 fn create_user_session(state: &AppState, user_id: i64) -> String {
@@ -328,8 +441,12 @@ pub async fn admin_login_page() -> Html<String> {
 
 pub async fn admin_login(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Json(payload): Json<serde_json::Value>,
 ) -> Response {
+    if request_is_cross_site(&headers) {
+        return csrf_rejected_response();
+    }
     let init_data = payload
         .get("init_data")
         .and_then(|v| v.as_str())
@@ -349,6 +466,20 @@ pub async fn admin_login(
                 .into_response();
         }
     };
+
+    if let Some(retry_after) = rate_limit_retry_after(&state, user_id, "admin_auth", 10, 600).await
+    {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            [(header::RETRY_AFTER, retry_after.to_string())],
+            Json(json!({
+                "ok": false,
+                "error": "rate_limited",
+                "retry_after": retry_after
+            })),
+        )
+            .into_response();
+    }
 
     let session = create_admin_session(&state, user_id);
 
@@ -454,8 +585,12 @@ pub async fn app_auth_page() -> Html<String> {
 
 pub async fn app_auth(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Json(payload): Json<serde_json::Value>,
 ) -> Response {
+    if request_is_cross_site(&headers) {
+        return csrf_rejected_response();
+    }
     let init_data = payload
         .get("init_data")
         .and_then(|v| v.as_str())
@@ -475,6 +610,19 @@ pub async fn app_auth(
                 .into_response();
         }
     };
+
+    if let Some(retry_after) = rate_limit_retry_after(&state, user_id, "app_auth", 30, 600).await {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            [(header::RETRY_AFTER, retry_after.to_string())],
+            Json(json!({
+                "ok": false,
+                "error": "rate_limited",
+                "retry_after": retry_after
+            })),
+        )
+            .into_response();
+    }
 
     // TASK 7.16B PROFILE SYNC
     let (telegram_username, telegram_first_name, telegram_last_name) =
@@ -541,8 +689,19 @@ pub async fn app_root() -> Html<String> {
 pub async fn app_search(
     State(state): State<AppState>,
     Query(params): Query<BTreeMap<String, String>>,
-) -> Html<String> {
+) -> Response {
     let q = params.get("q").map(|s| s.trim()).unwrap_or("");
+
+    if q.chars().count() > 100 || q.chars().any(|c| c.is_control()) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Html(
+                "<h1>400</h1><p>Поисковый запрос должен содержать не более 100 символов.</p>"
+                    .to_string(),
+            ),
+        )
+            .into_response();
+    }
 
     let mut resources: Vec<(
         i64,
@@ -583,61 +742,88 @@ pub async fn app_search(
         }
 
         let db = state.db.lock().await;
-        let pattern = format!("%{}%", q);
+
+        // FTS5 query:
+        // каждое слово ищем как prefix, чтобы запрос
+        // "elect" находил "electrician".
+        //
+        // Спецсимволы FTS не передаём напрямую:
+        // оставляем только буквы/цифры и собираем безопасный MATCH.
+        let fts_terms: Vec<String> = q
+            .split_whitespace()
+            .filter_map(|term| {
+                let clean: String = term.chars().filter(|c| c.is_alphanumeric()).collect();
+
+                if clean.is_empty() {
+                    None
+                } else {
+                    Some(format!("{}*", clean))
+                }
+            })
+            .collect();
+
+        let fts_query = fts_terms.join(" ");
 
         let mut sql = String::from(
             "SELECT
-                id,
-                title,
-                category,
-                description,
-                address,
-                rating,
-                votes,
-                is_verified,
-                is_premium,
-                continent_index,
-                country_index,
-                city_index
-             FROM resources
-             WHERE is_active = 1
-               AND moderation_status = 'approved'
-               AND (
-                    LOWER(title) LIKE LOWER(?1)
-                    OR LOWER(description) LIKE LOWER(?1)
-                    OR LOWER(category) LIKE LOWER(?1)
-                    OR LOWER(address) LIKE LOWER(?1)",
-        );
-
-        for (index, _) in location_matches.iter().enumerate() {
-            let base = 2 + index * 3;
-
-            sql.push_str(&format!(
-                " OR (
-                    continent_index = ?{}
-                    AND country_index = ?{}
-                    AND city_index = ?{}
-                )",
-                base,
-                base + 1,
-                base + 2
-            ));
-        }
-
-        sql.push_str(
-            ")
-             ORDER BY
-                is_premium DESC,
-                is_verified DESC,
-                rating DESC,
-                votes DESC,
-                id DESC
-             LIMIT 100",
+                r.id,
+                r.title,
+                r.category,
+                r.description,
+                r.address,
+                r.rating,
+                r.votes,
+                r.is_verified,
+                r.is_premium,
+                r.continent_index,
+                r.country_index,
+                r.city_index
+             FROM resources_fts f
+             JOIN resources r
+               ON r.id = f.rowid
+             WHERE r.is_active = 1
+               AND r.moderation_status = 'approved'
+               AND resources_fts MATCH ?1",
         );
 
         let mut values: Vec<rusqlite::types::Value> = Vec::new();
 
-        values.push(pattern.into());
+        values.push(fts_query.clone().into());
+
+        if !location_matches.is_empty() {
+            sql.push_str(" AND (");
+
+            for (index, _) in location_matches.iter().enumerate() {
+                if index > 0 {
+                    sql.push_str(" OR ");
+                }
+
+                let base = 2 + index * 3;
+
+                sql.push_str(&format!(
+                    "(
+                        r.continent_index = ?{}
+                        AND r.country_index = ?{}
+                        AND r.city_index = ?{}
+                    )",
+                    base,
+                    base + 1,
+                    base + 2
+                ));
+            }
+
+            sql.push(')');
+        }
+
+        sql.push_str(
+            " ORDER BY
+                r.is_premium DESC,
+                r.is_verified DESC,
+                r.rating DESC,
+                r.votes DESC,
+                r.id DESC
+              LIMIT 100",
+        );
 
         for (ci, si, zi) in location_matches {
             values.push((ci as i64).into());
@@ -645,81 +831,82 @@ pub async fn app_search(
             values.push((zi as i64).into());
         }
 
-        resources = db
-            .prepare(&sql)
-            .and_then(|mut stmt| {
-                stmt.query_map(rusqlite::params_from_iter(values.iter()), |row| {
-                    Ok((
-                        row.get(0)?,
-                        row.get(1)?,
-                        row.get(2)?,
-                        row.get(3)?,
-                        row.get(4)?,
-                        row.get(5)?,
-                        row.get(6)?,
-                        row.get(7)?,
-                        row.get(8)?,
-                        row.get(9)?,
-                        row.get(10)?,
-                        row.get(11)?,
-                    ))
-                })?
-                .collect::<Result<Vec<_>, _>>()
-            })
-            .unwrap_or_default();
+        if !fts_terms.is_empty() {
+            resources = db
+                .prepare(&sql)
+                .and_then(|mut stmt| {
+                    stmt.query_map(rusqlite::params_from_iter(values.iter()), |row| {
+                        Ok((
+                            row.get(0)?,
+                            row.get(1)?,
+                            row.get(2)?,
+                            row.get(3)?,
+                            row.get(4)?,
+                            row.get(5)?,
+                            row.get(6)?,
+                            row.get(7)?,
+                            row.get(8)?,
+                            row.get(9)?,
+                            row.get(10)?,
+                            row.get(11)?,
+                        ))
+                    })?
+                    .collect::<Result<Vec<_>, _>>()
+                })
+                .unwrap_or_default();
+        }
 
-        people = db
-            .prepare(
-                "SELECT
-                    public_id,
-                    username,
-                    first_name,
-                    last_name,
-                    open_contact,
-                    intent_text,
-                    intent_until
-                 FROM profiles
-                 WHERE client_id LIKE 'tg:%'
-                   AND public_id <> ''
-                   AND (
-                        LOWER(username) LIKE LOWER(?1)
-                        OR LOWER(first_name) LIKE LOWER(?1)
-                        OR LOWER(last_name) LIKE LOWER(?1)
-                        OR LOWER(intent_text) LIKE LOWER(?1)
-                   )
-                 ORDER BY
-                    CASE
-                        WHEN intent_text <> ''
-                         AND (
-                              intent_until = 0
-                              OR intent_until >= strftime('%s','now')
-                         )
-                        THEN 0
-                        ELSE 1
-                    END,
-                    updated_at DESC
-                 LIMIT 50",
-            )
-            .and_then(|mut stmt| {
-                stmt.query_map(rusqlite::params![format!("%{}%", q)], |row| {
-                    Ok((
-                        row.get(0)?,
-                        row.get(1)?,
-                        row.get(2)?,
-                        row.get(3)?,
-                        row.get(4)?,
-                        row.get(5)?,
-                        row.get(6)?,
-                    ))
-                })?
-                .collect::<Result<Vec<_>, _>>()
-            })
-            .unwrap_or_default();
+        if !fts_terms.is_empty() {
+            people = db
+                .prepare(
+                    "SELECT
+                        p.public_id,
+                        p.username,
+                        p.first_name,
+                        p.last_name,
+                        p.open_contact,
+                        p.intent_text,
+                        p.intent_until
+                     FROM profiles_fts
+                     JOIN profiles p
+                       ON p.rowid = profiles_fts.rowid
+                     WHERE profiles_fts MATCH ?1
+                       AND p.client_id LIKE 'tg:%'
+                       AND p.public_id <> ''
+                     ORDER BY
+                        CASE
+                            WHEN p.intent_text <> ''
+                             AND (
+                                  p.intent_until = 0
+                                  OR p.intent_until >= strftime('%s','now')
+                             )
+                            THEN 0
+                            ELSE 1
+                        END,
+                        p.updated_at DESC
+                     LIMIT 50",
+                )
+                .and_then(|mut stmt| {
+                    stmt.query_map(rusqlite::params![&fts_query], |row| {
+                        Ok((
+                            row.get(0)?,
+                            row.get(1)?,
+                            row.get(2)?,
+                            row.get(3)?,
+                            row.get(4)?,
+                            row.get(5)?,
+                            row.get(6)?,
+                        ))
+                    })?
+                    .collect::<Result<Vec<_>, _>>()
+                })
+                .unwrap_or_default();
+        }
 
         drop(db);
     }
 
-    Html(templates::render_search(q, resources, people))
+    Html(templates::render_search(q, resources, people)).into_response()
 }
 
 pub async fn app_me(State(state): State<AppState>, headers: HeaderMap) -> Html<String> {
@@ -1247,11 +1434,84 @@ pub async fn add_resource(
     Path((ci, si, zi, k)): Path<(usize, usize, usize, String)>,
     headers: HeaderMap,
     Form(form): Form<AddResourceForm>,
-) -> Html<String> {
+) -> Response {
+    if request_is_cross_site(&headers) {
+        return (
+            StatusCode::FORBIDDEN,
+            Html(r#"<h1>403</h1><p>Запрос отклонён.</p>"#.to_string()),
+        )
+            .into_response();
+    }
+
+    let category = k.trim();
+    let title = form.title.trim();
+    let description = form.description.trim();
+    let contact = form.contact.trim();
+    let address = form.address.trim();
+    let init_data = form.init_data.trim();
+
+    if !input_text_is_valid(category, 1, 100) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Html("<h1>400</h1><p>Некорректная категория.</p>".to_string()),
+        )
+            .into_response();
+    }
+
+    if !input_text_is_valid(title, 1, 120) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Html("<h1>400</h1><p>Название должно содержать от 1 до 120 символов.</p>".to_string()),
+        )
+            .into_response();
+    }
+
+    if !input_text_is_valid(description, 1, 1000) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Html("<h1>400</h1><p>Описание должно содержать от 1 до 1000 символов.</p>".to_string()),
+        )
+            .into_response();
+    }
+
+    if !input_text_is_valid(contact, 0, 120) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Html(
+                "<h1>400</h1><p>Контакт слишком длинный или содержит недопустимые символы.</p>"
+                    .to_string(),
+            ),
+        )
+            .into_response();
+    }
+
+    if !input_text_is_valid(address, 0, 250) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Html(
+                "<h1>400</h1><p>Адрес слишком длинный или содержит недопустимые символы.</p>"
+                    .to_string(),
+            ),
+        )
+            .into_response();
+    }
+
+    // Telegram initData обычно намного меньше.
+    // Ограничение защищает endpoint от бессмысленно огромного значения.
+    if !input_text_is_valid(init_data, 0, 8192) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Html("<h1>400</h1><p>Некорректные данные Telegram.</p>".to_string()),
+        )
+            .into_response();
+    }
+
+    let category_url = urlencoding::encode(category);
+
     let owner_client_id = if let Some(user_id) = verify_user_session(&state, &headers) {
         format!("tg:{}", user_id)
-    } else if !form.init_data.trim().is_empty() {
-        match verify_telegram_init_data(form.init_data.trim(), &state.bot_token) {
+    } else if !init_data.is_empty() {
+        match verify_telegram_init_data(init_data, &state.bot_token) {
             Some(user_id) => format!("tg:{}", user_id),
             None => String::new(),
         }
@@ -1286,7 +1546,35 @@ pub async fn add_resource(
 </body>
 </html>"#,
             templates::base_style(),
-        ));
+        ))
+        .into_response();
+    }
+
+    let owner_user_id = owner_client_id
+        .strip_prefix("tg:")
+        .and_then(|value| value.parse::<i64>().ok())
+        .unwrap_or(0);
+
+    if owner_user_id <= 0 {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Html("<h1>401</h1><p>Не удалось определить пользователя.</p>".to_string()),
+        )
+            .into_response();
+    }
+
+    if let Some(retry_after) =
+        rate_limit_retry_after(&state, owner_user_id, "resource_add", 10, 3600).await
+    {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            [(header::RETRY_AFTER, retry_after.to_string())],
+            Html(
+                "<h1>429</h1><p>Слишком много добавлений ресурсов. Попробуйте позже.</p>"
+                    .to_string(),
+            ),
+        )
+            .into_response();
     }
 
     let db = state.db.lock().await;
@@ -1307,11 +1595,11 @@ pub async fn add_resource(
             ci,
             si,
             zi,
-            k,
-            form.title.trim(),
-            form.description.trim(),
-            form.contact.trim(),
-            form.address.trim(),
+            category,
+            title,
+            description,
+            contact,
+            address,
             owner_client_id,
         ],
     );
@@ -1353,9 +1641,10 @@ pub async fn add_resource(
             ci,
             si,
             zi,
-            k,
+            category_url,
             templates::icon("map"),
-        )),
+        ))
+        .into_response(),
         Err(_) => Html(format!(
             r#"<!DOCTYPE html>
 <html lang="ru">
@@ -1380,8 +1669,9 @@ pub async fn add_resource(
             ci,
             si,
             zi,
-            k,
-        )),
+            category_url,
+        ))
+        .into_response(),
     }
 }
 
@@ -1523,6 +1813,10 @@ pub async fn accept_contact_request(
     Path(id): Path<i64>,
     headers: HeaderMap,
 ) -> Response {
+    if request_is_cross_site(&headers) {
+        return csrf_rejected_response();
+    }
+
     let user_id = match verify_user_session(&state, &headers) {
         Some(id) => id,
 
@@ -1530,6 +1824,17 @@ pub async fn accept_contact_request(
             return (StatusCode::UNAUTHORIZED, "Требуется вход через Telegram").into_response();
         }
     };
+
+    if let Some(retry_after) =
+        rate_limit_retry_after(&state, user_id, "contact_decision", 30, 600).await
+    {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            [(header::RETRY_AFTER, retry_after.to_string())],
+            "Слишком много действий с запросами. Попробуйте позже.",
+        )
+            .into_response();
+    }
 
     let db = state.db.lock().await;
 
@@ -1555,44 +1860,63 @@ pub async fn accept_contact_request(
         }
     };
 
-    let changed = db
-        .execute(
+    let (user1_id, user2_id) = if sender_user_id < user_id {
+        (sender_user_id, user_id)
+    } else {
+        (user_id, sender_user_id)
+    };
+
+    let transaction_result = (|| -> rusqlite::Result<usize> {
+        let tx = db.unchecked_transaction()?;
+
+        let changed = tx.execute(
             "UPDATE contact_requests
              SET status = 'accepted',
                  updated_at = strftime('%s','now')
              WHERE id = ?1
                AND receiver_user_id = ?2
                AND status = 'pending'",
-            rusqlite::params![id, user_id,],
-        )
-        .unwrap_or(0);
+            rusqlite::params![id, user_id],
+        )?;
+
+        if changed == 1 {
+            tx.execute(
+                "INSERT INTO conversations (
+                    user1_id,
+                    user2_id,
+                    created_at,
+                    updated_at
+                 )
+                 VALUES (
+                    ?1,
+                    ?2,
+                    strftime('%s','now'),
+                    strftime('%s','now')
+                 )
+                 ON CONFLICT(user1_id, user2_id)
+                 DO UPDATE SET
+                    updated_at = strftime('%s','now')",
+                rusqlite::params![user1_id, user2_id],
+            )?;
+        }
+
+        tx.commit()?;
+        Ok(changed)
+    })();
+
+    let changed = match transaction_result {
+        Ok(changed) => changed,
+        Err(err) => {
+            drop(db);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Ошибка принятия запроса: {}", err),
+            )
+                .into_response();
+        }
+    };
 
     if changed == 1 {
-        let (user1_id, user2_id) = if sender_user_id < user_id {
-            (sender_user_id, user_id)
-        } else {
-            (user_id, sender_user_id)
-        };
-
-        let _ = db.execute(
-            "INSERT INTO conversations (
-                user1_id,
-                user2_id,
-                created_at,
-                updated_at
-             )
-             VALUES (
-                ?1,
-                ?2,
-                strftime('%s','now'),
-                strftime('%s','now')
-             )
-             ON CONFLICT(user1_id, user2_id)
-             DO UPDATE SET
-                updated_at = strftime('%s','now')",
-            rusqlite::params![user1_id, user2_id,],
-        );
-
         let _ = db.execute(
             "INSERT INTO user_notifications (
                 user_id,
@@ -1612,7 +1936,7 @@ pub async fn accept_contact_request(
                 0,
                 strftime('%s','now')
              )",
-            rusqlite::params![sender_user_id,],
+            rusqlite::params![sender_user_id],
         );
     }
 
@@ -1630,6 +1954,10 @@ pub async fn reject_contact_request(
     Path(id): Path<i64>,
     headers: HeaderMap,
 ) -> Response {
+    if request_is_cross_site(&headers) {
+        return csrf_rejected_response();
+    }
+
     let user_id = match verify_user_session(&state, &headers) {
         Some(id) => id,
 
@@ -1637,6 +1965,17 @@ pub async fn reject_contact_request(
             return (StatusCode::UNAUTHORIZED, "Требуется вход через Telegram").into_response();
         }
     };
+
+    if let Some(retry_after) =
+        rate_limit_retry_after(&state, user_id, "contact_decision", 30, 600).await
+    {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            [(header::RETRY_AFTER, retry_after.to_string())],
+            "Слишком много действий с запросами. Попробуйте позже.",
+        )
+            .into_response();
+    }
 
     let db = state.db.lock().await;
 
@@ -1951,6 +2290,10 @@ pub async fn send_chat_message(
     headers: HeaderMap,
     Form(form): Form<ChatMessageForm>,
 ) -> Response {
+    if request_is_cross_site(&headers) {
+        return csrf_rejected_response();
+    }
+
     let user_id = match verify_user_session(&state, &headers) {
         Some(id) => id,
 
@@ -1976,8 +2319,21 @@ pub async fn send_chat_message(
             .into_response();
     }
 
-    if message.chars().count() > 2000 {
-        return (StatusCode::BAD_REQUEST, "Сообщение слишком длинное").into_response();
+    if !input_text_is_valid(message, 1, 2000) {
+        return (
+            StatusCode::BAD_REQUEST,
+            "Сообщение слишком длинное или содержит недопустимые символы",
+        )
+            .into_response();
+    }
+
+    if let Some(retry_after) = rate_limit_retry_after(&state, user_id, "chat_send", 30, 60).await {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            [(header::RETRY_AFTER, retry_after.to_string())],
+            "Слишком много сообщений. Попробуйте немного позже.",
+        )
+            .into_response();
     }
 
     let (user1_id, user2_id) = if user_id < other_user_id {
@@ -2010,8 +2366,10 @@ pub async fn send_chat_message(
         }
     };
 
-    let inserted = db
-        .execute(
+    let transaction_result = (|| -> rusqlite::Result<usize> {
+        let tx = db.unchecked_transaction()?;
+
+        let inserted = tx.execute(
             "INSERT INTO messages (
                 conversation_id,
                 sender_user_id,
@@ -2026,18 +2384,35 @@ pub async fn send_chat_message(
                 0,
                 strftime('%s','now')
              )",
-            rusqlite::params![conversation_id, user_id, message,],
-        )
-        .unwrap_or(0);
+            rusqlite::params![conversation_id, user_id, message],
+        )?;
+
+        if inserted == 1 {
+            tx.execute(
+                "UPDATE conversations
+                 SET updated_at = strftime('%s','now')
+                 WHERE id = ?1",
+                rusqlite::params![conversation_id],
+            )?;
+        }
+
+        tx.commit()?;
+        Ok(inserted)
+    })();
+
+    let inserted = match transaction_result {
+        Ok(inserted) => inserted,
+        Err(err) => {
+            drop(db);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Ошибка сохранения сообщения: {}", err),
+            )
+                .into_response();
+        }
+    };
 
     if inserted == 1 {
-        let _ = db.execute(
-            "UPDATE conversations
-             SET updated_at = strftime('%s','now')
-             WHERE id = ?1",
-            rusqlite::params![conversation_id,],
-        );
-
         let existing_chat_notification = db
             .execute(
                 "UPDATE user_notifications
@@ -2045,7 +2420,7 @@ pub async fn send_chat_message(
                  WHERE user_id = ?1
                    AND kind = 'chat_message'
                    AND is_read = 0",
-                rusqlite::params![other_user_id,],
+                rusqlite::params![other_user_id],
             )
             .unwrap_or(0);
 
@@ -2069,7 +2444,7 @@ pub async fn send_chat_message(
                     0,
                     strftime('%s','now')
                  )",
-                rusqlite::params![other_user_id,],
+                rusqlite::params![other_user_id],
             );
         }
     }
@@ -2302,7 +2677,32 @@ pub async fn edit_resource(
     Path(id): Path<i64>,
     headers: HeaderMap,
     Form(form): Form<EditResourceForm>,
-) -> Html<String> {
+) -> Response {
+    if request_is_cross_site(&headers) {
+        return (
+            StatusCode::FORBIDDEN,
+            Html(r#"<h1>403</h1><p>Запрос отклонён.</p>"#.to_string()),
+        )
+            .into_response();
+    }
+
+    let title = form.title.trim();
+    let description = form.description.trim();
+    let contact = form.contact.trim();
+    let address = form.address.trim();
+
+    if !input_text_is_valid(title, 1, 120)
+        || !input_text_is_valid(description, 1, 1000)
+        || !input_text_is_valid(contact, 0, 120)
+        || !input_text_is_valid(address, 0, 250)
+    {
+        return (
+            StatusCode::BAD_REQUEST,
+            Html("<h1>400</h1><p>Проверьте длину и содержимое полей ресурса.</p>".to_string()),
+        )
+            .into_response();
+    }
+
     let owner_client_id = match verify_user_session(&state, &headers) {
         Some(user_id) => format!("tg:{}", user_id),
         None => String::new(),
@@ -2329,7 +2729,35 @@ pub async fn edit_resource(
 </body>
 </html>"#,
             templates::base_style(),
-        ));
+        ))
+        .into_response();
+    }
+
+    let owner_user_id = owner_client_id
+        .strip_prefix("tg:")
+        .and_then(|value| value.parse::<i64>().ok())
+        .unwrap_or(0);
+
+    if owner_user_id <= 0 {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Html("<h1>401</h1><p>Не удалось определить пользователя.</p>".to_string()),
+        )
+            .into_response();
+    }
+
+    if let Some(retry_after) =
+        rate_limit_retry_after(&state, owner_user_id, "resource_edit", 30, 3600).await
+    {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            [(header::RETRY_AFTER, retry_after.to_string())],
+            Html(
+                "<h1>429</h1><p>Слишком много изменений ресурсов. Попробуйте позже.</p>"
+                    .to_string(),
+            ),
+        )
+            .into_response();
     }
 
     let db = state.db.lock().await;
@@ -2348,14 +2776,7 @@ pub async fn edit_resource(
              updated_at = strftime('%s','now')
          WHERE id = ?5
            AND client_id = ?6",
-            rusqlite::params![
-                form.title.trim(),
-                form.description.trim(),
-                form.contact.trim(),
-                form.address.trim(),
-                id,
-                &owner_client_id,
-            ],
+            rusqlite::params![title, description, contact, address, id, &owner_client_id,],
         )
         .unwrap_or(0);
 
@@ -2389,6 +2810,7 @@ pub async fn edit_resource(
 </html>"#,
             templates::base_style(),
         ))
+        .into_response()
     } else {
         Html(format!(
             r#"<!DOCTYPE html>
@@ -2411,6 +2833,7 @@ pub async fn edit_resource(
 </html>"#,
             templates::base_style(),
         ))
+        .into_response()
     }
 }
 
@@ -2503,6 +2926,11 @@ pub async fn admin_reports(State(state): State<AppState>, headers: HeaderMap) ->
         is_active,
     ) in rows
     {
+        let safe_reason = templates::escape_html(&reason);
+        let safe_title = templates::escape_html(&title);
+        let safe_category = templates::escape_html(&category);
+        let safe_moderation_status = templates::escape_html(&moderation_status);
+
         let report_badge = if report_status == "pending" {
             r#"<span style="color:#d97706;font-weight:800;">● Ожидает</span>"#
         } else {
@@ -2512,12 +2940,12 @@ pub async fn admin_reports(State(state): State<AppState>, headers: HeaderMap) ->
         let resource_status = if is_active == 1 {
             format!(
                 r#"<span style="color:#16a34a;">● Активен · {}</span>"#,
-                moderation_status
+                safe_moderation_status
             )
         } else {
             format!(
                 r#"<span style="color:#dc2626;">● Скрыт · {}</span>"#,
-                moderation_status
+                safe_moderation_status
             )
         };
 
@@ -2683,11 +3111,11 @@ pub async fn admin_reports(State(state): State<AppState>, headers: HeaderMap) ->
 "#,
             report_id = report_id,
             resource_id = resource_id,
-            title = title,
-            category = category,
+            title = safe_title,
+            category = safe_category,
             report_badge = report_badge,
             resource_status = resource_status,
-            reason = reason,
+            reason = safe_reason,
             reporter_user_id = reporter_user_id,
             created_at = created_at,
             close_button = close_button,
@@ -2826,6 +3254,10 @@ pub async fn admin_close_report(
     Path(id): Path<i64>,
     headers: HeaderMap,
 ) -> Response {
+    if request_is_cross_site(&headers) {
+        return csrf_rejected_response();
+    }
+
     if !is_admin_session(&state, &headers) {
         return (StatusCode::UNAUTHORIZED, "Доступ запрещён").into_response();
     }
@@ -2854,6 +3286,10 @@ pub async fn admin_hide_reported_resource(
     Path(id): Path<i64>,
     headers: HeaderMap,
 ) -> Response {
+    if request_is_cross_site(&headers) {
+        return csrf_rejected_response();
+    }
+
     if !is_admin_session(&state, &headers) {
         return (StatusCode::UNAUTHORIZED, "Доступ запрещён").into_response();
     }
@@ -2871,21 +3307,36 @@ pub async fn admin_hide_reported_resource(
         .ok();
 
     if let Some(resource_id) = resource_id {
-        let _ = db.execute(
-            "UPDATE resources
-             SET is_active = 0,
-                 updated_at = strftime('%s','now')
-             WHERE id = ?1",
-            rusqlite::params![resource_id],
-        );
+        let transaction_result = (|| -> rusqlite::Result<()> {
+            let tx = db.unchecked_transaction()?;
 
-        let _ = db.execute(
-            "UPDATE resource_reports
-             SET status = 'closed',
-                 updated_at = strftime('%s','now')
-             WHERE id = ?1",
-            rusqlite::params![id],
-        );
+            tx.execute(
+                "UPDATE resources
+                 SET is_active = 0,
+                     updated_at = strftime('%s','now')
+                 WHERE id = ?1",
+                rusqlite::params![resource_id],
+            )?;
+
+            tx.execute(
+                "UPDATE resource_reports
+                 SET status = 'closed',
+                     updated_at = strftime('%s','now')
+                 WHERE id = ?1",
+                rusqlite::params![id],
+            )?;
+
+            tx.commit()
+        })();
+
+        if let Err(err) = transaction_result {
+            drop(db);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Ошибка обработки жалобы: {}", err),
+            )
+                .into_response();
+        }
     }
 
     drop(db);
@@ -2902,6 +3353,10 @@ pub async fn admin_reject_reported_resource(
     Path(id): Path<i64>,
     headers: HeaderMap,
 ) -> Response {
+    if request_is_cross_site(&headers) {
+        return csrf_rejected_response();
+    }
+
     if !is_admin_session(&state, &headers) {
         return (StatusCode::UNAUTHORIZED, "Доступ запрещён").into_response();
     }
@@ -2921,24 +3376,39 @@ pub async fn admin_reject_reported_resource(
     if let Some((resource_id, reason)) = report {
         let rejection_reason = format!("Жалоба пользователя: {}", reason);
 
-        let _ = db.execute(
-            "UPDATE resources
-             SET moderation_status = 'rejected',
-                 rejection_reason = ?2,
-                 is_verified = 0,
-                 is_active = 0,
-                 updated_at = strftime('%s','now')
-             WHERE id = ?1",
-            rusqlite::params![resource_id, rejection_reason,],
-        );
+        let transaction_result = (|| -> rusqlite::Result<()> {
+            let tx = db.unchecked_transaction()?;
 
-        let _ = db.execute(
-            "UPDATE resource_reports
-             SET status = 'closed',
-                 updated_at = strftime('%s','now')
-             WHERE id = ?1",
-            rusqlite::params![id],
-        );
+            tx.execute(
+                "UPDATE resources
+                 SET moderation_status = 'rejected',
+                     rejection_reason = ?2,
+                     is_verified = 0,
+                     is_active = 0,
+                     updated_at = strftime('%s','now')
+                 WHERE id = ?1",
+                rusqlite::params![resource_id, rejection_reason],
+            )?;
+
+            tx.execute(
+                "UPDATE resource_reports
+                 SET status = 'closed',
+                     updated_at = strftime('%s','now')
+                 WHERE id = ?1",
+                rusqlite::params![id],
+            )?;
+
+            tx.commit()
+        })();
+
+        if let Err(err) = transaction_result {
+            drop(db);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Ошибка отклонения ресурса по жалобе: {}", err),
+            )
+                .into_response();
+        }
     }
 
     drop(db);
@@ -2958,6 +3428,13 @@ pub async fn admin_resources(
     let filter = params.get("filter").map(|s| s.as_str()).unwrap_or("all");
 
     let q = params.get("q").map(|s| s.trim()).unwrap_or("");
+
+    if q.chars().count() > 100 || q.chars().any(|c| c.is_control()) {
+        return Html(
+            "<h1>400</h1><p>Поисковый запрос должен содержать не более 100 символов.</p>"
+                .to_string(),
+        );
+    }
 
     if !is_admin_session(&state, &headers) {
         return Html(
@@ -3110,6 +3587,11 @@ pub async fn admin_resources(
         rejection_reason,
     ) in rows
     {
+        let safe_title = templates::escape_html(&title);
+        let safe_category = templates::escape_html(&category);
+        let safe_description = templates::escape_html(&description);
+        let safe_rejection_reason = templates::escape_html(&rejection_reason);
+
         let moderation_badge = match moderation_status.as_str() {
             "approved" => r#"<span style="color:#16a34a;font-weight:800;">✓ Одобрен</span>"#,
             "rejected" => r#"<span style="color:#dc2626;font-weight:800;">✕ Отклонён</span>"#,
@@ -3129,7 +3611,7 @@ pub async fn admin_resources(
                         font-size:13px;
                         line-height:1.45;
                     "><strong>Причина отказа:</strong> {}</div>"#,
-                    rejection_reason
+                    safe_rejection_reason
                 )
             } else {
                 String::new()
@@ -3330,9 +3812,9 @@ pub async fn admin_resources(
 </article>
 "#,
             id = id,
-            title = title,
-            category = category,
-            description = description,
+            title = safe_title,
+            category = safe_category,
+            description = safe_description,
             rating = rating,
             votes = votes,
             moderation_badge = moderation_badge,
@@ -3344,6 +3826,9 @@ pub async fn admin_resources(
             key_query = key_query,
         ));
     }
+
+    let safe_q = templates::escape_html(q);
+    let safe_filter = templates::escape_html(filter);
 
     Html(format!(
         r#"<!DOCTYPE html>
@@ -3605,8 +4090,8 @@ pub async fn admin_resources(
         cards = cards,
         key_query = key_query,
         key_join = key_join,
-        filter = filter,
-        q = q,
+        filter = safe_filter,
+        q = safe_q,
         result_count = result_count,
     ))
 }
@@ -3615,13 +4100,36 @@ pub async fn admin_bulk_resources(
     State(state): State<AppState>,
     headers: HeaderMap,
     Query(params): Query<BTreeMap<String, String>>,
-) -> Html<String> {
+) -> Response {
+    if request_is_cross_site(&headers) {
+        return (
+            StatusCode::FORBIDDEN,
+            Html(r#"<h1>403</h1><p>Запрос отклонён.</p>"#.to_string()),
+        )
+            .into_response();
+    }
+
     let filter = params.get("filter").map(|s| s.as_str()).unwrap_or("all");
     let q = params.get("q").map(|s| s.trim()).unwrap_or("");
     let action = params.get("action").map(|s| s.as_str()).unwrap_or("");
 
+    if q.chars().count() > 100 || q.chars().any(|c| c.is_control()) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Html(
+                "<h1>400</h1><p>Поисковый запрос должен содержать не более 100 символов.</p>"
+                    .to_string(),
+            ),
+        )
+            .into_response();
+    }
+
     if !is_admin_session(&state, &headers) {
-        return Html("<h1>403</h1><p>Доступ запрещён</p>".to_string());
+        return (
+            StatusCode::FORBIDDEN,
+            Html("<h1>403</h1><p>Доступ запрещён</p>".to_string()),
+        )
+            .into_response();
     }
 
     let filter_clause = match filter {
@@ -3638,21 +4146,20 @@ pub async fn admin_bulk_resources(
         "premium" => "is_premium = 1",
         "hide" => "is_active = 0",
         _ => {
-            return Html("<h1>400</h1><p>Неизвестное действие</p>".to_string());
+            return (
+                StatusCode::BAD_REQUEST,
+                Html("<h1>400</h1><p>Неизвестное действие</p>".to_string()),
+            )
+                .into_response();
         }
     };
 
     let search_clause = if q.is_empty() {
-        "1 = 1".to_string()
+        "1 = 1"
     } else {
-        format!(
-            "(LOWER(title) LIKE LOWER('%{}%')
-              OR LOWER(category) LIKE LOWER('%{}%')
-              OR LOWER(description) LIKE LOWER('%{}%'))",
-            q.replace('\'', "''"),
-            q.replace('\'', "''"),
-            q.replace('\'', "''")
-        )
+        "(LOWER(title) LIKE LOWER(?1)
+          OR LOWER(category) LIKE LOWER(?1)
+          OR LOWER(description) LIKE LOWER(?1))"
     };
 
     let sql = format!(
@@ -3665,8 +4172,19 @@ pub async fn admin_bulk_resources(
     );
 
     let db = state.db.lock().await;
-    let changed = db.execute(&sql, []).unwrap_or(0);
+
+    let changed = if q.is_empty() {
+        db.execute(&sql, []).unwrap_or(0)
+    } else {
+        let pattern = format!("%{}%", q);
+
+        db.execute(&sql, rusqlite::params![pattern]).unwrap_or(0)
+    };
+
     drop(db);
+
+    let filter_url = urlencoding::encode(filter);
+    let q_url = urlencoding::encode(q);
 
     Html(format!(
         r#"<!DOCTYPE html>
@@ -3675,17 +4193,18 @@ pub async fn admin_bulk_resources(
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Готово · ResursMap</title>
-<meta http-equiv="refresh" content="1;url=/app/admin/resources?filter={filter}&q={q}">
+<meta http-equiv="refresh" content="1;url=/app/admin/resources?filter={filter_url}&amp;q={q_url}">
 </head>
 <body style="font-family:system-ui;padding:30px;">
 <h2>Изменено ресурсов: {changed}</h2>
 <p>Возвращаемся в модерацию…</p>
 </body>
 </html>"#,
-        filter = filter,
-        q = q,
+        filter_url = filter_url,
+        q_url = q_url,
         changed = changed,
     ))
+    .into_response()
 }
 
 async fn admin_toggle_field(
@@ -3693,15 +4212,15 @@ async fn admin_toggle_field(
     headers: &HeaderMap,
     id: i64,
     field: &str,
-) -> Html<String> {
+) -> Response {
     if !is_admin_session(state, headers) {
-        return Html("<h1>403</h1>".to_string());
+        return (StatusCode::FORBIDDEN, Html("<h1>403</h1>".to_string())).into_response();
     }
 
     let allowed = ["is_verified", "is_premium", "is_active"];
 
     if !allowed.contains(&field) {
-        return Html("<h1>400</h1>".to_string());
+        return (StatusCode::BAD_REQUEST, Html("<h1>400</h1>".to_string())).into_response();
     }
 
     let sql = format!(
@@ -3717,13 +4236,22 @@ async fn admin_toggle_field(
     drop(db);
 
     Html(r#"<meta http-equiv="refresh" content="0;url=/app/admin/resources">"#.to_string())
+        .into_response()
 }
 
 pub async fn admin_toggle_verified(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path(id): Path<i64>,
-) -> Html<String> {
+) -> Response {
+    if request_is_cross_site(&headers) {
+        return (
+            StatusCode::FORBIDDEN,
+            Html(r#"<h1>403</h1><p>Запрос отклонён.</p>"#.to_string()),
+        )
+            .into_response();
+    }
+
     admin_toggle_field(&state, &headers, id, "is_verified").await
 }
 
@@ -3731,7 +4259,15 @@ pub async fn admin_toggle_premium(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path(id): Path<i64>,
-) -> Html<String> {
+) -> Response {
+    if request_is_cross_site(&headers) {
+        return (
+            StatusCode::FORBIDDEN,
+            Html(r#"<h1>403</h1><p>Запрос отклонён.</p>"#.to_string()),
+        )
+            .into_response();
+    }
+
     admin_toggle_field(&state, &headers, id, "is_premium").await
 }
 
@@ -3739,7 +4275,15 @@ pub async fn admin_toggle_active(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path(id): Path<i64>,
-) -> Html<String> {
+) -> Response {
+    if request_is_cross_site(&headers) {
+        return (
+            StatusCode::FORBIDDEN,
+            Html(r#"<h1>403</h1><p>Запрос отклонён.</p>"#.to_string()),
+        )
+            .into_response();
+    }
+
     admin_toggle_field(&state, &headers, id, "is_active").await
 }
 
@@ -3761,6 +4305,10 @@ pub async fn api_report_resource(
     headers: HeaderMap,
     Json(payload): Json<ReportResourcePayload>,
 ) -> Response {
+    if request_is_cross_site(&headers) {
+        return csrf_rejected_response();
+    }
+
     let user_id = match verify_user_session(&state, &headers) {
         Some(id) => id,
 
@@ -3778,23 +4326,12 @@ pub async fn api_report_resource(
 
     let reason = payload.reason.trim();
 
-    if reason.len() < 3 {
+    if !input_text_is_valid(reason, 3, 500) {
         return (
             StatusCode::BAD_REQUEST,
             Json(json!({
                 "ok": false,
-                "error": "reason_too_short"
-            })),
-        )
-            .into_response();
-    }
-
-    if reason.chars().count() > 500 {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(json!({
-                "ok": false,
-                "error": "reason_too_long"
+                "error": "invalid_reason"
             })),
         )
             .into_response();
@@ -3824,6 +4361,23 @@ pub async fn api_report_resource(
             Json(json!({
                 "ok": false,
                 "error": "resource_not_found"
+            })),
+        )
+            .into_response();
+    }
+
+    if let Some(retry_after) =
+        rate_limit_retry_after(&state, user_id, "resource_report", 6, 3600).await
+    {
+        drop(db);
+
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            [(header::RETRY_AFTER, retry_after.to_string())],
+            Json(json!({
+                "ok": false,
+                "error": "rate_limited",
+                "retry_after": retry_after
             })),
         )
             .into_response();
@@ -3881,6 +4435,10 @@ pub async fn api_favorite_toggle(
     Path(id): Path<i64>,
     headers: HeaderMap,
 ) -> Response {
+    if request_is_cross_site(&headers) {
+        return csrf_rejected_response();
+    }
+
     let user_id = match verify_user_session(&state, &headers) {
         Some(id) => id,
         None => {
@@ -3894,6 +4452,21 @@ pub async fn api_favorite_toggle(
                 .into_response();
         }
     };
+
+    if let Some(retry_after) =
+        rate_limit_retry_after(&state, user_id, "favorite_toggle", 60, 60).await
+    {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            [(header::RETRY_AFTER, retry_after.to_string())],
+            Json(json!({
+                "ok": false,
+                "error": "rate_limited",
+                "retry_after": retry_after
+            })),
+        )
+            .into_response();
+    }
 
     let db = state.db.lock().await;
 
@@ -4014,6 +4587,10 @@ pub async fn api_resource_vote(
     headers: HeaderMap,
     Json(payload): Json<serde_json::Value>,
 ) -> Response {
+    if request_is_cross_site(&headers) {
+        return csrf_rejected_response();
+    }
+
     let user_id = match verify_user_session(&state, &headers) {
         Some(id) => id,
         None => {
@@ -4072,34 +4649,39 @@ pub async fn api_resource_vote(
             .into_response();
     }
 
-    let result = db.execute(
-        "INSERT INTO resource_votes
-            (resource_id, client_id, score, updated_at)
-         VALUES
-            (?1, ?2, ?3, strftime('%s','now'))
-         ON CONFLICT(resource_id, client_id)
-         DO UPDATE SET
-            score = excluded.score,
-            updated_at = excluded.updated_at",
-        rusqlite::params![id, client_id, score],
-    );
-
-    if let Err(err) = result {
+    if let Some(retry_after) =
+        rate_limit_retry_after(&state, user_id, "resource_rating", 60, 60).await
+    {
         drop(db);
 
         return (
-            StatusCode::INTERNAL_SERVER_ERROR,
+            StatusCode::TOO_MANY_REQUESTS,
+            [(header::RETRY_AFTER, retry_after.to_string())],
             Json(json!({
                 "ok": false,
-                "error": "vote_write_failed",
-                "message": err.to_string()
+                "error": "rate_limited",
+                "retry_after": retry_after
             })),
         )
             .into_response();
     }
 
-    let stats: (f64, i64) = db
-        .query_row(
+    let transaction_result = (|| -> rusqlite::Result<(f64, i64)> {
+        let tx = db.unchecked_transaction()?;
+
+        tx.execute(
+            "INSERT INTO resource_votes
+                (resource_id, client_id, score, updated_at)
+             VALUES
+                (?1, ?2, ?3, strftime('%s','now'))
+             ON CONFLICT(resource_id, client_id)
+             DO UPDATE SET
+                score = excluded.score,
+                updated_at = excluded.updated_at",
+            rusqlite::params![id, client_id, score],
+        )?;
+
+        let stats: (f64, i64) = tx.query_row(
             "SELECT
                 COALESCE(AVG(score), 0),
                 COUNT(*)
@@ -4107,17 +4689,38 @@ pub async fn api_resource_vote(
              WHERE resource_id = ?1",
             rusqlite::params![id],
             |row| Ok((row.get(0)?, row.get(1)?)),
-        )
-        .unwrap_or((0.0, 0));
+        )?;
 
-    let _ = db.execute(
-        "UPDATE resources
-         SET rating = ?1,
-             votes = ?2,
-             updated_at = strftime('%s','now')
-         WHERE id = ?3",
-        rusqlite::params![stats.0, stats.1, id],
-    );
+        tx.execute(
+            "UPDATE resources
+             SET rating = ?1,
+                 votes = ?2,
+                 updated_at = strftime('%s','now')
+             WHERE id = ?3",
+            rusqlite::params![stats.0, stats.1, id],
+        )?;
+
+        tx.commit()?;
+        Ok(stats)
+    })();
+
+    let stats = match transaction_result {
+        Ok(stats) => stats,
+
+        Err(err) => {
+            drop(db);
+
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({
+                    "ok": false,
+                    "error": "vote_write_failed",
+                    "message": err.to_string()
+                })),
+            )
+                .into_response();
+        }
+    };
 
     drop(db);
 
@@ -4141,6 +4744,10 @@ pub async fn api_contact_request(
     headers: HeaderMap,
     Json(payload): Json<ContactRequestPayload>,
 ) -> Response {
+    if request_is_cross_site(&headers) {
+        return csrf_rejected_response();
+    }
+
     let sender_user_id = match verify_user_session(&state, &headers) {
         Some(id) => id,
 
@@ -4175,23 +4782,12 @@ pub async fn api_contact_request(
             .into_response();
     }
 
-    if message.chars().count() < 2 {
+    if !input_text_is_valid(message, 2, 500) {
         return (
             StatusCode::BAD_REQUEST,
             Json(json!({
                 "ok": false,
-                "error": "message_too_short"
-            })),
-        )
-            .into_response();
-    }
-
-    if message.chars().count() > 500 {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(json!({
-                "ok": false,
-                "error": "message_too_long"
+                "error": "invalid_message"
             })),
         )
             .into_response();
@@ -4239,6 +4835,23 @@ pub async fn api_contact_request(
             Json(json!({
                 "ok": false,
                 "error": "cannot_contact_self"
+            })),
+        )
+            .into_response();
+    }
+
+    if let Some(retry_after) =
+        rate_limit_retry_after(&state, sender_user_id, "contact_request", 6, 600).await
+    {
+        drop(db);
+
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            [(header::RETRY_AFTER, retry_after.to_string())],
+            Json(json!({
+                "ok": false,
+                "error": "rate_limited",
+                "retry_after": retry_after
             })),
         )
             .into_response();
@@ -4407,6 +5020,10 @@ pub async fn api_profile_set(
     headers: HeaderMap,
     Json(payload): Json<serde_json::Value>,
 ) -> Response {
+    if request_is_cross_site(&headers) {
+        return csrf_rejected_response();
+    }
+
     let user_id = match verify_user_session(&state, &headers) {
         Some(id) => id,
 
@@ -4435,12 +5052,12 @@ pub async fn api_profile_set(
         .unwrap_or("")
         .trim();
 
-    if intent_text.chars().count() > 300 {
+    if !input_text_is_valid(intent_text, 0, 300) {
         return (
             StatusCode::BAD_REQUEST,
             Json(json!({
                 "ok": false,
-                "error": "intent_too_long"
+                "error": "invalid_intent"
             })),
         )
             .into_response();
@@ -4471,6 +5088,21 @@ pub async fn api_profile_set(
     } else {
         unix_now() + duration_days * 86_400
     };
+
+    if let Some(retry_after) =
+        rate_limit_retry_after(&state, user_id, "profile_update", 30, 600).await
+    {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            [(header::RETRY_AFTER, retry_after.to_string())],
+            Json(json!({
+                "ok": false,
+                "error": "rate_limited",
+                "retry_after": retry_after
+            })),
+        )
+            .into_response();
+    }
 
     let db = state.db.lock().await;
 
@@ -4559,6 +5191,10 @@ pub async fn admin_approve_resource(
     Path(id): Path<i64>,
     headers: HeaderMap,
 ) -> Response {
+    if request_is_cross_site(&headers) {
+        return csrf_rejected_response();
+    }
+
     if !is_admin_session(&state, &headers) {
         return (StatusCode::UNAUTHORIZED, "Доступ запрещён").into_response();
     }
@@ -4644,14 +5280,22 @@ pub async fn admin_reject_resource(
     headers: HeaderMap,
     Form(form): Form<RejectResourceForm>,
 ) -> Response {
+    if request_is_cross_site(&headers) {
+        return csrf_rejected_response();
+    }
+
     if !is_admin_session(&state, &headers) {
         return (StatusCode::UNAUTHORIZED, "Доступ запрещён").into_response();
     }
 
     let reason = form.reason.trim();
 
-    if reason.is_empty() {
-        return (StatusCode::BAD_REQUEST, "Укажите причину отклонения").into_response();
+    if !input_text_is_valid(reason, 1, 500) {
+        return (
+            StatusCode::BAD_REQUEST,
+            "Причина отклонения должна содержать от 1 до 500 символов",
+        )
+            .into_response();
     }
 
     let db = state.db.lock().await;
