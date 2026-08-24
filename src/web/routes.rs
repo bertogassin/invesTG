@@ -16,17 +16,28 @@ use axum::{
     Router,
 };
 
-pub fn routes(state: AppState) -> Router {
+fn public_routes() -> Router<AppState> {
     Router::new()
         .route("/", get(home))
         .route("/app", get(app_root))
-        .route("/app/auth", get(app_auth_page).post(app_auth))
         .route("/app/", get(app_root))
         .route("/app/search", get(app_search))
+        .route("/app/{ci}", get(app_continent))
+        .route("/app/{ci}/{si}", get(app_country))
+        .route("/app/{ci}/{si}/{zi}", get(app_city))
+}
+
+fn account_routes() -> Router<AppState> {
+    Router::new()
+        .route("/app/auth", get(app_auth_page).post(app_auth))
         .route("/app/me", get(app_me))
-        .route("/app/my-resources", get(my_resources))
         .route("/app/favorites", get(favorites_page))
         .route("/app/notifications", get(notifications_page))
+        .route("/app/user/{public_id}", get(public_user_profile))
+}
+
+fn communication_routes() -> Router<AppState> {
+    Router::new()
         .route("/app/contact-requests", get(contact_requests_page))
         .route("/app/messages", get(messages_page))
         .route(
@@ -39,20 +50,25 @@ pub fn routes(state: AppState) -> Router {
         )
         .route("/app/chat/{other_user_id}", get(chat_page))
         .route("/app/chat/{other_user_id}/send", post(send_chat_message))
-        .route("/app/user/{public_id}", get(public_user_profile))
+}
+
+fn resource_routes() -> Router<AppState> {
+    Router::new()
+        .route("/app/my-resources", get(my_resources))
         .route("/app/resource/{id}", get(resource_profile))
         .route(
             "/app/resource/{id}/edit",
             get(edit_resource_page).post(edit_resource),
         )
-        .route("/app/{ci}", get(app_continent))
-        .route("/app/{ci}/{si}", get(app_country))
-        .route("/app/{ci}/{si}/{zi}", get(app_city))
         .route("/app/{ci}/{si}/{zi}/cat/{k}", get(app_cat))
         .route(
             "/app/{ci}/{si}/{zi}/cat/{k}/add",
             get(add_resource_page).post(add_resource),
         )
+}
+
+fn admin_routes() -> Router<AppState> {
+    Router::new()
         .route("/app/admin/login", get(admin_login_page).post(admin_login))
         .route("/app/admin/resources", get(admin_resources))
         .route("/app/admin/reports", get(admin_reports))
@@ -86,7 +102,10 @@ pub fn routes(state: AppState) -> Router {
             "/app/admin/resource/{id}/toggle-active",
             post(admin_toggle_active),
         )
-        .route("/health", get(health))
+}
+
+fn api_routes() -> Router<AppState> {
+    Router::new()
         .route("/api/resource/{id}/vote", post(api_resource_vote))
         .route(
             "/api/resource/{id}/favorite",
@@ -96,6 +115,17 @@ pub fn routes(state: AppState) -> Router {
         .route("/api/contact/request", post(api_contact_request))
         .route("/api/profile", get(api_profile_get).post(api_profile_set))
         .route("/api/open_count", get(api_open_count))
+}
+
+pub fn routes(state: AppState) -> Router {
+    Router::new()
+        .merge(public_routes())
+        .merge(account_routes())
+        .merge(communication_routes())
+        .merge(resource_routes())
+        .merge(admin_routes())
+        .merge(api_routes())
+        .route("/health", get(health))
         .nest_service("/static", tower_http::services::ServeDir::new("static"))
         .with_state(state)
 }
