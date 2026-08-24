@@ -187,15 +187,7 @@ pub fn render_continent(ci: usize) -> String {
 
 <main class="page">
 
-<header class="topbar">
-    <a class="brand" href="/app">
-        <div class="brand-mark">{}</div>
-        <div>
-            <div class="brand-name">RESURSMAP</div>
-            <div class="brand-sub">RESOURCE NETWORK</div>
-        </div>
-    </a>
-</header>
+{}
 
 <section class="hero">
     <div class="eyebrow">
@@ -226,7 +218,7 @@ pub fn render_continent(ci: usize) -> String {
 </body>
 </html>"#,
             base_style(),
-            icon("globe"),
+            topbar("RESOURCE NETWORK", "globe"),
             icon("map"),
             bottom_nav = bottom_nav("map"),
             count = countries.len(),
@@ -282,15 +274,7 @@ pub fn render_country(ci: usize, si: usize) -> String {
 
 <main class="page">
 
-<header class="topbar">
-    <a class="brand" href="/app">
-        <div class="brand-mark">{}</div>
-        <div>
-            <div class="brand-name">RESURSMAP</div>
-            <div class="brand-sub">RESOURCE NETWORK</div>
-        </div>
-    </a>
-</header>
+{}
 
 <section class="hero">
     <div class="eyebrow">
@@ -321,7 +305,7 @@ pub fn render_country(ci: usize, si: usize) -> String {
 </body>
 </html>"#,
                 base_style(),
-                icon("globe"),
+                topbar("RESOURCE NETWORK", "globe"),
                 icon("map-pin"),
                 bottom_nav = bottom_nav("map"),
                 count = cities.len(),
@@ -356,15 +340,7 @@ pub fn render_city(ci: usize, si: usize, zi: usize) -> String {
 
 <main class="page">
 
-<header class="topbar">
-    <a class="brand" href="/app">
-        <div class="brand-mark">{}</div>
-        <div>
-            <div class="brand-name">RESURSMAP</div>
-            <div class="brand-sub">RESOURCE NETWORK</div>
-        </div>
-    </a>
-</header>
+{}
 
 <section class="hero">
 
@@ -437,7 +413,7 @@ pub fn render_city(ci: usize, si: usize, zi: usize) -> String {
 </body>
 </html>"#,
                     base_style(),
-                    icon("globe"),
+                    topbar("RESOURCE NETWORK", "globe"),
                     icon("map-pin"),
                     icon("briefcase"),
                     icon("chevron"),

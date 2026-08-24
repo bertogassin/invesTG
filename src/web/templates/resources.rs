@@ -1566,15 +1566,7 @@ pub fn render_add_resource(ci: usize, si: usize, zi: usize, category: &str) -> S
 
 <main class="page">
 
-<header class="topbar">
-    <a class="brand" href="/app">
-        <div class="brand-mark">{}</div>
-        <div>
-            <div class="brand-name">RESURSMAP</div>
-            <div class="brand-sub">ADD RESOURCE</div>
-        </div>
-    </a>
-</header>
+{}
 
 <section class="hero">
 
@@ -1699,7 +1691,7 @@ pub fn render_add_resource(ci: usize, si: usize, zi: usize, category: &str) -> S
 </body>
 </html>"#,
         base_style(),
-        icon("globe"),
+        topbar("ADD RESOURCE", "globe"),
         back_url,
         icon("chevron"),
         icon("plus"),
