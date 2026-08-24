@@ -1,4 +1,10 @@
-use super::*;
+use super::{templates, AppState};
+use axum::{
+    extract::{Path, Query, State},
+    http::StatusCode,
+    response::{Html, IntoResponse, Response},
+};
+use std::collections::BTreeMap;
 
 pub async fn home() -> Html<String> {
     Html("<h1>ResursMap</h1><p>Сервер работает.</p>".to_string())
