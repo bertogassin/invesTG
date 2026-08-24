@@ -1,5 +1,5 @@
 use super::common::escape_html;
-use super::common::{back_link, base_style, bottom_nav, icon, topbar};
+use super::common::{back_link, base_style, bottom_nav, icon, section_head, topbar};
 
 pub fn render_category(
     ci: usize,
@@ -139,6 +139,9 @@ pub fn render_category(
 
     let count = resources.len();
 
+    let section_head_resources = section_head("Ресурсы", &format!("Найдено: {}", count), None);
+    let section_head_city = section_head("Ваш город", "Все направления и категории", Some(34));
+
     format!(
         r#"<!DOCTYPE html>
 <html lang="ru">
@@ -174,32 +177,13 @@ pub fn render_category(
 
 </section>
 
-<div class="section-head">
-
-    <div>
-        <h2 class="section-title">Ресурсы</h2>
-        <p class="section-caption">
-            Найдено: {count}
-        </p>
-    </div>
-
-</div>
+{section_head_resources}
 
 <div>
     {cards}
 </div>
 
-<div class="section-head" style="margin-top:34px;">
-
-    <div>
-        <h2 class="section-title">Ваш город</h2>
-
-        <p class="section-caption">
-            Все направления и категории
-        </p>
-    </div>
-
-</div>
+{section_head_city}
 
 <a class="card"
    href="{city_url}"
@@ -241,7 +225,6 @@ pub fn render_category(
         bottom_nav = bottom_nav("map"),
         category = safe_category,
         city_url = city_url,
-        count = count,
         cards = cards,
     )
 }

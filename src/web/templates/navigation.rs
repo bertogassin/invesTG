@@ -1,4 +1,4 @@
-use super::common::{base_style, bottom_nav, icon, topbar};
+use super::common::{base_style, bottom_nav, icon, section_head, topbar};
 use std::collections::BTreeMap;
 
 pub fn world() -> BTreeMap<&'static str, BTreeMap<&'static str, Vec<&'static str>>> {
@@ -49,6 +49,9 @@ pub fn render_continents() -> String {
         }
     }
 
+    let section_head_countries = section_head("Страны", "Выберите страну для продолжения", None);
+    let section_head_features = section_head("Возможности", "Всё необходимое в одном месте", None);
+
     format!(
         r#"<!DOCTYPE html>
 <html lang="ru">
@@ -87,23 +90,13 @@ pub fn render_continents() -> String {
     </div>
 </section>
 
-<div class="section-head">
-    <div>
-        <h2 class="section-title">Страны</h2>
-        <p class="section-caption">Выберите страну для продолжения</p>
-    </div>
-</div>
+{section_head_countries}
 
 <div class="grid">
     {cards}
 </div>
 
-<div class="section-head">
-    <div>
-        <h2 class="section-title">Возможности</h2>
-        <p class="section-caption">Всё необходимое в одном месте</p>
-    </div>
-</div>
+{section_head_features}
 
 <div class="feature-grid">
     <div class="feature">
@@ -173,6 +166,9 @@ pub fn render_continent(ci: usize) -> String {
             ));
         }
 
+        let section_head_countries =
+            section_head("Страны", &format!("{} доступных", countries.len()), None);
+
         return format!(
             r#"<!DOCTYPE html>
 <html lang="ru">
@@ -200,12 +196,7 @@ pub fn render_continent(ci: usize) -> String {
     <p>Выберите страну, чтобы открыть доступные города и ресурсы.</p>
 </section>
 
-<div class="section-head">
-    <div>
-        <h2 class="section-title">Страны</h2>
-        <p class="section-caption">{count} доступных</p>
-    </div>
-</div>
+{section_head_countries}
 
 <div class="grid">
     {cards}
@@ -221,7 +212,6 @@ pub fn render_continent(ci: usize) -> String {
             topbar("RESOURCE NETWORK", "globe"),
             icon("map"),
             bottom_nav = bottom_nav("map"),
-            count = countries.len(),
         );
     }
 
@@ -260,6 +250,9 @@ pub fn render_country(ci: usize, si: usize) -> String {
                 ));
             }
 
+            let section_head_cities =
+                section_head("Города", &format!("{} городов", cities.len()), None);
+
             return format!(
                 r#"<!DOCTYPE html>
 <html lang="ru">
@@ -287,12 +280,7 @@ pub fn render_country(ci: usize, si: usize) -> String {
     <p>Выберите город и откройте его карту ресурсов.</p>
 </section>
 
-<div class="section-head">
-    <div>
-        <h2 class="section-title">Города</h2>
-        <p class="section-caption">{count} городов</p>
-    </div>
-</div>
+{section_head_cities}
 
 <div class="grid">
     {cards}
@@ -308,7 +296,6 @@ pub fn render_country(ci: usize, si: usize) -> String {
                 topbar("RESOURCE NETWORK", "globe"),
                 icon("map-pin"),
                 bottom_nav = bottom_nav("map"),
-                count = cities.len(),
             );
         }
     }
@@ -326,6 +313,8 @@ pub fn render_city(ci: usize, si: usize, zi: usize) -> String {
     if let Some((cname, countries)) = w.iter().nth(ci) {
         if let Some((country, cities)) = countries.iter().nth(si) {
             if let Some(city) = cities.get(zi) {
+                let section_head_sections = section_head("Разделы", "Выберите направление", None);
+
                 return format!(
                     r#"<!DOCTYPE html>
 <html lang="ru">
@@ -359,12 +348,7 @@ pub fn render_city(ci: usize, si: usize, zi: usize) -> String {
 
 </section>
 
-<div class="section-head">
-    <div>
-        <h2 class="section-title">Разделы</h2>
-        <p class="section-caption">Выберите направление</p>
-    </div>
-</div>
+{section_head_sections}
 
 <div class="grid">
 

@@ -1,4 +1,4 @@
-use super::common::{back_link, base_style, bottom_nav, escape_html, icon, topbar};
+use super::common::{back_link, base_style, bottom_nav, escape_html, icon, section_head, topbar};
 
 pub fn render_contact_requests(
     requests: Vec<(i64, i64, String, String, String, String, String, i64, i64)>,
@@ -670,6 +670,9 @@ pub fn render_messages(
             .join("")
     };
 
+    let section_head_dialogs =
+        section_head("Диалоги", &format!("Непрочитанных: {}", total_unread), None);
+
     format!(
         r#"<!DOCTYPE html>
 <html lang="ru">
@@ -714,21 +717,7 @@ pub fn render_messages(
 </section>
 
 
-<div class="section-head">
-
-    <div>
-
-        <h2 class="section-title">
-            Диалоги
-        </h2>
-
-        <p class="section-caption">
-            Непрочитанных: {total_unread}
-        </p>
-
-    </div>
-
-</div>
+{section_head_dialogs}
 
 
 <section>
@@ -747,7 +736,6 @@ pub fn render_messages(
         topbar = topbar("MESSAGES", "search"),
         back_link = back_link("/app/me", "Назад", "chevron-left"),
         message_icon = icon("message-circle"),
-        total_unread = total_unread,
         content = content,
     )
 }

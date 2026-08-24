@@ -925,3 +925,22 @@ pub(crate) fn back_link(href: &str, label: &str, icon_name: &str) -> String {
         icon = icon(icon_name),
     )
 }
+
+pub(crate) fn section_head(title: &str, caption: &str, margin_top: Option<u32>) -> String {
+    let style = match margin_top {
+        Some(px) => format!(r#" style="margin-top:{px}px;""#),
+        None => String::new(),
+    };
+
+    format!(
+        r#"<div class="section-head"{style}>
+    <div>
+        <h2 class="section-title">{title}</h2>
+        <p class="section-caption">{caption}</p>
+    </div>
+</div>"#,
+        style = style,
+        title = escape_html(title),
+        caption = escape_html(caption),
+    )
+}

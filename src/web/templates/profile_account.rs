@@ -1,4 +1,4 @@
-use super::common::{back_link, base_style, bottom_nav, escape_html, icon, topbar};
+use super::common::{back_link, base_style, bottom_nav, escape_html, icon, section_head, topbar};
 
 pub fn render_me(
     authenticated: bool,
@@ -303,6 +303,8 @@ pub fn render_me(
         String::new()
     };
 
+    let section_head_account = section_head("Ваш ResursMap", "Управление аккаунтом", None);
+
     format!(
         r#"<!DOCTYPE html>
 <html lang="ru">
@@ -589,19 +591,7 @@ pub fn render_me(
 </section>
 
 
-<div class="section-head">
-
-    <div>
-        <h2 class="section-title">
-            Ваш ResursMap
-        </h2>
-
-        <p class="section-caption">
-            Управление аккаунтом
-        </p>
-    </div>
-
-</div>
+{section_head_account}
 
 
 <div style="
@@ -1701,6 +1691,9 @@ pub fn render_public_user_profile(
             .join("")
     };
 
+    let section_head_resources =
+        section_head("Ресурсы участника", "Только активные и одобренные", None);
+
     format!(
         r#"<!DOCTYPE html>
 <html lang="ru">
@@ -1797,21 +1790,7 @@ pub fn render_public_user_profile(
 {internal_contact_html}
 
 
-<div class="section-head">
-
-    <div>
-
-        <h2 class="section-title">
-            Ресурсы участника
-        </h2>
-
-        <p class="section-caption">
-            Только активные и одобренные
-        </p>
-
-    </div>
-
-</div>
+{section_head_resources}
 
 
 <section>
