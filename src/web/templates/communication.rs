@@ -1,4 +1,4 @@
-use super::common::{base_style, escape_html, icon};
+use super::common::{base_style, bottom_nav, escape_html, icon};
 
 pub fn render_contact_requests(
     requests: Vec<(i64, i64, String, String, String, String, String, i64, i64)>,
@@ -455,56 +455,7 @@ pub fn render_contact_requests(
 </main>
 
 
-<nav class="bottom-nav">
-
-    <a class="nav-item"
-       href="/app">
-
-        {nav_map}
-
-        <span>
-            Карта
-        </span>
-
-    </a>
-
-
-    <a class="nav-item"
-       href="/app/search">
-
-        {nav_search}
-
-        <span>
-            Поиск
-        </span>
-
-    </a>
-
-
-    <a class="nav-item active"
-       href="/app/me">
-
-        {nav_user}
-
-        <span>
-            Профиль
-        </span>
-
-    </a>
-
-
-    <a class="nav-item"
-       href="/app">
-
-        {nav_menu}
-
-        <span>
-            Меню
-        </span>
-
-    </a>
-
-</nav>
+{bottom_nav}
 
 
 </body>
@@ -516,10 +467,7 @@ pub fn render_contact_requests(
         user_icon = icon("user"),
         pending_count = pending_count,
         cards = cards,
-        nav_map = icon("map"),
-        nav_search = icon("search"),
-        nav_user = icon("user"),
-        nav_menu = icon("menu"),
+        bottom_nav = bottom_nav("profile"),
     )
 }
 

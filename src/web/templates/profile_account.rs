@@ -1,4 +1,4 @@
-use super::common::{base_style, escape_html, icon};
+use super::common::{base_style, bottom_nav, escape_html, icon};
 
 pub fn render_me(
     authenticated: bool,
@@ -876,33 +876,7 @@ pub fn render_me(
 </main>
 
 
-<nav class="bottom-nav">
-
-    <a class="nav-item"
-       href="/app">
-        {nav_map}
-        <span>Карта</span>
-    </a>
-
-    <a class="nav-item"
-       href="/app/search">
-        {nav_search}
-        <span>Поиск</span>
-    </a>
-
-    <a class="nav-item active"
-       href="/app/me">
-        {nav_user}
-        <span>Профиль</span>
-    </a>
-
-    <a class="nav-item"
-       href="/app">
-        {nav_menu}
-        <span>Меню</span>
-    </a>
-
-</nav>
+{bottom_nav}
 
 
 <script>
@@ -1043,10 +1017,7 @@ pub fn render_me(
         arrow1 = icon("chevron"),
         arrow2 = icon("chevron"),
         arrow3 = icon("chevron"),
-        nav_map = icon("map"),
-        nav_search = icon("search"),
-        nav_user = icon("user"),
-        nav_menu = icon("menu"),
+        bottom_nav = bottom_nav("profile"),
     )
 }
 
@@ -1360,33 +1331,7 @@ pub fn render_notifications(
 </main>
 
 
-<nav class="bottom-nav">
-
-    <a class="nav-item"
-       href="/app">
-        {nav_map}
-        <span>Карта</span>
-    </a>
-
-    <a class="nav-item"
-       href="/app/search">
-        {nav_search}
-        <span>Поиск</span>
-    </a>
-
-    <a class="nav-item active"
-       href="/app/me">
-        {nav_user}
-        <span>Профиль</span>
-    </a>
-
-    <a class="nav-item"
-       href="/app">
-        {nav_menu}
-        <span>Меню</span>
-    </a>
-
-</nav>
+{bottom_nav}
 
 
 </body>
@@ -1395,10 +1340,7 @@ pub fn render_notifications(
         logo = icon("user"),
         back = icon("arrow-left"),
         cards = cards,
-        nav_map = icon("map"),
-        nav_search = icon("search"),
-        nav_user = icon("user"),
-        nav_menu = icon("menu"),
+        bottom_nav = bottom_nav("profile"),
     )
 }
 
@@ -1965,33 +1907,7 @@ pub fn render_public_user_profile(
 </main>
 
 
-<nav class="bottom-nav">
-
-    <a class="nav-item"
-       href="/app">
-        {nav_map}
-        <span>Карта</span>
-    </a>
-
-    <a class="nav-item"
-       href="/app/search">
-        {nav_search}
-        <span>Поиск</span>
-    </a>
-
-    <a class="nav-item"
-       href="/app/me">
-        {nav_user}
-        <span>Профиль</span>
-    </a>
-
-    <a class="nav-item"
-       href="/app">
-        {nav_menu}
-        <span>Меню</span>
-    </a>
-
-</nav>
+{bottom_nav}
 
 
 
@@ -2177,10 +2093,7 @@ pub fn render_public_user_profile(
         internal_contact_html = internal_contact_html,
         public_id_js = public_id_js,
         cards = cards,
-        nav_map = icon("map"),
-        nav_search = icon("search"),
-        nav_user = icon("user"),
-        nav_menu = icon("menu"),
+        bottom_nav = bottom_nav("none"),
     )
 }
 
@@ -2445,29 +2358,7 @@ pub fn render_favorites(
 
 </main>
 
-<nav class="bottom-nav">
-
-    <a class="nav-item" href="/app">
-        {nav_map}
-        <span>Карта</span>
-    </a>
-
-    <a class="nav-item" href="/app/search">
-        {nav_search}
-        <span>Поиск</span>
-    </a>
-
-    <a class="nav-item active" href="/app/me">
-        {nav_user}
-        <span>Профиль</span>
-    </a>
-
-    <a class="nav-item" href="/app">
-        {nav_menu}
-        <span>Меню</span>
-    </a>
-
-</nav>
+{bottom_nav}
 
 </body>
 </html>"#,
@@ -2476,9 +2367,6 @@ pub fn render_favorites(
         back = icon("arrow-left"),
         heart = icon("heart"),
         cards = cards,
-        nav_map = icon("map"),
-        nav_search = icon("search"),
-        nav_user = icon("user"),
-        nav_menu = icon("menu"),
+        bottom_nav = bottom_nav("profile"),
     )
 }

@@ -1,4 +1,4 @@
-use super::common::{base_style, icon};
+use super::common::{base_style, bottom_nav, icon};
 use std::collections::BTreeMap;
 
 pub fn world() -> BTreeMap<&'static str, BTreeMap<&'static str, Vec<&'static str>>> {
@@ -135,27 +135,7 @@ pub fn render_continents() -> String {
 
 </main>
 
-<nav class="bottom-nav">
-    <a class="nav-item active" href="/app">
-        {nav_map}
-        <span>Карта</span>
-    </a>
-
-    <a class="nav-item" href="/app/search">
-        {nav_search}
-        <span>Поиск</span>
-    </a>
-
-    <a class="nav-item" href="/app/me">
-        {nav_user}
-        <span>Профиль</span>
-    </a>
-
-    <a class="nav-item" href="/app">
-        {nav_menu}
-        <span>Меню</span>
-    </a>
-</nav>
+{bottom_nav}
 
 </body>
 </html>"#,
@@ -166,10 +146,7 @@ pub fn render_continents() -> String {
         map_icon = icon("map"),
         heart_icon = icon("heart"),
         user_icon = icon("user"),
-        nav_map = icon("map"),
-        nav_search = icon("search"),
-        nav_user = icon("user"),
-        nav_menu = icon("menu"),
+        bottom_nav = bottom_nav("map"),
     )
 }
 
@@ -1132,29 +1109,7 @@ pub fn render_search(
 
 </main>
 
-<nav class="bottom-nav">
-
-    <a class="nav-item" href="/app">
-        {nav_map}
-        <span>Карта</span>
-    </a>
-
-    <a class="nav-item active" href="/app/search">
-        {nav_search}
-        <span>Поиск</span>
-    </a>
-
-    <a class="nav-item" href="/app/me">
-        {nav_user}
-        <span>Профиль</span>
-    </a>
-
-    <a class="nav-item" href="/app">
-        {nav_menu}
-        <span>Меню</span>
-    </a>
-
-</nav>
+{bottom_nav}
 
 </body>
 </html>"#,
@@ -1162,10 +1117,7 @@ pub fn render_search(
         logo = icon("search"),
         search_icon = icon("search"),
         search_input_icon = icon("search"),
-        nav_map = icon("map"),
-        nav_search = icon("search"),
-        nav_user = icon("user"),
-        nav_menu = icon("menu"),
+        bottom_nav = bottom_nav("search"),
         q = q,
         location_section = location_section,
         people_section = people_section,

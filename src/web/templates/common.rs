@@ -847,3 +847,49 @@ body::before {
 // ============================================================
 // MAIN APP
 // ============================================================
+
+pub(crate) fn bottom_nav(active: &str) -> String {
+    let item_class = |name: &str| {
+        if active == name {
+            "nav-item active"
+        } else {
+            "nav-item"
+        }
+    };
+
+    format!(
+        r#"
+<nav class="bottom-nav">
+
+    <a class="{map_class}" href="/app">
+        {nav_map}
+        <span>Карта</span>
+    </a>
+
+    <a class="{search_class}" href="/app/search">
+        {nav_search}
+        <span>Поиск</span>
+    </a>
+
+    <a class="{profile_class}" href="/app/me">
+        {nav_user}
+        <span>Профиль</span>
+    </a>
+
+    <a class="{menu_class}" href="/app">
+        {nav_menu}
+        <span>Меню</span>
+    </a>
+
+</nav>
+"#,
+        map_class = item_class("map"),
+        search_class = item_class("search"),
+        profile_class = item_class("profile"),
+        menu_class = item_class("menu"),
+        nav_map = icon("map"),
+        nav_search = icon("search"),
+        nav_user = icon("user"),
+        nav_menu = icon("menu"),
+    )
+}

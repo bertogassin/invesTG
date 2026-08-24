@@ -1,5 +1,5 @@
 use super::common::escape_html;
-use super::common::{base_style, icon};
+use super::common::{base_style, bottom_nav, icon};
 
 pub fn render_category(
     ci: usize,
@@ -243,29 +243,7 @@ pub fn render_category(
 
 </main>
 
-<nav class="bottom-nav">
-
-    <a class="nav-item active" href="/app">
-        {nav_map}
-        <span>Карта</span>
-    </a>
-
-    <a class="nav-item" href="/app/search">
-        {nav_search}
-        <span>Поиск</span>
-    </a>
-
-    <a class="nav-item" href="/app/me">
-        {nav_user}
-        <span>Профиль</span>
-    </a>
-
-    <a class="nav-item" href="/app">
-        {nav_menu}
-        <span>Меню</span>
-    </a>
-
-</nav>
+{bottom_nav}
 
 </body>
 </html>"#,
@@ -274,10 +252,7 @@ pub fn render_category(
         back = icon("chevron"),
         category_icon = icon("map"),
         city_icon = icon("map"),
-        nav_map = icon("map"),
-        nav_search = icon("search"),
-        nav_user = icon("user"),
-        nav_menu = icon("menu"),
+        bottom_nav = bottom_nav("map"),
         category = safe_category,
         city_url = city_url,
         count = count,
