@@ -1,4 +1,4 @@
-use super::common::{base_style, bottom_nav, escape_html, icon};
+use super::common::{base_style, bottom_nav, escape_html, icon, topbar};
 
 pub fn render_me(
     authenticated: bool,
@@ -323,28 +323,7 @@ pub fn render_me(
 
 <main class="page">
 
-<header class="topbar">
-
-    <a class="brand"
-       href="/app">
-
-        <div class="brand-mark">
-            {logo}
-        </div>
-
-        <div>
-            <div class="brand-name">
-                RESURSMAP
-            </div>
-
-            <div class="brand-sub">
-                PROFILE
-            </div>
-        </div>
-
-    </a>
-
-</header>
+{topbar}
 
 
 <section class="hero">
@@ -999,7 +978,7 @@ pub fn render_me(
 </body>
 </html>"#,
         style = base_style(),
-        logo = icon("user"),
+        topbar = topbar("PROFILE", "user"),
         profile_icon = icon("user"),
         account_header = account_header,
         statistics = statistics,
@@ -1264,28 +1243,7 @@ pub fn render_notifications(
 <main class="page">
 
 
-<header class="topbar">
-
-    <a class="brand"
-       href="/app">
-
-        <div class="brand-mark">
-            {logo}
-        </div>
-
-        <div>
-            <div class="brand-name">
-                RESURSMAP
-            </div>
-
-            <div class="brand-sub">
-                NOTIFICATIONS
-            </div>
-        </div>
-
-    </a>
-
-</header>
+{topbar}
 
 
 <section class="hero">
@@ -1337,7 +1295,7 @@ pub fn render_notifications(
 </body>
 </html>"#,
         style = base_style(),
-        logo = icon("user"),
+        topbar = topbar("NOTIFICATIONS", "user"),
         back = icon("arrow-left"),
         cards = cards,
         bottom_nav = bottom_nav("profile"),
@@ -1772,28 +1730,7 @@ pub fn render_public_user_profile(
 
 <main class="page">
 
-<header class="topbar">
-
-    <a class="brand"
-       href="/app">
-
-        <div class="brand-mark">
-            {logo}
-        </div>
-
-        <div>
-            <div class="brand-name">
-                RESURSMAP
-            </div>
-
-            <div class="brand-sub">
-                MEMBER
-            </div>
-        </div>
-
-    </a>
-
-</header>
+{topbar}
 
 
 <section class="hero">
@@ -2082,7 +2019,7 @@ pub fn render_public_user_profile(
 </body>
 </html>"#,
         style = base_style(),
-        logo = icon("user"),
+        topbar = topbar("MEMBER", "user"),
         back = icon("arrow-left"),
         user_icon = icon("user"),
         profile_icon = icon("user"),
@@ -2316,15 +2253,7 @@ pub fn render_favorites(
 
 <main class="page">
 
-<header class="topbar">
-    <a class="brand" href="/app">
-        <div class="brand-mark">{logo}</div>
-        <div>
-            <div class="brand-name">RESURSMAP</div>
-            <div class="brand-sub">FAVORITES</div>
-        </div>
-    </a>
-</header>
+{topbar}
 
 <section class="hero">
 
@@ -2363,7 +2292,7 @@ pub fn render_favorites(
 </body>
 </html>"#,
         style = base_style(),
-        logo = icon("heart"),
+        topbar = topbar("FAVORITES", "heart"),
         back = icon("arrow-left"),
         heart = icon("heart"),
         cards = cards,

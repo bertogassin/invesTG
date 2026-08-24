@@ -893,3 +893,21 @@ pub(crate) fn bottom_nav(active: &str) -> String {
         nav_menu = icon("menu"),
     )
 }
+
+pub(crate) fn topbar(subtitle: &str, icon_name: &str) -> String {
+    format!(
+        r#"
+<header class="topbar">
+    <a class="brand" href="/app">
+        <div class="brand-mark">{logo}</div>
+        <div>
+            <div class="brand-name">RESURSMAP</div>
+            <div class="brand-sub">{subtitle}</div>
+        </div>
+    </a>
+</header>
+"#,
+        logo = icon(icon_name),
+        subtitle = escape_html(subtitle),
+    )
+}

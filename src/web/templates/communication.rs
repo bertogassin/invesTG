@@ -1,4 +1,4 @@
-use super::common::{base_style, bottom_nav, escape_html, icon};
+use super::common::{base_style, bottom_nav, escape_html, icon, topbar};
 
 pub fn render_contact_requests(
     requests: Vec<(i64, i64, String, String, String, String, String, i64, i64)>,
@@ -350,30 +350,7 @@ pub fn render_contact_requests(
 
 <main class="page">
 
-<header class="topbar">
-
-    <a class="brand"
-       href="/app">
-
-        <div class="brand-mark">
-            {logo}
-        </div>
-
-        <div>
-
-            <div class="brand-name">
-                RESURSMAP
-            </div>
-
-            <div class="brand-sub">
-                CONTACT REQUESTS
-            </div>
-
-        </div>
-
-    </a>
-
-</header>
+{topbar}
 
 
 <section class="hero">
@@ -462,7 +439,7 @@ pub fn render_contact_requests(
 
 </html>"#,
         style = base_style(),
-        logo = icon("user"),
+        topbar = topbar("CONTACT REQUESTS", "user"),
         back = icon("arrow-left"),
         user_icon = icon("user"),
         pending_count = pending_count,
@@ -730,28 +707,7 @@ pub fn render_messages(
 
 <main class="page">
 
-<header class="topbar">
-
-    <a class="brand"
-       href="/app">
-
-        <div class="brand-mark">
-            {logo}
-        </div>
-
-        <div>
-            <div class="brand-name">
-                RESURSMAP
-            </div>
-
-            <div class="brand-sub">
-                MESSAGES
-            </div>
-        </div>
-
-    </a>
-
-</header>
+{topbar}
 
 
 <section class="hero">
@@ -815,7 +771,7 @@ pub fn render_messages(
 
 </html>"#,
         style = base_style(),
-        logo = icon("search"),
+        topbar = topbar("MESSAGES", "search"),
         back = icon("chevron-left"),
         message_icon = icon("message-circle"),
         total_unread = total_unread,
@@ -1181,28 +1137,7 @@ pub fn render_chat(
 
 <main class="page">
 
-<header class="topbar">
-
-    <a class="brand"
-       href="/app">
-
-        <div class="brand-mark">
-            {logo}
-        </div>
-
-        <div>
-            <div class="brand-name">
-                RESURSMAP
-            </div>
-
-            <div class="brand-sub">
-                CHAT
-            </div>
-        </div>
-
-    </a>
-
-</header>
+{topbar}
 
 <section class="hero"
          style="
@@ -1274,7 +1209,7 @@ pub fn render_chat(
 </body>
 </html>"#,
         style = base_style(),
-        logo = icon("search"),
+        topbar = topbar("CHAT", "search"),
         back = icon("chevron"),
         user_icon = icon("user"),
         display_name = display_name,

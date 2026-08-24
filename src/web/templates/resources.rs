@@ -1,5 +1,5 @@
 use super::common::escape_html;
-use super::common::{base_style, bottom_nav, icon};
+use super::common::{base_style, bottom_nav, icon, topbar};
 
 pub fn render_category(
     ci: usize,
@@ -155,16 +155,7 @@ pub fn render_category(
 
 <main class="page">
 
-<header class="topbar">
-    <a class="brand" href="/app">
-        <div class="brand-mark">{logo}</div>
-
-        <div>
-            <div class="brand-name">RESURSMAP</div>
-            <div class="brand-sub">RESOURCE NETWORK</div>
-        </div>
-    </a>
-</header>
+{topbar}
 
 <section class="hero">
 
@@ -248,7 +239,7 @@ pub fn render_category(
 </body>
 </html>"#,
         style = base_style(),
-        logo = icon("globe"),
+        topbar = topbar("RESOURCE NETWORK", "globe"),
         back = icon("chevron"),
         category_icon = icon("map"),
         city_icon = icon("map"),
@@ -438,15 +429,7 @@ pub fn render_resource_profile(
 
 <main class="page">
 
-<header class="topbar">
-    <a class="brand" href="/app">
-        <div class="brand-mark">{logo}</div>
-        <div>
-            <div class="brand-name">RESURSMAP</div>
-            <div class="brand-sub">RESOURCE NETWORK</div>
-        </div>
-    </a>
-</header>
+{topbar}
 
 <section class="hero">
 
@@ -1083,7 +1066,7 @@ pub fn render_resource_profile(
 </body>
 </html>"##,
         style = base_style(),
-        logo = icon("map"),
+        topbar = topbar("RESOURCE NETWORK", "map"),
         back = icon("arrow-left"),
         category_icon = icon("map-pin"),
         category = safe_category,
@@ -1399,15 +1382,7 @@ pub fn render_my_resources(
 <body>
 <main class="page">
 
-<header class="topbar">
-    <a class="brand" href="/app">
-        <div class="brand-mark">{logo}</div>
-        <div>
-            <div class="brand-name">RESURSMAP</div>
-            <div class="brand-sub">MY RESOURCES</div>
-        </div>
-    </a>
-</header>
+{topbar}
 
 <section class="hero">
     <a href="/app/me"
@@ -1435,7 +1410,7 @@ pub fn render_my_resources(
 </body>
 </html>"#,
         style = base_style(),
-        logo = icon("map"),
+        topbar = topbar("MY RESOURCES", "map"),
         back = icon("arrow-left"),
         user_icon = icon("user"),
         cards = cards,
@@ -1474,15 +1449,7 @@ pub fn render_edit_resource(
 
 <main class="page">
 
-<header class="topbar">
-    <a class="brand" href="/app">
-        <div class="brand-mark">{logo}</div>
-        <div>
-            <div class="brand-name">RESURSMAP</div>
-            <div class="brand-sub">EDIT RESOURCE</div>
-        </div>
-    </a>
-</header>
+{topbar}
 
 <section class="hero">
     <a href="/app/resource/{id}"
@@ -1567,7 +1534,7 @@ pub fn render_edit_resource(
 </body>
 </html>"##,
         style = base_style(),
-        logo = icon("map"),
+        topbar = topbar("EDIT RESOURCE", "map"),
         back = icon("arrow-left"),
         edit_icon = icon("user"),
         id = id,

@@ -1,4 +1,4 @@
-use super::common::{base_style, bottom_nav, icon};
+use super::common::{base_style, bottom_nav, icon, topbar};
 use std::collections::BTreeMap;
 
 pub fn world() -> BTreeMap<&'static str, BTreeMap<&'static str, Vec<&'static str>>> {
@@ -62,15 +62,7 @@ pub fn render_continents() -> String {
 <body>
 <main class="page">
 
-<header class="topbar">
-    <a class="brand" href="/app">
-        <div class="brand-mark">{logo}</div>
-        <div>
-            <div class="brand-name">RESURSMAP</div>
-            <div class="brand-sub">RESOURCE NETWORK</div>
-        </div>
-    </a>
-</header>
+{topbar}
 
 <section class="hero">
     <div class="eyebrow">
@@ -140,7 +132,7 @@ pub fn render_continents() -> String {
 </body>
 </html>"#,
         style = base_style(),
-        logo = icon("globe"),
+        topbar = topbar("RESOURCE NETWORK", "globe"),
         search_icon = icon("search"),
         cards = cards,
         map_icon = icon("map"),
@@ -990,15 +982,7 @@ pub fn render_search(
 
 <main class="page">
 
-<header class="topbar">
-    <a class="brand" href="/app">
-        <div class="brand-mark">{logo}</div>
-        <div>
-            <div class="brand-name">RESURSMAP</div>
-            <div class="brand-sub">SEARCH</div>
-        </div>
-    </a>
-</header>
+{topbar}
 
 <section class="hero">
 
@@ -1045,7 +1029,7 @@ pub fn render_search(
 </body>
 </html>"#,
         style = base_style(),
-        logo = icon("search"),
+        topbar = topbar("SEARCH", "search"),
         search_icon = icon("search"),
         search_input_icon = icon("search"),
         bottom_nav = bottom_nav("search"),
