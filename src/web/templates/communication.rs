@@ -1,4 +1,4 @@
-use super::common::{base_style, bottom_nav, escape_html, icon, topbar};
+use super::common::{back_link, base_style, bottom_nav, escape_html, icon, topbar};
 
 pub fn render_contact_requests(
     requests: Vec<(i64, i64, String, String, String, String, String, i64, i64)>,
@@ -355,23 +355,7 @@ pub fn render_contact_requests(
 
 <section class="hero">
 
-    <a href="/app/me"
-       style="
-           display:inline-flex;
-           align-items:center;
-           gap:8px;
-           color:var(--muted);
-           text-decoration:none;
-           margin-bottom:20px;
-       ">
-
-        {back}
-
-        <span>
-            Профиль
-        </span>
-
-    </a>
+    {back_link}
 
 
     <div class="eyebrow">
@@ -440,7 +424,7 @@ pub fn render_contact_requests(
 </html>"#,
         style = base_style(),
         topbar = topbar("CONTACT REQUESTS", "user"),
-        back = icon("arrow-left"),
+        back_link = back_link("/app/me", "Профиль", "arrow-left"),
         user_icon = icon("user"),
         pending_count = pending_count,
         cards = cards,
@@ -712,18 +696,7 @@ pub fn render_messages(
 
 <section class="hero">
 
-    <a href="/app/me"
-       style="
-           display:inline-flex;
-           align-items:center;
-           gap:8px;
-           color:var(--muted);
-           text-decoration:none;
-           margin-bottom:20px;
-       ">
-        {back}
-        Назад
-    </a>
+    {back_link}
 
     <div class="eyebrow">
         {message_icon}
@@ -772,7 +745,7 @@ pub fn render_messages(
 </html>"#,
         style = base_style(),
         topbar = topbar("MESSAGES", "search"),
-        back = icon("chevron-left"),
+        back_link = back_link("/app/me", "Назад", "chevron-left"),
         message_icon = icon("message-circle"),
         total_unread = total_unread,
         content = content,
@@ -1144,18 +1117,7 @@ pub fn render_chat(
              padding-bottom:14px;
          ">
 
-    <a href="/app/messages"
-       style="
-           display:inline-flex;
-           align-items:center;
-           gap:7px;
-           color:var(--muted);
-           text-decoration:none;
-           margin-bottom:18px;
-       ">
-        {back}
-        Назад
-    </a>
+    {back_link}
 
     <div style="
         display:flex;
@@ -1210,7 +1172,7 @@ pub fn render_chat(
 </html>"#,
         style = base_style(),
         topbar = topbar("CHAT", "search"),
-        back = icon("chevron"),
+        back_link = back_link("/app/messages", "Назад", "chevron"),
         user_icon = icon("user"),
         display_name = display_name,
         subtitle = subtitle,

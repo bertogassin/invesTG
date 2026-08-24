@@ -911,3 +911,17 @@ pub(crate) fn topbar(subtitle: &str, icon_name: &str) -> String {
         subtitle = escape_html(subtitle),
     )
 }
+
+pub(crate) fn back_link(href: &str, label: &str, icon_name: &str) -> String {
+    format!(
+        r#"<a href="{href}"
+   style="display:inline-flex;align-items:center;gap:8px;
+          color:var(--muted);text-decoration:none;margin-bottom:20px;">
+    {icon}
+    <span>{label}</span>
+</a>"#,
+        href = escape_html(href),
+        label = escape_html(label),
+        icon = icon(icon_name),
+    )
+}

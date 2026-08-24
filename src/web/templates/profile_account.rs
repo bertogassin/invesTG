@@ -1,4 +1,4 @@
-use super::common::{base_style, bottom_nav, escape_html, icon, topbar};
+use super::common::{back_link, base_style, bottom_nav, escape_html, icon, topbar};
 
 pub fn render_me(
     authenticated: bool,
@@ -1248,18 +1248,7 @@ pub fn render_notifications(
 
 <section class="hero">
 
-    <a href="/app/me"
-       style="
-           display:inline-flex;
-           align-items:center;
-           gap:8px;
-           color:var(--muted);
-           text-decoration:none;
-           margin-bottom:20px;
-       ">
-        {back}
-        <span>Профиль</span>
-    </a>
+    {back_link}
 
 
     <div class="eyebrow">
@@ -1296,7 +1285,7 @@ pub fn render_notifications(
 </html>"#,
         style = base_style(),
         topbar = topbar("NOTIFICATIONS", "user"),
-        back = icon("arrow-left"),
+        back_link = back_link("/app/me", "Профиль", "arrow-left"),
         cards = cards,
         bottom_nav = bottom_nav("profile"),
     )
@@ -1735,18 +1724,7 @@ pub fn render_public_user_profile(
 
 <section class="hero">
 
-    <a href="javascript:history.back()"
-       style="
-           display:inline-flex;
-           align-items:center;
-           gap:8px;
-           color:var(--muted);
-           text-decoration:none;
-           margin-bottom:20px;
-       ">
-        {back}
-        <span>Назад</span>
-    </a>
+    {back_link}
 
     <div class="eyebrow">
         {user_icon}
@@ -2020,7 +1998,7 @@ pub fn render_public_user_profile(
 </html>"#,
         style = base_style(),
         topbar = topbar("MEMBER", "user"),
-        back = icon("arrow-left"),
+        back_link = back_link("javascript:history.back()", "Назад", "arrow-left"),
         user_icon = icon("user"),
         profile_icon = icon("user"),
         display_name = display_name,
@@ -2257,18 +2235,7 @@ pub fn render_favorites(
 
 <section class="hero">
 
-    <a href="/app/me"
-       style="
-           display:inline-flex;
-           align-items:center;
-           gap:8px;
-           color:var(--muted);
-           text-decoration:none;
-           margin-bottom:20px;
-       ">
-        {back}
-        <span>Профиль</span>
-    </a>
+    {back_link}
 
     <div class="eyebrow">
         {heart}
@@ -2293,7 +2260,7 @@ pub fn render_favorites(
 </html>"#,
         style = base_style(),
         topbar = topbar("FAVORITES", "heart"),
-        back = icon("arrow-left"),
+        back_link = back_link("/app/me", "Профиль", "arrow-left"),
         heart = icon("heart"),
         cards = cards,
         bottom_nav = bottom_nav("profile"),

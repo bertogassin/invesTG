@@ -1,5 +1,5 @@
 use super::common::escape_html;
-use super::common::{base_style, bottom_nav, icon, topbar};
+use super::common::{back_link, base_style, bottom_nav, icon, topbar};
 
 pub fn render_category(
     ci: usize,
@@ -159,12 +159,7 @@ pub fn render_category(
 
 <section class="hero">
 
-    <a href="{city_url}"
-       style="display:inline-flex;align-items:center;gap:8px;
-              color:var(--muted);text-decoration:none;margin-bottom:20px;">
-        {back}
-        <span>Вернуться к городу</span>
-    </a>
+    {back_link}
 
     <div class="eyebrow">
         {category_icon}
@@ -240,7 +235,7 @@ pub fn render_category(
 </html>"#,
         style = base_style(),
         topbar = topbar("RESOURCE NETWORK", "globe"),
-        back = icon("chevron"),
+        back_link = back_link(&city_url, "Вернуться к городу", "chevron"),
         category_icon = icon("map"),
         city_icon = icon("map"),
         bottom_nav = bottom_nav("map"),
@@ -433,12 +428,7 @@ pub fn render_resource_profile(
 
 <section class="hero">
 
-    <a href="/app"
-       style="display:inline-flex;align-items:center;gap:8px;
-              color:var(--muted);text-decoration:none;margin-bottom:20px;">
-        {back}
-        <span>Вернуться к карте</span>
-    </a>
+    {back_link}
 
     <div class="eyebrow">
         {category_icon}
@@ -1067,7 +1057,7 @@ pub fn render_resource_profile(
 </html>"##,
         style = base_style(),
         topbar = topbar("RESOURCE NETWORK", "map"),
-        back = icon("arrow-left"),
+        back_link = back_link("/app", "Вернуться к карте", "arrow-left"),
         category_icon = icon("map-pin"),
         category = safe_category,
         title = safe_title,
@@ -1385,12 +1375,7 @@ pub fn render_my_resources(
 {topbar}
 
 <section class="hero">
-    <a href="/app/me"
-       style="display:inline-flex;align-items:center;gap:8px;
-              color:var(--muted);text-decoration:none;margin-bottom:20px;">
-        {back}
-        <span>Профиль</span>
-    </a>
+    {back_link}
 
     <div class="eyebrow">
         {user_icon}
@@ -1411,7 +1396,7 @@ pub fn render_my_resources(
 </html>"#,
         style = base_style(),
         topbar = topbar("MY RESOURCES", "map"),
-        back = icon("arrow-left"),
+        back_link = back_link("/app/me", "Профиль", "arrow-left"),
         user_icon = icon("user"),
         cards = cards,
     )
@@ -1452,12 +1437,7 @@ pub fn render_edit_resource(
 {topbar}
 
 <section class="hero">
-    <a href="/app/resource/{id}"
-       style="display:inline-flex;align-items:center;gap:8px;
-              color:var(--muted);text-decoration:none;margin-bottom:20px;">
-        {back}
-        <span>Назад к ресурсу</span>
-    </a>
+    {back_link}
 
     <div class="eyebrow">
         {edit_icon}
@@ -1535,7 +1515,11 @@ pub fn render_edit_resource(
 </html>"##,
         style = base_style(),
         topbar = topbar("EDIT RESOURCE", "map"),
-        back = icon("arrow-left"),
+        back_link = back_link(
+            &format!("/app/resource/{}", id),
+            "Назад к ресурсу",
+            "arrow-left"
+        ),
         edit_icon = icon("user"),
         id = id,
         title = safe_title,
@@ -1570,15 +1554,10 @@ pub fn render_add_resource(ci: usize, si: usize, zi: usize, category: &str) -> S
 
 <section class="hero">
 
-    <a href="{}"
-       style="display:inline-flex;align-items:center;gap:8px;
-              color:var(--muted);text-decoration:none;margin-bottom:20px;">
-        {}
-        <span>Вернуться</span>
-    </a>
+    {back_link}
 
     <div class="eyebrow">
-        {}
+        {plus_icon}
         Добавление ресурса
     </div>
 
@@ -1692,13 +1671,12 @@ pub fn render_add_resource(ci: usize, si: usize, zi: usize, category: &str) -> S
 </html>"#,
         base_style(),
         topbar("ADD RESOURCE", "globe"),
-        back_url,
-        icon("chevron"),
-        icon("plus"),
         category,
         ci,
         si,
         zi,
         category,
+        back_link = back_link(&back_url, "Вернуться", "chevron"),
+        plus_icon = icon("plus"),
     )
 }
