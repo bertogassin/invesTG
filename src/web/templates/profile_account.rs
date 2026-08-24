@@ -1,4 +1,4 @@
-use super::*;
+use super::navigation::{base_style, icon};
 
 pub fn render_me(
     authenticated: bool,

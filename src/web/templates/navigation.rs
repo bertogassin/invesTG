@@ -1,4 +1,4 @@
-use super::*;
+use std::collections::BTreeMap;
 
 pub fn world() -> BTreeMap<&'static str, BTreeMap<&'static str, Vec<&'static str>>> {
     let mut w = BTreeMap::new();

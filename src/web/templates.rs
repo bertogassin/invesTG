@@ -1,3 +1,6 @@
+mod common;
+pub use common::escape_html;
+
 mod resources;
 pub use resources::*;
 
@@ -9,14 +12,3 @@ pub use communication::*;
 
 mod navigation;
 pub use navigation::*;
-
-pub fn escape_html(value: &str) -> String {
-    value
-        .replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&#39;")
-}
-
-use std::collections::BTreeMap;
