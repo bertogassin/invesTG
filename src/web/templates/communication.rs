@@ -1,4 +1,4 @@
-use super::navigation::{base_style, icon};
+use super::common::{base_style, icon};
 
 pub fn render_contact_requests(
     requests: Vec<(i64, i64, String, String, String, String, String, i64, i64)>,

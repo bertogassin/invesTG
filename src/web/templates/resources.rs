@@ -1,5 +1,5 @@
 use super::common::escape_html;
-use super::navigation::{base_style, icon};
+use super::common::{base_style, icon};
 
 pub fn render_category(
     ci: usize,
