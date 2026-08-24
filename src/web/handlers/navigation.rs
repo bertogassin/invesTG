@@ -1,4 +1,5 @@
-use super::{templates, AppState};
+use crate::state::app_state::AppState;
+use crate::web::templates;
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,

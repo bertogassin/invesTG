@@ -1,4 +1,6 @@
-use super::{templates, verify_user_session, AppState};
+use super::auth::verify_user_session;
+use crate::state::app_state::AppState;
+use crate::web::templates;
 use axum::{extract::State, http::HeaderMap, response::Html};
 
 pub async fn notifications_page(State(state): State<AppState>, headers: HeaderMap) -> Html<String> {

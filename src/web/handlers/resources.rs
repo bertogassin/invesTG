@@ -1,8 +1,10 @@
-use super::{
+use super::auth::{verify_telegram_init_data, verify_user_session};
+use super::common::{
     csrf_rejected_response, input_text_is_valid, rate_limit_retry_after, request_is_cross_site,
-    templates, verify_telegram_init_data, verify_user_session, AddResourceForm, AppState,
-    EditResourceForm, ReportResourcePayload,
 };
+use super::types::{AddResourceForm, EditResourceForm, ReportResourcePayload};
+use crate::state::app_state::AppState;
+use crate::web::templates;
 use axum::{
     extract::{Form, Path, State},
     http::{header, HeaderMap, StatusCode},

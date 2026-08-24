@@ -1,6 +1,7 @@
-use super::{
-    csrf_rejected_response, rate_limit_retry_after, request_is_cross_site, unix_now, AppState,
+use super::common::{
+    csrf_rejected_response, rate_limit_retry_after, request_is_cross_site, unix_now,
 };
+use crate::state::app_state::AppState;
 use axum::{
     extract::State,
     http::{header, HeaderMap, HeaderValue, StatusCode},

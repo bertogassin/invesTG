@@ -1,7 +1,7 @@
-use super::{
-    csrf_rejected_response, rate_limit_retry_after, request_is_cross_site, templates,
-    verify_user_session, AppState,
-};
+use super::auth::verify_user_session;
+use super::common::{csrf_rejected_response, rate_limit_retry_after, request_is_cross_site};
+use crate::state::app_state::AppState;
+use crate::web::templates;
 use axum::{
     extract::{Path, State},
     http::{header, HeaderMap, StatusCode},

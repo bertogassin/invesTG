@@ -1,8 +1,11 @@
-use super::{
-    create_admin_session, csrf_rejected_response, input_text_is_valid, is_admin_session,
-    rate_limit_retry_after, request_is_cross_site, telegram_owner_user_id, templates,
-    verify_telegram_init_data, AppState, RejectResourceForm,
+use super::auth::{create_admin_session, is_admin_session, verify_telegram_init_data};
+use super::common::{
+    csrf_rejected_response, input_text_is_valid, rate_limit_retry_after, request_is_cross_site,
+    telegram_owner_user_id,
 };
+use super::types::RejectResourceForm;
+use crate::state::app_state::AppState;
+use crate::web::templates;
 use axum::{
     extract::{Form, Path, Query, State},
     http::{header, HeaderMap, HeaderValue, StatusCode},
