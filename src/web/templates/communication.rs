@@ -1,18 +1,9 @@
-use super::common::{base_style, icon};
+use super::common::{base_style, escape_html, icon};
 
 pub fn render_contact_requests(
     requests: Vec<(i64, i64, String, String, String, String, String, i64, i64)>,
     authenticated: bool,
 ) -> String {
-    fn escape_html(value: &str) -> String {
-        value
-            .replace('&', "&amp;")
-            .replace('<', "&lt;")
-            .replace('>', "&gt;")
-            .replace('"', "&quot;")
-            .replace('\'', "&#39;")
-    }
-
     let pending_count = requests.iter().filter(|r| r.3 == "pending").count();
 
     let cards = if !authenticated {
@@ -540,15 +531,6 @@ pub fn render_messages(
     authenticated: bool,
     conversations: Vec<(i64, i64, String, String, String, String, i64, i64)>,
 ) -> String {
-    fn escape_html(value: &str) -> String {
-        value
-            .replace('&', "&amp;")
-            .replace('<', "&lt;")
-            .replace('>', "&gt;")
-            .replace('"', "&quot;")
-            .replace('\'', "&#39;")
-    }
-
     let total_unread: i64 = conversations.iter().map(|c| c.6).sum();
 
     let content = if !authenticated {
@@ -905,15 +887,6 @@ pub fn render_chat(
     last_name: &str,
     messages: Vec<(i64, i64, String, i64, i64)>,
 ) -> String {
-    fn escape_html(value: &str) -> String {
-        value
-            .replace('&', "&amp;")
-            .replace('<', "&lt;")
-            .replace('>', "&gt;")
-            .replace('"', "&quot;")
-            .replace('\'', "&#39;")
-    }
-
     let safe_username = escape_html(username);
     let safe_first_name = escape_html(first_name);
     let safe_last_name = escape_html(last_name);

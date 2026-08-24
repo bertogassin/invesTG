@@ -1,4 +1,4 @@
-use super::common::{base_style, icon};
+use super::common::{base_style, escape_html, icon};
 
 pub fn render_me(
     authenticated: bool,
@@ -18,15 +18,6 @@ pub fn render_me(
     intent_text: &str,
     intent_until: i64,
 ) -> String {
-    fn escape_html(value: &str) -> String {
-        value
-            .replace('&', "&amp;")
-            .replace('<', "&lt;")
-            .replace('>', "&gt;")
-            .replace('"', "&quot;")
-            .replace('\'', "&#39;")
-    }
-
     let safe_username = escape_html(username);
     let safe_first_name = escape_html(first_name);
     let safe_last_name = escape_html(last_name);
@@ -1067,15 +1058,6 @@ pub fn render_notifications(
     notifications: Vec<(i64, Option<i64>, String, String, String, i64, i64)>,
     authenticated: bool,
 ) -> String {
-    fn escape_html(value: &str) -> String {
-        value
-            .replace('&', "&amp;")
-            .replace('<', "&lt;")
-            .replace('>', "&gt;")
-            .replace('"', "&quot;")
-            .replace('\'', "&#39;")
-    }
-
     let cards = if !authenticated {
         r#"
         <div class="card"
@@ -1434,15 +1416,6 @@ pub fn render_public_user_profile(
     chat_user_id: Option<i64>,
     resources: Vec<(i64, String, String, String, f64, i64, i64, i64)>,
 ) -> String {
-    fn escape_html(value: &str) -> String {
-        value
-            .replace('&', "&amp;")
-            .replace('<', "&lt;")
-            .replace('>', "&gt;")
-            .replace('"', "&quot;")
-            .replace('\'', "&#39;")
-    }
-
     let safe_username = escape_html(username);
     let safe_first_name = escape_html(first_name);
     let safe_last_name = escape_html(last_name);
