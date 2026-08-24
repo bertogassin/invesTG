@@ -24,7 +24,12 @@ enum Command {
 
 #[tokio::main]
 async fn main() {
-    let db = db::queries::init_db().expect("Не удалось открыть базу данных");
+    // Инициализируем/проверяем схему SQLite и сразу закрываем
+    // одноразовое startup-соединение.
+    drop(db::queries::init_db().expect("Не удалось инициализировать базу данных"));
+
+    // Единственный постоянный production-доступ к SQLite — connection pool.
+    let db_pool = db::pool::create_pool().expect("Не удалось создать SQLite connection pool");
 
     let bot_token = env::var("TELEGRAM_BOT_TOKEN").expect("TELEGRAM_BOT_TOKEN не задан");
 
@@ -35,7 +40,7 @@ async fn main() {
         .parse()
         .expect("ADMIN_TELEGRAM_ID должен быть числом");
 
-    let state = AppState::new(db, bot_token.clone(), admin_key, admin_telegram_id);
+    let state = AppState::new(db_pool, bot_token.clone(), admin_key, admin_telegram_id);
 
     let app = web::routes::routes(state);
 

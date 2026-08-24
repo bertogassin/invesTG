@@ -1,4 +1,4 @@
-use rusqlite::Connection;
+use crate::db::pool::DbPool;
 use std::{
     collections::{HashMap, VecDeque},
     sync::Arc,
@@ -7,7 +7,9 @@ use tokio::sync::Mutex;
 
 #[derive(Clone)]
 pub struct AppState {
-    pub db: Arc<Mutex<Connection>>,
+    // Новый SQLite connection pool.
+    pub db_pool: DbPool,
+
     pub bot_token: String,
     pub admin_key: String,
     pub admin_telegram_id: i64,
@@ -27,13 +29,13 @@ pub struct AppState {
 
 impl AppState {
     pub fn new(
-        db: Connection,
+        db_pool: DbPool,
         bot_token: String,
         admin_key: String,
         admin_telegram_id: i64,
     ) -> Self {
         Self {
-            db: Arc::new(Mutex::new(db)),
+            db_pool,
             bot_token,
             admin_key,
             admin_telegram_id,

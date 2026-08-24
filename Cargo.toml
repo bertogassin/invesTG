@@ -19,3 +19,5 @@ url = "2.5.8"
 
 chrono = "0.4"
 chrono-tz = "0.10"
+r2d2 = "0.8.10"
+r2d2_sqlite = { version = "0.25.0", features = ["bundled"] }

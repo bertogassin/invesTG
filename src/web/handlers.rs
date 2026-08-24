@@ -631,10 +631,11 @@ pub async fn app_auth(
     let client_id = format!("tg:{}", user_id);
 
     {
-        let db = state.db.lock().await;
+        let db = crate::db::pool::get_connection(&state.db_pool).ok();
 
-        let _ = db.execute(
-            "INSERT INTO profiles (
+        if let Some(db) = db {
+            let _ = db.execute(
+                "INSERT INTO profiles (
                 client_id,
                 username,
                 first_name,
@@ -654,13 +655,14 @@ pub async fn app_auth(
                 first_name = excluded.first_name,
                 last_name = excluded.last_name,
                 updated_at = strftime('%s','now')",
-            rusqlite::params![
-                &client_id,
-                &telegram_username,
-                &telegram_first_name,
-                &telegram_last_name,
-            ],
-        );
+                rusqlite::params![
+                    &client_id,
+                    &telegram_username,
+                    &telegram_first_name,
+                    &telegram_last_name,
+                ],
+            );
+        }
     }
 
     let session = create_user_session(&state, user_id);
@@ -741,7 +743,16 @@ pub async fn app_search(
             }
         }
 
-        let db = state.db.lock().await;
+        let db = match crate::db::pool::get_connection(&state.db_pool) {
+            Ok(db) => db,
+            Err(_) => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    "База данных временно недоступна",
+                )
+                    .into_response();
+            }
+        };
 
         // FTS5 query:
         // каждое слово ищем как prefix, чтобы запрос
@@ -922,7 +933,12 @@ pub async fn app_me(State(state): State<AppState>, headers: HeaderMap) -> Html<S
 
     let client_id = format!("tg:{}", user_id);
 
-    let db = state.db.lock().await;
+    let db = match crate::db::pool::get_connection(&state.db_pool) {
+        Ok(db) => db,
+        Err(_) => {
+            return Html("<h1>503</h1><p>База данных временно недоступна.</p>".to_string());
+        }
+    };
 
     let profile: Option<(String, String, String, i64, String, i64)> = db
         .query_row(
@@ -1088,7 +1104,12 @@ pub async fn app_cat(
     State(state): State<AppState>,
     Path((ci, si, zi, k)): Path<(usize, usize, usize, String)>,
 ) -> Html<String> {
-    let db = state.db.lock().await;
+    let db = match crate::db::pool::get_connection(&state.db_pool) {
+        Ok(db) => db,
+        Err(_) => {
+            return Html("<h1>503</h1><p>База данных временно недоступна.</p>".to_string());
+        }
+    };
 
     let resources: Vec<(i64, String, String, String, String, f64, i64, i64, i64)> = db
         .prepare(
@@ -1171,7 +1192,12 @@ pub async fn public_user_profile(
         return Html(templates::render_public_user_not_found());
     }
 
-    let db = state.db.lock().await;
+    let db = match crate::db::pool::get_connection(&state.db_pool) {
+        Ok(db) => db,
+        Err(_) => {
+            return Html("<h1>503</h1><p>База данных временно недоступна.</p>".to_string());
+        }
+    };
 
     let profile: Option<(String, String, String, String, i64, String, i64)> = db
         .query_row(
@@ -1319,7 +1345,12 @@ pub async fn public_user_profile(
 // ПРОФИЛЬ РЕСУРСА
 // ============================================================
 pub async fn resource_profile(State(state): State<AppState>, Path(id): Path<i64>) -> Html<String> {
-    let db = state.db.lock().await;
+    let db = match crate::db::pool::get_connection(&state.db_pool) {
+        Ok(db) => db,
+        Err(_) => {
+            return Html("<h1>503</h1><p>База данных временно недоступна.</p>".to_string());
+        }
+    };
 
     let resource = db
         .query_row(
@@ -1577,7 +1608,16 @@ pub async fn add_resource(
             .into_response();
     }
 
-    let db = state.db.lock().await;
+    let db = match crate::db::pool::get_connection(&state.db_pool) {
+        Ok(db) => db,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "База данных временно недоступна",
+            )
+                .into_response();
+        }
+    };
 
     let result = db.execute(
         "INSERT INTO resources
@@ -1688,7 +1728,12 @@ pub async fn notifications_page(State(state): State<AppState>, headers: HeaderMa
         }
     };
 
-    let db = state.db.lock().await;
+    let db = match crate::db::pool::get_connection(&state.db_pool) {
+        Ok(db) => db,
+        Err(_) => {
+            return Html("<h1>503</h1><p>База данных временно недоступна.</p>".to_string());
+        }
+    };
 
     let notifications: Vec<(i64, Option<i64>, String, String, String, i64, i64)> = db
         .prepare(
@@ -1753,7 +1798,12 @@ pub async fn contact_requests_page(
         }
     };
 
-    let db = state.db.lock().await;
+    let db = match crate::db::pool::get_connection(&state.db_pool) {
+        Ok(db) => db,
+        Err(_) => {
+            return Html("<h1>503</h1><p>База данных временно недоступна.</p>".to_string());
+        }
+    };
 
     let requests: Vec<(i64, i64, String, String, String, String, String, i64, i64)> = db
         .prepare(
@@ -1836,7 +1886,16 @@ pub async fn accept_contact_request(
             .into_response();
     }
 
-    let db = state.db.lock().await;
+    let db = match crate::db::pool::get_connection(&state.db_pool) {
+        Ok(db) => db,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "База данных временно недоступна",
+            )
+                .into_response();
+        }
+    };
 
     let request: Option<i64> = db
         .query_row(
@@ -1977,7 +2036,16 @@ pub async fn reject_contact_request(
             .into_response();
     }
 
-    let db = state.db.lock().await;
+    let db = match crate::db::pool::get_connection(&state.db_pool) {
+        Ok(db) => db,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "База данных временно недоступна",
+            )
+                .into_response();
+        }
+    };
 
     let request: Option<i64> = db
         .query_row(
@@ -2059,7 +2127,12 @@ pub async fn messages_page(State(state): State<AppState>, headers: HeaderMap) ->
         }
     };
 
-    let db = state.db.lock().await;
+    let db = match crate::db::pool::get_connection(&state.db_pool) {
+        Ok(db) => db,
+        Err(_) => {
+            return Html("<h1>503</h1><p>База данных временно недоступна.</p>".to_string());
+        }
+    };
 
     let conversations: Vec<(i64, i64, String, String, String, String, i64, i64)> = db
         .prepare(
@@ -2186,7 +2259,12 @@ pub async fn chat_page(
         (other_user_id, user_id)
     };
 
-    let db = state.db.lock().await;
+    let db = match crate::db::pool::get_connection(&state.db_pool) {
+        Ok(db) => db,
+        Err(_) => {
+            return Html("<h1>503</h1><p>База данных временно недоступна.</p>".to_string());
+        }
+    };
 
     let conversation_id: Option<i64> = db
         .query_row(
@@ -2342,7 +2420,16 @@ pub async fn send_chat_message(
         (other_user_id, user_id)
     };
 
-    let db = state.db.lock().await;
+    let db = match crate::db::pool::get_connection(&state.db_pool) {
+        Ok(db) => db,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "База данных временно недоступна",
+            )
+                .into_response();
+        }
+    };
 
     let conversation_id: Option<i64> = db
         .query_row(
@@ -2469,7 +2556,12 @@ pub async fn favorites_page(State(state): State<AppState>, headers: HeaderMap) -
         }
     };
 
-    let db = state.db.lock().await;
+    let db = match crate::db::pool::get_connection(&state.db_pool) {
+        Ok(db) => db,
+        Err(_) => {
+            return Html("<h1>503</h1><p>База данных временно недоступна.</p>".to_string());
+        }
+    };
 
     let resources: Vec<(i64, String, String, String, String, f64, i64, i64, i64)> = db
         .prepare(
@@ -2527,7 +2619,12 @@ pub async fn my_resources(State(state): State<AppState>, headers: HeaderMap) -> 
         return Html(templates::render_my_resources("", vec![]));
     }
 
-    let db = state.db.lock().await;
+    let db = match crate::db::pool::get_connection(&state.db_pool) {
+        Ok(db) => db,
+        Err(_) => {
+            return Html("<h1>503</h1><p>База данных временно недоступна.</p>".to_string());
+        }
+    };
 
     let resources: Vec<(
         i64,
@@ -2605,7 +2702,12 @@ pub async fn edit_resource_page(
         None => String::new(),
     };
 
-    let db = state.db.lock().await;
+    let db = match crate::db::pool::get_connection(&state.db_pool) {
+        Ok(db) => db,
+        Err(_) => {
+            return Html("<h1>503</h1><p>База данных временно недоступна.</p>".to_string());
+        }
+    };
 
     let resource = db
         .query_row(
@@ -2760,7 +2862,16 @@ pub async fn edit_resource(
             .into_response();
     }
 
-    let db = state.db.lock().await;
+    let db = match crate::db::pool::get_connection(&state.db_pool) {
+        Ok(db) => db,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "База данных временно недоступна",
+            )
+                .into_response();
+        }
+    };
 
     let changed = db
         .execute(
@@ -2849,7 +2960,12 @@ pub async fn admin_reports(State(state): State<AppState>, headers: HeaderMap) ->
 
     let key_query = String::new();
 
-    let db = state.db.lock().await;
+    let db = match crate::db::pool::get_connection(&state.db_pool) {
+        Ok(db) => db,
+        Err(_) => {
+            return Html("<h1>503</h1><p>База данных временно недоступна.</p>".to_string());
+        }
+    };
 
     let rows: Vec<(
         i64,
@@ -3262,7 +3378,16 @@ pub async fn admin_close_report(
         return (StatusCode::UNAUTHORIZED, "Доступ запрещён").into_response();
     }
 
-    let db = state.db.lock().await;
+    let db = match crate::db::pool::get_connection(&state.db_pool) {
+        Ok(db) => db,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "База данных временно недоступна",
+            )
+                .into_response();
+        }
+    };
 
     let _ = db.execute(
         "UPDATE resource_reports
@@ -3294,7 +3419,16 @@ pub async fn admin_hide_reported_resource(
         return (StatusCode::UNAUTHORIZED, "Доступ запрещён").into_response();
     }
 
-    let db = state.db.lock().await;
+    let db = match crate::db::pool::get_connection(&state.db_pool) {
+        Ok(db) => db,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "База данных временно недоступна",
+            )
+                .into_response();
+        }
+    };
 
     let resource_id: Option<i64> = db
         .query_row(
@@ -3361,7 +3495,16 @@ pub async fn admin_reject_reported_resource(
         return (StatusCode::UNAUTHORIZED, "Доступ запрещён").into_response();
     }
 
-    let db = state.db.lock().await;
+    let db = match crate::db::pool::get_connection(&state.db_pool) {
+        Ok(db) => db,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "База данных временно недоступна",
+            )
+                .into_response();
+        }
+    };
 
     let report: Option<(i64, String)> = db
         .query_row(
@@ -3448,7 +3591,12 @@ pub async fn admin_resources(
     let key_query = String::new();
     let key_join = "?";
 
-    let db = state.db.lock().await;
+    let db = match crate::db::pool::get_connection(&state.db_pool) {
+        Ok(db) => db,
+        Err(_) => {
+            return Html("<h1>503</h1><p>База данных временно недоступна.</p>".to_string());
+        }
+    };
 
     let filter_clause = match filter {
         "pending" => "moderation_status = 'pending'",
@@ -4171,7 +4319,16 @@ pub async fn admin_bulk_resources(
         action_sql, filter_clause, search_clause
     );
 
-    let db = state.db.lock().await;
+    let db = match crate::db::pool::get_connection(&state.db_pool) {
+        Ok(db) => db,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "База данных временно недоступна",
+            )
+                .into_response();
+        }
+    };
 
     let changed = if q.is_empty() {
         db.execute(&sql, []).unwrap_or(0)
@@ -4231,7 +4388,16 @@ async fn admin_toggle_field(
         field
     );
 
-    let db = state.db.lock().await;
+    let db = match crate::db::pool::get_connection(&state.db_pool) {
+        Ok(db) => db,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "База данных временно недоступна",
+            )
+                .into_response();
+        }
+    };
     let _ = db.execute(&sql, rusqlite::params![id]);
     drop(db);
 
@@ -4337,10 +4503,19 @@ pub async fn api_report_resource(
             .into_response();
     }
 
-    let db = state.db.lock().await;
+    let resource_exists: bool = {
+        let db = match crate::db::pool::get_connection(&state.db_pool) {
+            Ok(db) => db,
+            Err(_) => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    "База данных временно недоступна",
+                )
+                    .into_response();
+            }
+        };
 
-    let resource_exists: bool = db
-        .query_row(
+        db.query_row(
             "SELECT EXISTS(
                 SELECT 1
                 FROM resources
@@ -4351,11 +4526,10 @@ pub async fn api_report_resource(
             rusqlite::params![id],
             |row| row.get(0),
         )
-        .unwrap_or(false);
+        .unwrap_or(false)
+    };
 
     if !resource_exists {
-        drop(db);
-
         return (
             StatusCode::NOT_FOUND,
             Json(json!({
@@ -4369,8 +4543,6 @@ pub async fn api_report_resource(
     if let Some(retry_after) =
         rate_limit_retry_after(&state, user_id, "resource_report", 6, 3600).await
     {
-        drop(db);
-
         return (
             StatusCode::TOO_MANY_REQUESTS,
             [(header::RETRY_AFTER, retry_after.to_string())],
@@ -4382,6 +4554,17 @@ pub async fn api_report_resource(
         )
             .into_response();
     }
+
+    let db = match crate::db::pool::get_connection(&state.db_pool) {
+        Ok(db) => db,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "База данных временно недоступна",
+            )
+                .into_response();
+        }
+    };
 
     let result = db.execute(
         "INSERT INTO resource_reports (
@@ -4468,7 +4651,16 @@ pub async fn api_favorite_toggle(
             .into_response();
     }
 
-    let db = state.db.lock().await;
+    let db = match crate::db::pool::get_connection(&state.db_pool) {
+        Ok(db) => db,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "База данных временно недоступна",
+            )
+                .into_response();
+        }
+    };
 
     let allowed: bool = db
         .query_row(
@@ -4556,22 +4748,21 @@ pub async fn api_favorite_status(
         }
     };
 
-    let db = state.db.lock().await;
-
-    let favorite: bool = db
-        .query_row(
-            "SELECT EXISTS(
-                SELECT 1
-                FROM favorites
-                WHERE user_id = ?1
-                  AND resource_id = ?2
-            )",
-            rusqlite::params![user_id, id],
-            |row| row.get(0),
-        )
-        .unwrap_or(false);
-
-    drop(db);
+    let favorite: bool = match crate::db::pool::get_connection(&state.db_pool) {
+        Ok(db) => db
+            .query_row(
+                "SELECT EXISTS(
+                    SELECT 1
+                    FROM favorites
+                    WHERE user_id = ?1
+                      AND resource_id = ?2
+                )",
+                rusqlite::params![user_id, id],
+                |row| row.get(0),
+            )
+            .unwrap_or(false),
+        Err(_) => false,
+    };
 
     Json(json!({
         "ok": true,
@@ -4620,10 +4811,19 @@ pub async fn api_resource_vote(
 
     let client_id = format!("tg:{}", user_id);
 
-    let db = state.db.lock().await;
+    let allowed: bool = {
+        let db = match crate::db::pool::get_connection(&state.db_pool) {
+            Ok(db) => db,
+            Err(_) => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    "База данных временно недоступна",
+                )
+                    .into_response();
+            }
+        };
 
-    let allowed: bool = db
-        .query_row(
+        db.query_row(
             "SELECT EXISTS(
                 SELECT 1
                 FROM resources
@@ -4634,11 +4834,10 @@ pub async fn api_resource_vote(
             rusqlite::params![id],
             |row| row.get(0),
         )
-        .unwrap_or(false);
+        .unwrap_or(false)
+    };
 
     if !allowed {
-        drop(db);
-
         return (
             StatusCode::NOT_FOUND,
             Json(json!({
@@ -4652,8 +4851,6 @@ pub async fn api_resource_vote(
     if let Some(retry_after) =
         rate_limit_retry_after(&state, user_id, "resource_rating", 60, 60).await
     {
-        drop(db);
-
         return (
             StatusCode::TOO_MANY_REQUESTS,
             [(header::RETRY_AFTER, retry_after.to_string())],
@@ -4665,6 +4862,17 @@ pub async fn api_resource_vote(
         )
             .into_response();
     }
+
+    let db = match crate::db::pool::get_connection(&state.db_pool) {
+        Ok(db) => db,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "База данных временно недоступна",
+            )
+                .into_response();
+        }
+    };
 
     let transaction_result = (|| -> rusqlite::Result<(f64, i64)> {
         let tx = db.unchecked_transaction()?;
@@ -4793,10 +5001,19 @@ pub async fn api_contact_request(
             .into_response();
     }
 
-    let db = state.db.lock().await;
+    let receiver_user_id: Option<i64> = {
+        let db = match crate::db::pool::get_connection(&state.db_pool) {
+            Ok(db) => db,
+            Err(_) => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    "База данных временно недоступна",
+                )
+                    .into_response();
+            }
+        };
 
-    let receiver_user_id: Option<i64> = db
-        .query_row(
+        db.query_row(
             "SELECT CAST(
                 substr(client_id, 4)
                 AS INTEGER
@@ -4808,14 +5025,13 @@ pub async fn api_contact_request(
             rusqlite::params![public_id],
             |row| row.get(0),
         )
-        .ok();
+        .ok()
+    };
 
     let receiver_user_id = match receiver_user_id {
         Some(id) if id > 0 => id,
 
         _ => {
-            drop(db);
-
             return (
                 StatusCode::NOT_FOUND,
                 Json(json!({
@@ -4828,8 +5044,6 @@ pub async fn api_contact_request(
     };
 
     if sender_user_id == receiver_user_id {
-        drop(db);
-
         return (
             StatusCode::BAD_REQUEST,
             Json(json!({
@@ -4843,8 +5057,6 @@ pub async fn api_contact_request(
     if let Some(retry_after) =
         rate_limit_retry_after(&state, sender_user_id, "contact_request", 6, 600).await
     {
-        drop(db);
-
         return (
             StatusCode::TOO_MANY_REQUESTS,
             [(header::RETRY_AFTER, retry_after.to_string())],
@@ -4856,6 +5068,17 @@ pub async fn api_contact_request(
         )
             .into_response();
     }
+
+    let db = match crate::db::pool::get_connection(&state.db_pool) {
+        Ok(db) => db,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "База данных временно недоступна",
+            )
+                .into_response();
+        }
+    };
 
     let existing_status: Option<String> = db
         .query_row(
@@ -4962,7 +5185,16 @@ pub async fn api_profile_get(State(state): State<AppState>, headers: HeaderMap) 
 
     let client_id = format!("tg:{}", user_id);
 
-    let db = state.db.lock().await;
+    let db = match crate::db::pool::get_connection(&state.db_pool) {
+        Ok(db) => db,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "База данных временно недоступна",
+            )
+                .into_response();
+        }
+    };
 
     let profile: Option<(String, String, String, i64, String, i64)> = db
         .query_row(
@@ -5104,7 +5336,16 @@ pub async fn api_profile_set(
             .into_response();
     }
 
-    let db = state.db.lock().await;
+    let db = match crate::db::pool::get_connection(&state.db_pool) {
+        Ok(db) => db,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "База данных временно недоступна",
+            )
+                .into_response();
+        }
+    };
 
     let result = db.execute(
         "INSERT INTO profiles (
@@ -5160,17 +5401,18 @@ pub async fn api_profile_set(
 }
 
 pub async fn api_open_count(State(state): State<AppState>) -> Json<serde_json::Value> {
-    let db = state.db.lock().await;
-
-    let count: i64 = db
-        .query_row(
-            "SELECT COUNT(*)
-             FROM profiles
-             WHERE open_contact = 1",
-            [],
-            |row| row.get(0),
-        )
-        .unwrap_or(0);
+    let count: i64 = match crate::db::pool::get_connection(&state.db_pool) {
+        Ok(db) => db
+            .query_row(
+                "SELECT COUNT(*)
+                 FROM profiles
+                 WHERE open_contact = 1",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap_or(0),
+        Err(_) => 0,
+    };
 
     Json(json!({
         "count": count
@@ -5199,7 +5441,16 @@ pub async fn admin_approve_resource(
         return (StatusCode::UNAUTHORIZED, "Доступ запрещён").into_response();
     }
 
-    let db = state.db.lock().await;
+    let db = match crate::db::pool::get_connection(&state.db_pool) {
+        Ok(db) => db,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "База данных временно недоступна",
+            )
+                .into_response();
+        }
+    };
 
     let result = db.execute(
         "UPDATE resources
@@ -5298,7 +5549,16 @@ pub async fn admin_reject_resource(
             .into_response();
     }
 
-    let db = state.db.lock().await;
+    let db = match crate::db::pool::get_connection(&state.db_pool) {
+        Ok(db) => db,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "База данных временно недоступна",
+            )
+                .into_response();
+        }
+    };
 
     let result = db.execute(
         "UPDATE resources
