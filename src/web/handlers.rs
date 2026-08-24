@@ -42,14 +42,3 @@ use auth::{
 
 use super::templates;
 use crate::state::app_state::AppState;
-use axum::{
-    extract::{Form, Path, Query, State},
-    http::{header, HeaderMap, HeaderValue, StatusCode},
-    response::{Html, IntoResponse, Response},
-    Json,
-};
-use serde_json::json;
-use std::collections::BTreeMap;
-
-use hmac::{Hmac, Mac};
-use sha2::Sha256;
