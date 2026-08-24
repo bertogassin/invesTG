@@ -1,13 +1,373 @@
+use super::templates;
+use crate::state::app_state::AppState;
 use axum::{
     extract::{Form, Path, Query, State},
-    response::Html,
+    http::{header, HeaderMap, HeaderValue, StatusCode},
+    response::{Html, IntoResponse, Response},
     Json,
 };
-use serde::{Deserialize};
+use serde::Deserialize;
 use serde_json::json;
 use std::collections::BTreeMap;
-use crate::state::app_state::AppState;
-use super::templates;
+
+use hmac::{Hmac, Mac};
+use sha2::Sha256;
+
+fn verify_telegram_init_data(init_data: &str, bot_token: &str) -> Option<i64> {
+    let mut hash_from_telegram = String::new();
+    let mut pairs: Vec<(String, String)> = Vec::new();
+
+    for part in init_data.split('&') {
+        let mut iter = part.splitn(2, '=');
+
+        let key = iter.next().unwrap_or("");
+        let value = iter.next().unwrap_or("");
+
+        let key = urlencoding::decode(key).ok()?.to_string();
+        let value = urlencoding::decode(value).ok()?.to_string();
+
+        if key == "hash" {
+            hash_from_telegram = value;
+        } else {
+            pairs.push((key, value));
+        }
+    }
+
+    if hash_from_telegram.is_empty() {
+        return None;
+    }
+
+    pairs.sort_by(|a, b| a.0.cmp(&b.0));
+
+    let data_check_string = pairs
+        .iter()
+        .map(|(k, v)| format!("{}={}", k, v))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    type HmacSha256 = Hmac<Sha256>;
+
+    let mut secret_mac = HmacSha256::new_from_slice(b"WebAppData").ok()?;
+    secret_mac.update(bot_token.as_bytes());
+
+    let secret_key = secret_mac.finalize().into_bytes();
+
+    let mut check_mac = HmacSha256::new_from_slice(&secret_key).ok()?;
+    check_mac.update(data_check_string.as_bytes());
+
+    let calculated_hash = hex::encode(check_mac.finalize().into_bytes());
+
+    if calculated_hash != hash_from_telegram {
+        return None;
+    }
+
+    let user_json = pairs.iter().find(|(k, _)| k == "user").map(|(_, v)| v)?;
+
+    let user: serde_json::Value = serde_json::from_str(user_json).ok()?;
+
+    user.get("id")?.as_i64()
+}
+
+fn telegram_profile_from_init_data(init_data: &str) -> (String, String, String) {
+    let params: Vec<(String, String)> = url::form_urlencoded::parse(init_data.as_bytes())
+        .into_owned()
+        .collect();
+
+    let user_json = params
+        .iter()
+        .find(|(key, _)| key == "user")
+        .map(|(_, value)| value.as_str())
+        .unwrap_or("");
+
+    let user: serde_json::Value = match serde_json::from_str(user_json) {
+        Ok(value) => value,
+        Err(_) => {
+            return (String::new(), String::new(), String::new());
+        }
+    };
+
+    let username = user
+        .get("username")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+
+    let first_name = user
+        .get("first_name")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+
+    let last_name = user
+        .get("last_name")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+
+    (username, first_name, last_name)
+}
+
+fn telegram_owner_user_id(client_id: &str) -> Option<i64> {
+    client_id
+        .strip_prefix("tg:")
+        .and_then(|value| value.parse::<i64>().ok())
+}
+
+fn unix_now() -> i64 {
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
+}
+
+fn create_user_session(state: &AppState, user_id: i64) -> String {
+    type HmacSha256 = Hmac<Sha256>;
+
+    // Пользовательская сессия на 30 дней.
+    let expires = unix_now() + 2_592_000;
+    let payload = format!("user:{}:{}", user_id, expires);
+
+    let mut mac = HmacSha256::new_from_slice(state.admin_key.as_bytes()).expect("HMAC key");
+
+    mac.update(payload.as_bytes());
+
+    let signature = hex::encode(mac.finalize().into_bytes());
+
+    format!("{}:{}:{}", user_id, expires, signature)
+}
+
+fn verify_user_session(state: &AppState, headers: &HeaderMap) -> Option<i64> {
+    type HmacSha256 = Hmac<Sha256>;
+
+    let cookie_header = headers.get(header::COOKIE)?.to_str().ok()?;
+
+    let session = cookie_header
+        .split(';')
+        .map(|v| v.trim())
+        .find_map(|v| v.strip_prefix("resursmap_user="))?;
+
+    let mut parts = session.split(':');
+
+    let user_id: i64 = parts.next()?.parse().ok()?;
+    let expires: i64 = parts.next()?.parse().ok()?;
+    let signature_hex = parts.next()?;
+
+    if parts.next().is_some() || expires < unix_now() {
+        return None;
+    }
+
+    let signature = hex::decode(signature_hex).ok()?;
+
+    let payload = format!("user:{}:{}", user_id, expires);
+
+    let mut mac = HmacSha256::new_from_slice(state.admin_key.as_bytes()).ok()?;
+
+    mac.update(payload.as_bytes());
+
+    if mac.verify_slice(&signature).is_ok() {
+        Some(user_id)
+    } else {
+        None
+    }
+}
+
+fn create_admin_session(state: &AppState, user_id: i64) -> String {
+    type HmacSha256 = Hmac<Sha256>;
+
+    let expires = unix_now() + 43_200;
+    let payload = format!("{}:{}", user_id, expires);
+
+    let mut mac = HmacSha256::new_from_slice(state.admin_key.as_bytes()).expect("HMAC key");
+
+    mac.update(payload.as_bytes());
+
+    let signature = hex::encode(mac.finalize().into_bytes());
+
+    format!("{}:{}", payload, signature)
+}
+
+fn verify_admin_session(state: &AppState, headers: &HeaderMap) -> bool {
+    type HmacSha256 = Hmac<Sha256>;
+
+    let cookie_header = match headers.get(header::COOKIE) {
+        Some(v) => match v.to_str() {
+            Ok(v) => v,
+            Err(_) => return false,
+        },
+        None => return false,
+    };
+
+    let session = cookie_header
+        .split(';')
+        .map(|v| v.trim())
+        .find_map(|v| v.strip_prefix("resursmap_admin="));
+
+    let session = match session {
+        Some(v) => v,
+        None => return false,
+    };
+
+    let mut parts = session.split(':');
+
+    let user_id: i64 = match parts.next().and_then(|v| v.parse().ok()) {
+        Some(v) => v,
+        None => return false,
+    };
+
+    let expires: i64 = match parts.next().and_then(|v| v.parse().ok()) {
+        Some(v) => v,
+        None => return false,
+    };
+
+    let signature_hex = match parts.next() {
+        Some(v) => v,
+        None => return false,
+    };
+
+    if parts.next().is_some() || user_id != state.admin_telegram_id || expires < unix_now() {
+        return false;
+    }
+
+    let signature = match hex::decode(signature_hex) {
+        Ok(v) => v,
+        Err(_) => return false,
+    };
+
+    let payload = format!("{}:{}", user_id, expires);
+
+    let mut mac = match HmacSha256::new_from_slice(state.admin_key.as_bytes()) {
+        Ok(v) => v,
+        Err(_) => return false,
+    };
+
+    mac.update(payload.as_bytes());
+
+    mac.verify_slice(&signature).is_ok()
+}
+
+fn is_admin_session(state: &AppState, headers: &HeaderMap) -> bool {
+    verify_admin_session(state, headers)
+}
+
+pub async fn admin_login_page() -> Html<String> {
+    Html(
+        r#"<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Admin Login · ResursMap</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+
+<body style="
+    font-family:system-ui;
+    background:#0b0e12;
+    color:#f5f5f5;
+    padding:28px;
+">
+
+<div style="max-width:520px;margin:auto;">
+    <h1>ResursMap Admin</h1>
+    <p id="status">Проверяем Telegram…</p>
+</div>
+
+<script>
+(async function () {
+    const status = document.getElementById("status");
+
+    try {
+        const tg = window.Telegram && window.Telegram.WebApp
+            ? window.Telegram.WebApp
+            : null;
+
+        if (!tg || !tg.initData) {
+            status.textContent =
+                "Откройте эту страницу через Telegram Mini App.";
+            return;
+        }
+
+        tg.ready();
+
+        const response = await fetch("/app/admin/login", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                init_data: tg.initData
+            })
+        });
+
+        const data = await response.json();
+
+        if (!data.ok) {
+            status.textContent = "Доступ запрещён.";
+            return;
+        }
+
+        status.textContent = "✓ Вход выполнен";
+
+        window.location.replace("/app/admin/resources");
+    } catch (_) {
+        status.textContent = "Ошибка авторизации.";
+    }
+})();
+</script>
+
+</body>
+</html>"#
+            .to_string(),
+    )
+}
+
+pub async fn admin_login(
+    State(state): State<AppState>,
+    Json(payload): Json<serde_json::Value>,
+) -> Response {
+    let init_data = payload
+        .get("init_data")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+
+    let user_id = match verify_telegram_init_data(init_data, &state.bot_token) {
+        Some(id) if id == state.admin_telegram_id => id,
+
+        _ => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(json!({
+                    "ok": false,
+                    "error": "forbidden"
+                })),
+            )
+                .into_response();
+        }
+    };
+
+    let session = create_admin_session(&state, user_id);
+
+    let cookie = format!(
+        "resursmap_admin={}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=43200",
+        session
+    );
+
+    let mut response = Json(json!({
+        "ok": true
+    }))
+    .into_response();
+
+    if let Ok(value) = HeaderValue::from_str(&cookie) {
+        response.headers_mut().insert(header::SET_COOKIE, value);
+    }
+
+    response
+}
 
 // ------------------------------------------------------------
 // HTML-страницы
@@ -16,17 +376,513 @@ pub async fn home() -> Html<String> {
     Html("<h1>ResursMap</h1><p>Сервер работает.</p>".to_string())
 }
 
+pub async fn app_auth_page() -> Html<String> {
+    Html(
+        r#"<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ResursMap</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+
+<body style="
+    margin:0;
+    padding:28px;
+    background:#080a0d;
+    color:#f5f5f5;
+    font-family:system-ui;
+">
+
+<div style="max-width:520px;margin:auto;">
+    <h2>RESURSMAP</h2>
+    <p id="status">Подключаем Telegram…</p>
+</div>
+
+<script>
+(async function () {
+    const status = document.getElementById("status");
+
+    try {
+        const tg =
+            window.Telegram && window.Telegram.WebApp
+                ? window.Telegram.WebApp
+                : null;
+
+        if (!tg || !tg.initData) {
+            status.textContent =
+                "Telegram-сессия недоступна.";
+            return;
+        }
+
+        tg.ready();
+
+        const response = await fetch("/app/auth", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                init_data: tg.initData
+            })
+        });
+
+        const data = await response.json();
+
+        if (!data.ok) {
+            status.textContent =
+                "Не удалось подтвердить Telegram.";
+            return;
+        }
+
+        status.textContent = "✓ Готово";
+
+        window.location.replace("/app");
+    } catch (_) {
+        status.textContent =
+            "Ошибка подключения Telegram.";
+    }
+})();
+</script>
+
+</body>
+</html>"#
+            .to_string(),
+    )
+}
+
+pub async fn app_auth(
+    State(state): State<AppState>,
+    Json(payload): Json<serde_json::Value>,
+) -> Response {
+    let init_data = payload
+        .get("init_data")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+
+    let user_id = match verify_telegram_init_data(init_data, &state.bot_token) {
+        Some(id) => id,
+
+        None => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(json!({
+                    "ok": false,
+                    "error": "invalid_telegram_data"
+                })),
+            )
+                .into_response();
+        }
+    };
+
+    // TASK 7.16B PROFILE SYNC
+    let (telegram_username, telegram_first_name, telegram_last_name) =
+        telegram_profile_from_init_data(init_data);
+
+    let client_id = format!("tg:{}", user_id);
+
+    {
+        let db = state.db.lock().await;
+
+        let _ = db.execute(
+            "INSERT INTO profiles (
+                client_id,
+                username,
+                first_name,
+                last_name,
+                updated_at
+             )
+             VALUES (
+                ?1,
+                ?2,
+                ?3,
+                ?4,
+                strftime('%s','now')
+             )
+             ON CONFLICT(client_id)
+             DO UPDATE SET
+                username = excluded.username,
+                first_name = excluded.first_name,
+                last_name = excluded.last_name,
+                updated_at = strftime('%s','now')",
+            rusqlite::params![
+                &client_id,
+                &telegram_username,
+                &telegram_first_name,
+                &telegram_last_name,
+            ],
+        );
+    }
+
+    let session = create_user_session(&state, user_id);
+
+    let cookie = format!(
+        "resursmap_user={}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=2592000",
+        session
+    );
+
+    let mut response = Json(json!({
+        "ok": true
+    }))
+    .into_response();
+
+    if let Ok(value) = HeaderValue::from_str(&cookie) {
+        response.headers_mut().insert(header::SET_COOKIE, value);
+    }
+
+    response
+}
+
 pub async fn app_root() -> Html<String> {
     Html(templates::render_continents())
 }
 
-pub async fn app_search(Query(params): Query<BTreeMap<String, String>>) -> Html<String> {
-    let q = params.get("q").map(|s| s.as_str()).unwrap_or("");
-    Html(templates::render_search(q))
+pub async fn app_search(
+    State(state): State<AppState>,
+    Query(params): Query<BTreeMap<String, String>>,
+) -> Html<String> {
+    let q = params.get("q").map(|s| s.trim()).unwrap_or("");
+
+    let mut resources: Vec<(
+        i64,
+        String,
+        String,
+        String,
+        String,
+        f64,
+        i64,
+        i64,
+        i64,
+        usize,
+        usize,
+        usize,
+    )> = Vec::new();
+
+    let mut people: Vec<(String, String, String, String, i64, String, i64)> = Vec::new();
+
+    if !q.is_empty() {
+        let query_lower = q.to_lowercase();
+
+        let mut location_matches: Vec<(usize, usize, usize)> = Vec::new();
+
+        let world_data = templates::world();
+
+        for (ci, (_, countries)) in world_data.iter().enumerate() {
+            for (si, (country, cities)) in countries.iter().enumerate() {
+                let country_match = country.to_lowercase().contains(&query_lower);
+
+                for (zi, city) in cities.iter().enumerate() {
+                    let city_match = city.to_lowercase().contains(&query_lower);
+
+                    if city_match || country_match {
+                        location_matches.push((ci, si, zi));
+                    }
+                }
+            }
+        }
+
+        let db = state.db.lock().await;
+        let pattern = format!("%{}%", q);
+
+        let mut sql = String::from(
+            "SELECT
+                id,
+                title,
+                category,
+                description,
+                address,
+                rating,
+                votes,
+                is_verified,
+                is_premium,
+                continent_index,
+                country_index,
+                city_index
+             FROM resources
+             WHERE is_active = 1
+               AND moderation_status = 'approved'
+               AND (
+                    LOWER(title) LIKE LOWER(?1)
+                    OR LOWER(description) LIKE LOWER(?1)
+                    OR LOWER(category) LIKE LOWER(?1)
+                    OR LOWER(address) LIKE LOWER(?1)",
+        );
+
+        for (index, _) in location_matches.iter().enumerate() {
+            let base = 2 + index * 3;
+
+            sql.push_str(&format!(
+                " OR (
+                    continent_index = ?{}
+                    AND country_index = ?{}
+                    AND city_index = ?{}
+                )",
+                base,
+                base + 1,
+                base + 2
+            ));
+        }
+
+        sql.push_str(
+            ")
+             ORDER BY
+                is_premium DESC,
+                is_verified DESC,
+                rating DESC,
+                votes DESC,
+                id DESC
+             LIMIT 100",
+        );
+
+        let mut values: Vec<rusqlite::types::Value> = Vec::new();
+
+        values.push(pattern.into());
+
+        for (ci, si, zi) in location_matches {
+            values.push((ci as i64).into());
+            values.push((si as i64).into());
+            values.push((zi as i64).into());
+        }
+
+        resources = db
+            .prepare(&sql)
+            .and_then(|mut stmt| {
+                stmt.query_map(rusqlite::params_from_iter(values.iter()), |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                        row.get(5)?,
+                        row.get(6)?,
+                        row.get(7)?,
+                        row.get(8)?,
+                        row.get(9)?,
+                        row.get(10)?,
+                        row.get(11)?,
+                    ))
+                })?
+                .collect::<Result<Vec<_>, _>>()
+            })
+            .unwrap_or_default();
+
+        people = db
+            .prepare(
+                "SELECT
+                    public_id,
+                    username,
+                    first_name,
+                    last_name,
+                    open_contact,
+                    intent_text,
+                    intent_until
+                 FROM profiles
+                 WHERE client_id LIKE 'tg:%'
+                   AND public_id <> ''
+                   AND (
+                        LOWER(username) LIKE LOWER(?1)
+                        OR LOWER(first_name) LIKE LOWER(?1)
+                        OR LOWER(last_name) LIKE LOWER(?1)
+                        OR LOWER(intent_text) LIKE LOWER(?1)
+                   )
+                 ORDER BY
+                    CASE
+                        WHEN intent_text <> ''
+                         AND (
+                              intent_until = 0
+                              OR intent_until >= strftime('%s','now')
+                         )
+                        THEN 0
+                        ELSE 1
+                    END,
+                    updated_at DESC
+                 LIMIT 50",
+            )
+            .and_then(|mut stmt| {
+                stmt.query_map(rusqlite::params![format!("%{}%", q)], |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                        row.get(5)?,
+                        row.get(6)?,
+                    ))
+                })?
+                .collect::<Result<Vec<_>, _>>()
+            })
+            .unwrap_or_default();
+
+        drop(db);
+    }
+
+    Html(templates::render_search(q, resources, people))
 }
 
-pub async fn app_me() -> Html<String> {
-    Html(templates::render_me())
+pub async fn app_me(State(state): State<AppState>, headers: HeaderMap) -> Html<String> {
+    let user_id = match verify_user_session(&state, &headers) {
+        Some(id) => id,
+
+        None => {
+            return Html(templates::render_me(
+                false, 0, "", "", "", 0, 0, 0, 0, 0, 0, 0, 0, false, "", 0,
+            ));
+        }
+    };
+
+    let client_id = format!("tg:{}", user_id);
+
+    let db = state.db.lock().await;
+
+    let profile: Option<(String, String, String, i64, String, i64)> = db
+        .query_row(
+            "SELECT
+                username,
+                first_name,
+                last_name,
+                open_contact,
+                intent_text,
+                intent_until
+             FROM profiles
+             WHERE client_id = ?1",
+            rusqlite::params![&client_id],
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                ))
+            },
+        )
+        .ok();
+
+    let (username, first_name, last_name, open_contact, intent_text, intent_until) = profile
+        .unwrap_or_else(|| {
+            (
+                String::new(),
+                String::new(),
+                String::new(),
+                0,
+                String::new(),
+                0,
+            )
+        });
+
+    let resources_count: i64 = db
+        .query_row(
+            "SELECT COUNT(*)
+             FROM resources
+             WHERE client_id = ?1",
+            rusqlite::params![&client_id],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    let approved_count: i64 = db
+        .query_row(
+            "SELECT COUNT(*)
+             FROM resources
+             WHERE client_id = ?1
+               AND moderation_status = 'approved'",
+            rusqlite::params![&client_id],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    let pending_count: i64 = db
+        .query_row(
+            "SELECT COUNT(*)
+             FROM resources
+             WHERE client_id = ?1
+               AND moderation_status = 'pending'",
+            rusqlite::params![&client_id],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    let rejected_count: i64 = db
+        .query_row(
+            "SELECT COUNT(*)
+             FROM resources
+             WHERE client_id = ?1
+               AND moderation_status = 'rejected'",
+            rusqlite::params![&client_id],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    let favorites_count: i64 = db
+        .query_row(
+            "SELECT COUNT(*)
+             FROM favorites
+             WHERE user_id = ?1",
+            rusqlite::params![user_id],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    let unread_notifications_count: i64 = db
+        .query_row(
+            "SELECT COUNT(*)
+             FROM user_notifications
+             WHERE user_id = ?1
+               AND is_read = 0",
+            rusqlite::params![user_id],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    let pending_contact_requests_count: i64 = db
+        .query_row(
+            "SELECT COUNT(*)
+             FROM contact_requests
+             WHERE receiver_user_id = ?1
+               AND status = 'pending'",
+            rusqlite::params![user_id],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    let unread_messages_count: i64 = db
+        .query_row(
+            "SELECT COUNT(*)
+             FROM messages m
+             JOIN conversations c
+               ON c.id = m.conversation_id
+             WHERE (c.user1_id = ?1 OR c.user2_id = ?1)
+               AND m.sender_user_id <> ?1
+               AND m.is_read = 0",
+            rusqlite::params![user_id],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    drop(db);
+
+    Html(templates::render_me(
+        true,
+        user_id,
+        &username,
+        &first_name,
+        &last_name,
+        resources_count,
+        approved_count,
+        pending_count,
+        rejected_count,
+        favorites_count,
+        unread_notifications_count,
+        pending_contact_requests_count,
+        unread_messages_count,
+        open_contact == 1,
+        &intent_text,
+        intent_until,
+    ))
 }
 
 pub async fn app_continent(Path(ci): Path<usize>) -> Html<String> {
@@ -56,6 +912,7 @@ pub async fn app_cat(
                AND city_index = ?3
                AND category = ?4
                AND is_active = 1
+               AND moderation_status = 'approved'
              ORDER BY is_verified DESC, rating DESC, votes DESC, id DESC",
         )
         .and_then(|mut stmt| {
@@ -81,7 +938,6 @@ pub async fn app_cat(
 
     drop(db);
 
-
     // Premium → проверенные → рейтинг → голоса
     let mut resources = resources;
     resources.sort_by(|a, b| {
@@ -91,15 +947,8 @@ pub async fn app_cat(
             .then_with(|| b.6.cmp(&a.6))
     });
 
-    Html(templates::render_category(
-        ci,
-        si,
-        zi,
-        &k,
-        resources,
-    ))
+    Html(templates::render_category(ci, si, zi, &k, resources))
 }
-
 
 // ============================================================
 // ДОБАВЛЕНИЕ РЕСУРСА
@@ -111,40 +960,218 @@ pub struct AddResourceForm {
     pub description: String,
     pub contact: String,
     pub address: String,
+    #[serde(default)]
+    pub init_data: String,
 }
 
+// ============================================================
+// PUBLIC USER PROFILE
+// ============================================================
+
+pub async fn public_user_profile(
+    State(state): State<AppState>,
+    Path(public_id): Path<String>,
+    headers: HeaderMap,
+) -> Html<String> {
+    let public_id = public_id.trim();
+
+    if public_id.is_empty()
+        || public_id.len() > 64
+        || !public_id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    {
+        return Html(templates::render_public_user_not_found());
+    }
+
+    let db = state.db.lock().await;
+
+    let profile: Option<(String, String, String, String, i64, String, i64)> = db
+        .query_row(
+            "SELECT
+                client_id,
+                username,
+                first_name,
+                last_name,
+                open_contact,
+                intent_text,
+                intent_until
+             FROM profiles
+             WHERE public_id = ?1
+             LIMIT 1",
+            rusqlite::params![public_id],
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                    row.get(6)?,
+                ))
+            },
+        )
+        .ok();
+
+    let (client_id, username, first_name, last_name, open_contact, intent_text, intent_until) =
+        match profile {
+            Some(profile) => profile,
+
+            None => {
+                drop(db);
+
+                return Html(templates::render_public_user_not_found());
+            }
+        };
+
+    // Старые web:-профили публичными не делаем.
+    if !client_id.starts_with("tg:") {
+        drop(db);
+
+        return Html(templates::render_public_user_not_found());
+    }
+
+    let resources: Vec<(i64, String, String, String, f64, i64, i64, i64)> = db
+        .prepare(
+            "SELECT
+                id,
+                title,
+                category,
+                description,
+                rating,
+                votes,
+                is_verified,
+                is_premium
+             FROM resources
+             WHERE client_id = ?1
+               AND is_active = 1
+               AND moderation_status = 'approved'
+             ORDER BY
+                is_premium DESC,
+                is_verified DESC,
+                rating DESC,
+                votes DESC,
+                id DESC",
+        )
+        .and_then(|mut stmt| {
+            stmt.query_map(rusqlite::params![&client_id], |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                    row.get(6)?,
+                    row.get(7)?,
+                ))
+            })?
+            .collect::<Result<Vec<_>, _>>()
+        })
+        .unwrap_or_default();
+
+    // Определяем, кто сейчас смотрит публичный профиль.
+    let viewer_user_id = verify_user_session(&state, &headers);
+
+    // Если между текущим пользователем и владельцем профиля
+    // уже существует conversation, передаём ID владельца
+    // в шаблон, чтобы вместо повторного запроса показать чат.
+    let chat_user_id: Option<i64> = viewer_user_id.and_then(|viewer_id| {
+        let profile_user_id = client_id
+            .strip_prefix("tg:")
+            .and_then(|value| value.parse::<i64>().ok())?;
+
+        if viewer_id <= 0 || profile_user_id <= 0 || viewer_id == profile_user_id {
+            return None;
+        }
+
+        let (user1_id, user2_id) = if viewer_id < profile_user_id {
+            (viewer_id, profile_user_id)
+        } else {
+            (profile_user_id, viewer_id)
+        };
+
+        let exists: Option<i64> = db
+            .query_row(
+                "SELECT id
+                     FROM conversations
+                     WHERE user1_id = ?1
+                       AND user2_id = ?2
+                     LIMIT 1",
+                rusqlite::params![user1_id, user2_id,],
+                |row| row.get(0),
+            )
+            .ok();
+
+        exists.map(|_| profile_user_id)
+    });
+
+    drop(db);
+
+    // Просроченный статус публично не показываем.
+    let visible_intent = if intent_until > 0 && intent_until < unix_now() {
+        String::new()
+    } else {
+        intent_text
+    };
+
+    Html(templates::render_public_user_profile(
+        public_id,
+        &username,
+        &first_name,
+        &last_name,
+        open_contact == 1,
+        &visible_intent,
+        chat_user_id,
+        resources,
+    ))
+}
 
 // ============================================================
 // ПРОФИЛЬ РЕСУРСА
 // ============================================================
-pub async fn resource_profile(
-    State(state): State<AppState>,
-    Path(id): Path<i64>,
-) -> Html<String> {
+pub async fn resource_profile(State(state): State<AppState>, Path(id): Path<i64>) -> Html<String> {
     let db = state.db.lock().await;
 
-    let resource = db.query_row(
-        "SELECT title, description, contact, address,
-                rating, votes, is_premium, is_verified,
-                category, created_at
-         FROM resources
-         WHERE id = ?1 AND is_active = 1",
-        rusqlite::params![id],
-        |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, String>(2)?,
-                row.get::<_, String>(3)?,
-                row.get::<_, f64>(4)?,
-                row.get::<_, i64>(5)?,
-                row.get::<_, i64>(6)?,
-                row.get::<_, i64>(7)?,
-                row.get::<_, String>(8)?,
-                row.get::<_, i64>(9)?,
-            ))
-        },
-    ).ok();
+    let resource = db
+        .query_row(
+            "SELECT
+                r.title,
+                r.description,
+                r.contact,
+                r.address,
+                r.rating,
+                r.votes,
+                r.is_premium,
+                r.is_verified,
+                r.category,
+                r.created_at,
+                COALESCE(p.public_id, '')
+         FROM resources r
+         LEFT JOIN profiles p
+           ON p.client_id = r.client_id
+         WHERE r.id = ?1
+           AND r.is_active = 1
+           AND r.moderation_status = 'approved'",
+            rusqlite::params![id],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, f64>(4)?,
+                    row.get::<_, i64>(5)?,
+                    row.get::<_, i64>(6)?,
+                    row.get::<_, i64>(7)?,
+                    row.get::<_, String>(8)?,
+                    row.get::<_, i64>(9)?,
+                    row.get::<_, String>(10)?,
+                ))
+            },
+        )
+        .ok();
 
     drop(db);
 
@@ -160,6 +1187,7 @@ pub async fn resource_profile(
             verified,
             category,
             created_at,
+            owner_public_id,
         )) => Html(templates::render_resource_profile(
             id,
             &title,
@@ -172,6 +1200,7 @@ pub async fn resource_profile(
             verified,
             &category,
             created_at,
+            &owner_public_id,
         )),
 
         None => Html(format!(
@@ -216,8 +1245,50 @@ pub async fn add_resource_page(
 pub async fn add_resource(
     State(state): State<AppState>,
     Path((ci, si, zi, k)): Path<(usize, usize, usize, String)>,
+    headers: HeaderMap,
     Form(form): Form<AddResourceForm>,
 ) -> Html<String> {
+    let owner_client_id = if let Some(user_id) = verify_user_session(&state, &headers) {
+        format!("tg:{}", user_id)
+    } else if !form.init_data.trim().is_empty() {
+        match verify_telegram_init_data(form.init_data.trim(), &state.bot_token) {
+            Some(user_id) => format!("tg:{}", user_id),
+            None => String::new(),
+        }
+    } else {
+        String::new()
+    };
+
+    if owner_client_id.is_empty() {
+        return Html(format!(
+            r#"<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Требуется Telegram · ResursMap</title>
+<style>{}</style>
+</head>
+<body>
+<main class="page">
+<section class="hero">
+<div class="eyebrow">⚠ Авторизация</div>
+<h1>Не удалось подтвердить пользователя</h1>
+<p>Откройте ResursMap через Telegram и попробуйте добавить ресурс снова.</p>
+<a class="card" href="/app" style="text-decoration:none;margin-top:20px;">
+<div class="card-content">
+<div class="card-title">Вернуться на карту</div>
+</div>
+<div class="card-arrow">›</div>
+</a>
+</section>
+</main>
+</body>
+</html>"#,
+            templates::base_style(),
+        ));
+    }
+
     let db = state.db.lock().await;
 
     let result = db.execute(
@@ -225,10 +1296,13 @@ pub async fn add_resource(
         (client_id, continent_index, country_index, city_index,
          category, title, description, contact, address,
          rating, votes, is_premium, is_verified, is_active,
+         moderation_status, rejection_reason,
          created_at, updated_at)
         VALUES
-        ('', ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8,
-         0, 0, 0, 0, 1, strftime('%s','now'), strftime('%s','now'))",
+        (?9, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8,
+         0, 0, 0, 0, 1,
+         'pending', '',
+         strftime('%s','now'), strftime('%s','now'))",
         rusqlite::params![
             ci,
             si,
@@ -238,6 +1312,7 @@ pub async fn add_resource(
             form.description.trim(),
             form.contact.trim(),
             form.address.trim(),
+            owner_client_id,
         ],
     );
 
@@ -310,6 +1385,2364 @@ pub async fn add_resource(
     }
 }
 
+// ============================================================
+// МОИ РЕСУРСЫ
+// ============================================================
+
+pub async fn notifications_page(State(state): State<AppState>, headers: HeaderMap) -> Html<String> {
+    let user_id = match verify_user_session(&state, &headers) {
+        Some(id) => id,
+
+        None => {
+            return Html(templates::render_notifications(vec![], false));
+        }
+    };
+
+    let db = state.db.lock().await;
+
+    let notifications: Vec<(i64, Option<i64>, String, String, String, i64, i64)> = db
+        .prepare(
+            "SELECT
+                id,
+                resource_id,
+                kind,
+                title,
+                message,
+                is_read,
+                created_at
+             FROM user_notifications
+             WHERE user_id = ?1
+             ORDER BY
+                is_read ASC,
+                created_at DESC,
+                id DESC
+             LIMIT 100",
+        )
+        .and_then(|mut stmt| {
+            stmt.query_map(rusqlite::params![user_id], |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                    row.get(6)?,
+                ))
+            })?
+            .collect::<Result<Vec<_>, _>>()
+        })
+        .unwrap_or_default();
+
+    let _ = db.execute(
+        "UPDATE user_notifications
+         SET is_read = 1
+         WHERE user_id = ?1
+           AND is_read = 0",
+        rusqlite::params![user_id],
+    );
+
+    drop(db);
+
+    Html(templates::render_notifications(notifications, true))
+}
+
+// ============================================================
+// CONTACT REQUESTS
+// ============================================================
+
+pub async fn contact_requests_page(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Html<String> {
+    let user_id = match verify_user_session(&state, &headers) {
+        Some(id) => id,
+
+        None => {
+            return Html(templates::render_contact_requests(vec![], false));
+        }
+    };
+
+    let db = state.db.lock().await;
+
+    let requests: Vec<(i64, i64, String, String, String, String, String, i64, i64)> = db
+        .prepare(
+            "SELECT
+                cr.id,
+                cr.sender_user_id,
+                cr.message,
+                cr.status,
+                COALESCE(p.public_id, ''),
+                COALESCE(p.username, ''),
+                COALESCE(p.first_name, ''),
+                cr.created_at,
+                CASE
+                    WHEN cr.status = 'pending' THEN 0
+                    WHEN cr.status = 'accepted' THEN 1
+                    ELSE 2
+                END
+             FROM contact_requests cr
+             LEFT JOIN profiles p
+               ON p.client_id = ('tg:' || cr.sender_user_id)
+             WHERE cr.receiver_user_id = ?1
+             ORDER BY
+                CASE cr.status
+                    WHEN 'pending' THEN 0
+                    WHEN 'accepted' THEN 1
+                    ELSE 2
+                END,
+                cr.updated_at DESC,
+                cr.id DESC
+             LIMIT 100",
+        )
+        .and_then(|mut stmt| {
+            stmt.query_map(rusqlite::params![user_id], |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                    row.get(6)?,
+                    row.get(7)?,
+                    row.get(8)?,
+                ))
+            })?
+            .collect::<Result<Vec<_>, _>>()
+        })
+        .unwrap_or_default();
+
+    drop(db);
+
+    Html(templates::render_contact_requests(requests, true))
+}
+
+pub async fn accept_contact_request(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    headers: HeaderMap,
+) -> Response {
+    let user_id = match verify_user_session(&state, &headers) {
+        Some(id) => id,
+
+        None => {
+            return (StatusCode::UNAUTHORIZED, "Требуется вход через Telegram").into_response();
+        }
+    };
+
+    let db = state.db.lock().await;
+
+    let request: Option<i64> = db
+        .query_row(
+            "SELECT sender_user_id
+             FROM contact_requests
+             WHERE id = ?1
+               AND receiver_user_id = ?2
+               AND status = 'pending'",
+            rusqlite::params![id, user_id],
+            |row| row.get(0),
+        )
+        .ok();
+
+    let sender_user_id = match request {
+        Some(id) => id,
+
+        None => {
+            drop(db);
+
+            return (StatusCode::NOT_FOUND, "Запрос не найден").into_response();
+        }
+    };
+
+    let changed = db
+        .execute(
+            "UPDATE contact_requests
+             SET status = 'accepted',
+                 updated_at = strftime('%s','now')
+             WHERE id = ?1
+               AND receiver_user_id = ?2
+               AND status = 'pending'",
+            rusqlite::params![id, user_id,],
+        )
+        .unwrap_or(0);
+
+    if changed == 1 {
+        let (user1_id, user2_id) = if sender_user_id < user_id {
+            (sender_user_id, user_id)
+        } else {
+            (user_id, sender_user_id)
+        };
+
+        let _ = db.execute(
+            "INSERT INTO conversations (
+                user1_id,
+                user2_id,
+                created_at,
+                updated_at
+             )
+             VALUES (
+                ?1,
+                ?2,
+                strftime('%s','now'),
+                strftime('%s','now')
+             )
+             ON CONFLICT(user1_id, user2_id)
+             DO UPDATE SET
+                updated_at = strftime('%s','now')",
+            rusqlite::params![user1_id, user2_id,],
+        );
+
+        let _ = db.execute(
+            "INSERT INTO user_notifications (
+                user_id,
+                resource_id,
+                kind,
+                title,
+                message,
+                is_read,
+                created_at
+             )
+             VALUES (
+                ?1,
+                NULL,
+                'contact_accepted',
+                'Запрос принят',
+                'Ваш запрос на связь принят. Теперь можно начать общение в ResursMap.',
+                0,
+                strftime('%s','now')
+             )",
+            rusqlite::params![sender_user_id,],
+        );
+    }
+
+    drop(db);
+
+    (
+        StatusCode::SEE_OTHER,
+        [(header::LOCATION, "/app/contact-requests")],
+    )
+        .into_response()
+}
+
+pub async fn reject_contact_request(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    headers: HeaderMap,
+) -> Response {
+    let user_id = match verify_user_session(&state, &headers) {
+        Some(id) => id,
+
+        None => {
+            return (StatusCode::UNAUTHORIZED, "Требуется вход через Telegram").into_response();
+        }
+    };
+
+    let db = state.db.lock().await;
+
+    let request: Option<i64> = db
+        .query_row(
+            "SELECT sender_user_id
+             FROM contact_requests
+             WHERE id = ?1
+               AND receiver_user_id = ?2
+               AND status = 'pending'",
+            rusqlite::params![id, user_id],
+            |row| row.get(0),
+        )
+        .ok();
+
+    let sender_user_id = match request {
+        Some(id) => id,
+
+        None => {
+            drop(db);
+
+            return (StatusCode::NOT_FOUND, "Запрос не найден").into_response();
+        }
+    };
+
+    let changed = db
+        .execute(
+            "UPDATE contact_requests
+             SET status = 'rejected',
+                 updated_at = strftime('%s','now')
+             WHERE id = ?1
+               AND receiver_user_id = ?2
+               AND status = 'pending'",
+            rusqlite::params![id, user_id,],
+        )
+        .unwrap_or(0);
+
+    if changed == 1 {
+        let _ = db.execute(
+            "INSERT INTO user_notifications (
+                user_id,
+                resource_id,
+                kind,
+                title,
+                message,
+                is_read,
+                created_at
+             )
+             VALUES (
+                ?1,
+                NULL,
+                'contact_rejected',
+                'Запрос отклонён',
+                'Пользователь отклонил запрос на связь.',
+                0,
+                strftime('%s','now')
+             )",
+            rusqlite::params![sender_user_id,],
+        );
+    }
+
+    drop(db);
+
+    (
+        StatusCode::SEE_OTHER,
+        [(header::LOCATION, "/app/contact-requests")],
+    )
+        .into_response()
+}
+
+// ============================================================
+// TASK 7.22G-C — MESSAGES LIST
+// ============================================================
+
+pub async fn messages_page(State(state): State<AppState>, headers: HeaderMap) -> Html<String> {
+    let user_id = match verify_user_session(&state, &headers) {
+        Some(id) => id,
+
+        None => {
+            return Html(templates::render_messages(false, vec![]));
+        }
+    };
+
+    let db = state.db.lock().await;
+
+    let conversations: Vec<(i64, i64, String, String, String, String, i64, i64)> = db
+        .prepare(
+            "SELECT
+                c.id,
+
+                CASE
+                    WHEN c.user1_id = ?1
+                    THEN c.user2_id
+                    ELSE c.user1_id
+                END AS other_user_id,
+
+                COALESCE(p.username, ''),
+                COALESCE(p.first_name, ''),
+                COALESCE(p.last_name, ''),
+
+                COALESCE((
+                    SELECT m.message
+                    FROM messages m
+                    WHERE m.conversation_id = c.id
+                    ORDER BY
+                        m.created_at DESC,
+                        m.id DESC
+                    LIMIT 1
+                ), ''),
+
+                (
+                    SELECT COUNT(*)
+                    FROM messages m
+                    WHERE m.conversation_id = c.id
+                      AND m.sender_user_id <> ?1
+                      AND m.is_read = 0
+                ) AS unread_count,
+
+                c.updated_at
+
+             FROM conversations c
+
+             LEFT JOIN profiles p
+               ON p.client_id = (
+                    'tg:' ||
+                    CASE
+                        WHEN c.user1_id = ?1
+                        THEN c.user2_id
+                        ELSE c.user1_id
+                    END
+               )
+
+             WHERE c.user1_id = ?1
+                OR c.user2_id = ?1
+
+             ORDER BY
+                c.updated_at DESC,
+                c.id DESC
+
+             LIMIT 200",
+        )
+        .and_then(|mut stmt| {
+            stmt.query_map(rusqlite::params![user_id], |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                    row.get(6)?,
+                    row.get(7)?,
+                ))
+            })?
+            .collect::<Result<Vec<_>, _>>()
+        })
+        .unwrap_or_default();
+
+    let _ = db.execute(
+        "UPDATE user_notifications
+         SET is_read = 1
+         WHERE user_id = ?1
+           AND kind = 'chat_message'
+           AND is_read = 0",
+        rusqlite::params![user_id],
+    );
+
+    drop(db);
+
+    Html(templates::render_messages(true, conversations))
+}
+
+// ============================================================
+// TASK 7.22F-E — INTERNAL CHAT
+// ============================================================
+
+#[derive(Debug, Deserialize)]
+pub struct ChatMessageForm {
+    pub message: String,
+}
+
+pub async fn chat_page(
+    State(state): State<AppState>,
+    Path(other_user_id): Path<i64>,
+    headers: HeaderMap,
+) -> Html<String> {
+    let user_id = match verify_user_session(&state, &headers) {
+        Some(id) => id,
+        None => {
+            return Html(templates::render_chat(false, 0, "", "", "", vec![]));
+        }
+    };
+
+    if other_user_id <= 0 || other_user_id == user_id {
+        return Html(templates::render_chat(
+            true,
+            other_user_id,
+            "",
+            "",
+            "",
+            vec![],
+        ));
+    }
+
+    let (user1_id, user2_id) = if user_id < other_user_id {
+        (user_id, other_user_id)
+    } else {
+        (other_user_id, user_id)
+    };
+
+    let db = state.db.lock().await;
+
+    let conversation_id: Option<i64> = db
+        .query_row(
+            "SELECT id
+             FROM conversations
+             WHERE user1_id = ?1
+               AND user2_id = ?2
+             LIMIT 1",
+            rusqlite::params![user1_id, user2_id,],
+            |row| row.get(0),
+        )
+        .ok();
+
+    let conversation_id = match conversation_id {
+        Some(id) => id,
+
+        None => {
+            drop(db);
+
+            return Html(templates::render_chat(
+                true,
+                other_user_id,
+                "",
+                "",
+                "",
+                vec![],
+            ));
+        }
+    };
+
+    let other_profile: Option<(String, String, String)> = db
+        .query_row(
+            "SELECT
+                COALESCE(username, ''),
+                COALESCE(first_name, ''),
+                COALESCE(last_name, '')
+             FROM profiles
+             WHERE client_id = ?1
+             LIMIT 1",
+            rusqlite::params![format!("tg:{}", other_user_id)],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .ok();
+
+    let (other_username, other_first_name, other_last_name) =
+        other_profile.unwrap_or_else(|| (String::new(), String::new(), String::new()));
+
+    let messages: Vec<(i64, i64, String, i64, i64)> = db
+        .prepare(
+            "SELECT
+                id,
+                sender_user_id,
+                message,
+                is_read,
+                created_at
+             FROM messages
+             WHERE conversation_id = ?1
+             ORDER BY
+                created_at ASC,
+                id ASC
+             LIMIT 500",
+        )
+        .and_then(|mut stmt| {
+            stmt.query_map(rusqlite::params![conversation_id], |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                ))
+            })?
+            .collect::<Result<Vec<_>, _>>()
+        })
+        .unwrap_or_default();
+
+    let _ = db.execute(
+        "UPDATE messages
+         SET is_read = 1
+         WHERE conversation_id = ?1
+           AND sender_user_id = ?2
+           AND is_read = 0",
+        rusqlite::params![conversation_id, other_user_id,],
+    );
+
+    drop(db);
+
+    Html(templates::render_chat(
+        true,
+        other_user_id,
+        &other_username,
+        &other_first_name,
+        &other_last_name,
+        messages,
+    ))
+}
+
+pub async fn send_chat_message(
+    State(state): State<AppState>,
+    Path(other_user_id): Path<i64>,
+    headers: HeaderMap,
+    Form(form): Form<ChatMessageForm>,
+) -> Response {
+    let user_id = match verify_user_session(&state, &headers) {
+        Some(id) => id,
+
+        None => {
+            return (StatusCode::UNAUTHORIZED, "Требуется вход через Telegram").into_response();
+        }
+    };
+
+    if other_user_id <= 0 || other_user_id == user_id {
+        return (StatusCode::BAD_REQUEST, "Некорректный пользователь").into_response();
+    }
+
+    let message = form.message.trim();
+
+    if message.is_empty() {
+        return (
+            StatusCode::SEE_OTHER,
+            [(
+                header::LOCATION,
+                format!("/app/chat/{}#chat-end", other_user_id),
+            )],
+        )
+            .into_response();
+    }
+
+    if message.chars().count() > 2000 {
+        return (StatusCode::BAD_REQUEST, "Сообщение слишком длинное").into_response();
+    }
+
+    let (user1_id, user2_id) = if user_id < other_user_id {
+        (user_id, other_user_id)
+    } else {
+        (other_user_id, user_id)
+    };
+
+    let db = state.db.lock().await;
+
+    let conversation_id: Option<i64> = db
+        .query_row(
+            "SELECT id
+             FROM conversations
+             WHERE user1_id = ?1
+               AND user2_id = ?2
+             LIMIT 1",
+            rusqlite::params![user1_id, user2_id,],
+            |row| row.get(0),
+        )
+        .ok();
+
+    let conversation_id = match conversation_id {
+        Some(id) => id,
+
+        None => {
+            drop(db);
+
+            return (StatusCode::FORBIDDEN, "Чат между пользователями не открыт").into_response();
+        }
+    };
+
+    let inserted = db
+        .execute(
+            "INSERT INTO messages (
+                conversation_id,
+                sender_user_id,
+                message,
+                is_read,
+                created_at
+             )
+             VALUES (
+                ?1,
+                ?2,
+                ?3,
+                0,
+                strftime('%s','now')
+             )",
+            rusqlite::params![conversation_id, user_id, message,],
+        )
+        .unwrap_or(0);
+
+    if inserted == 1 {
+        let _ = db.execute(
+            "UPDATE conversations
+             SET updated_at = strftime('%s','now')
+             WHERE id = ?1",
+            rusqlite::params![conversation_id,],
+        );
+
+        let existing_chat_notification = db
+            .execute(
+                "UPDATE user_notifications
+                 SET created_at = strftime('%s','now')
+                 WHERE user_id = ?1
+                   AND kind = 'chat_message'
+                   AND is_read = 0",
+                rusqlite::params![other_user_id,],
+            )
+            .unwrap_or(0);
+
+        if existing_chat_notification == 0 {
+            let _ = db.execute(
+                "INSERT INTO user_notifications (
+                    user_id,
+                    resource_id,
+                    kind,
+                    title,
+                    message,
+                    is_read,
+                    created_at
+                 )
+                 VALUES (
+                    ?1,
+                    NULL,
+                    'chat_message',
+                    'Новое сообщение',
+                    'У вас новое сообщение в ResursMap.',
+                    0,
+                    strftime('%s','now')
+                 )",
+                rusqlite::params![other_user_id,],
+            );
+        }
+    }
+
+    drop(db);
+
+    (
+        StatusCode::SEE_OTHER,
+        [(
+            header::LOCATION,
+            format!("/app/chat/{}#chat-end", other_user_id),
+        )],
+    )
+        .into_response()
+}
+
+pub async fn favorites_page(State(state): State<AppState>, headers: HeaderMap) -> Html<String> {
+    let user_id = match verify_user_session(&state, &headers) {
+        Some(id) => id,
+        None => {
+            return Html(templates::render_favorites(vec![], false));
+        }
+    };
+
+    let db = state.db.lock().await;
+
+    let resources: Vec<(i64, String, String, String, String, f64, i64, i64, i64)> = db
+        .prepare(
+            "SELECT
+                r.id,
+                r.title,
+                r.category,
+                r.description,
+                r.address,
+                r.rating,
+                r.votes,
+                r.is_verified,
+                r.is_premium
+             FROM favorites f
+             JOIN resources r
+               ON r.id = f.resource_id
+             WHERE f.user_id = ?1
+               AND r.is_active = 1
+               AND r.moderation_status = 'approved'
+             ORDER BY
+                r.is_premium DESC,
+                r.is_verified DESC,
+                f.created_at DESC",
+        )
+        .and_then(|mut stmt| {
+            stmt.query_map(rusqlite::params![user_id], |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                    row.get(6)?,
+                    row.get(7)?,
+                    row.get(8)?,
+                ))
+            })?
+            .collect::<Result<Vec<_>, _>>()
+        })
+        .unwrap_or_default();
+
+    drop(db);
+
+    Html(templates::render_favorites(resources, true))
+}
+
+pub async fn my_resources(State(state): State<AppState>, headers: HeaderMap) -> Html<String> {
+    let client_id = match verify_user_session(&state, &headers) {
+        Some(user_id) => format!("tg:{}", user_id),
+        None => String::new(),
+    };
+
+    if client_id.is_empty() {
+        return Html(templates::render_my_resources("", vec![]));
+    }
+
+    let db = state.db.lock().await;
+
+    let resources: Vec<(
+        i64,
+        String,
+        String,
+        String,
+        f64,
+        i64,
+        i64,
+        i64,
+        String,
+        String,
+        i64,
+    )> = db
+        .prepare(
+            "SELECT
+                id,
+                title,
+                category,
+                description,
+                rating,
+                votes,
+                is_verified,
+                is_premium,
+                moderation_status,
+                rejection_reason,
+                is_active
+             FROM resources
+             WHERE client_id = ?1
+             ORDER BY is_active DESC,
+                      is_premium DESC,
+                      updated_at DESC,
+                      id DESC",
+        )
+        .and_then(|mut stmt| {
+            stmt.query_map(rusqlite::params![&client_id], |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                    row.get(6)?,
+                    row.get(7)?,
+                    row.get(8)?,
+                    row.get(9)?,
+                    row.get(10)?,
+                ))
+            })?
+            .collect::<Result<Vec<_>, _>>()
+        })
+        .unwrap_or_default();
+
+    drop(db);
+
+    Html(templates::render_my_resources(&client_id, resources))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct EditResourceForm {
+    pub title: String,
+    pub description: String,
+    pub contact: String,
+    pub address: String,
+}
+
+pub async fn edit_resource_page(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    headers: HeaderMap,
+) -> Html<String> {
+    let client_id = match verify_user_session(&state, &headers) {
+        Some(user_id) => format!("tg:{}", user_id),
+        None => String::new(),
+    };
+
+    let db = state.db.lock().await;
+
+    let resource = db
+        .query_row(
+            "SELECT title, description, contact, address, category, client_id
+         FROM resources
+         WHERE id = ?1",
+            rusqlite::params![id],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, String>(4)?,
+                    row.get::<_, String>(5)?,
+                ))
+            },
+        )
+        .ok();
+
+    drop(db);
+
+    match resource {
+        Some((title, description, contact, address, category, owner))
+            if !client_id.is_empty() && owner == client_id =>
+        {
+            Html(templates::render_edit_resource(
+                id,
+                &title,
+                &description,
+                &contact,
+                &address,
+                &category,
+            ))
+        }
+
+        _ => Html(format!(
+            r#"<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Нет доступа · ResursMap</title>
+<style>{}</style>
+</head>
+<body>
+<main class="page">
+<section class="hero">
+<div class="eyebrow">⚠ Доступ</div>
+<h1>Редактирование недоступно</h1>
+<p>Этот ресурс не принадлежит текущему пользователю.</p>
+<a class="card" href="/app/me" style="text-decoration:none;margin-top:20px;">
+<div class="card-content">
+<div class="card-title">Вернуться в профиль</div>
+</div>
+<div class="card-arrow">›</div>
+</a>
+</section>
+</main>
+</body>
+</html>"#,
+            templates::base_style(),
+        )),
+    }
+}
+
+pub async fn edit_resource(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    headers: HeaderMap,
+    Form(form): Form<EditResourceForm>,
+) -> Html<String> {
+    let owner_client_id = match verify_user_session(&state, &headers) {
+        Some(user_id) => format!("tg:{}", user_id),
+        None => String::new(),
+    };
+
+    if owner_client_id.is_empty() {
+        return Html(format!(
+            r#"<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Нет доступа · ResursMap</title>
+<style>{}</style>
+</head>
+<body>
+<main class="page">
+<section class="hero">
+<div class="eyebrow">⚠ Доступ</div>
+<h1>Не удалось подтвердить владельца</h1>
+<p>Откройте ResursMap через Telegram и попробуйте снова.</p>
+</section>
+</main>
+</body>
+</html>"#,
+            templates::base_style(),
+        ));
+    }
+
+    let db = state.db.lock().await;
+
+    let changed = db
+        .execute(
+            "UPDATE resources
+         SET title = ?1,
+             description = ?2,
+             contact = ?3,
+             address = ?4,
+             is_verified = 0,
+             is_active = 1,
+             moderation_status = 'pending',
+             rejection_reason = '',
+             updated_at = strftime('%s','now')
+         WHERE id = ?5
+           AND client_id = ?6",
+            rusqlite::params![
+                form.title.trim(),
+                form.description.trim(),
+                form.contact.trim(),
+                form.address.trim(),
+                id,
+                &owner_client_id,
+            ],
+        )
+        .unwrap_or(0);
+
+    drop(db);
+
+    if changed == 1 {
+        Html(format!(
+            r#"<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Изменения сохранены · ResursMap</title>
+<style>{}</style>
+</head>
+<body>
+<main class="page">
+<section class="hero">
+<div class="eyebrow">✓ Готово</div>
+<h1>Изменения сохранены</h1>
+<p>После изменения ресурс снова ожидает проверки.</p>
+<a class="card" href="/app/my-resources" style="text-decoration:none;margin-top:20px;">
+<div class="card-content">
+<div class="card-title">Вернуться в мои ресурсы</div>
+</div>
+<div class="card-arrow">›</div>
+</a>
+</section>
+</main>
+</body>
+</html>"#,
+            templates::base_style(),
+        ))
+    } else {
+        Html(format!(
+            r#"<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Нет доступа · ResursMap</title>
+<style>{}</style>
+</head>
+<body>
+<main class="page">
+<section class="hero">
+<div class="eyebrow">⚠ Ошибка</div>
+<h1>Не удалось сохранить</h1>
+<p>Проверьте владельца ресурса.</p>
+</section>
+</main>
+</body>
+</html>"#,
+            templates::base_style(),
+        ))
+    }
+}
+
+pub async fn admin_reports(State(state): State<AppState>, headers: HeaderMap) -> Html<String> {
+    if !is_admin_session(&state, &headers) {
+        return Html(
+            r#"<h1>403</h1>
+<p>Доступ запрещён.</p>
+<a href="/app/admin/login">Войти через Telegram</a>"#
+                .to_string(),
+        );
+    }
+
+    let key_query = String::new();
+
+    let db = state.db.lock().await;
+
+    let rows: Vec<(
+        i64,
+        i64,
+        i64,
+        String,
+        String,
+        i64,
+        String,
+        String,
+        String,
+        i64,
+    )> = db
+        .prepare(
+            "SELECT
+                rr.id,
+                rr.reporter_user_id,
+                rr.resource_id,
+                rr.reason,
+                rr.status,
+                rr.created_at,
+                COALESCE(r.title, ''),
+                COALESCE(r.category, ''),
+                COALESCE(r.moderation_status, ''),
+                COALESCE(r.is_active, 0)
+             FROM resource_reports rr
+             LEFT JOIN resources r
+               ON r.id = rr.resource_id
+             ORDER BY
+                CASE rr.status
+                    WHEN 'pending' THEN 0
+                    ELSE 1
+                END,
+                rr.created_at DESC,
+                rr.id DESC",
+        )
+        .and_then(|mut stmt| {
+            stmt.query_map([], |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                    row.get(6)?,
+                    row.get(7)?,
+                    row.get(8)?,
+                    row.get(9)?,
+                ))
+            })?
+            .collect::<Result<Vec<_>, _>>()
+        })
+        .unwrap_or_default();
+
+    drop(db);
+
+    let pending_count = rows.iter().filter(|r| r.4 == "pending").count();
+
+    let closed_count = rows.iter().filter(|r| r.4 == "closed").count();
+
+    let mut cards = String::new();
+
+    for (
+        report_id,
+        reporter_user_id,
+        resource_id,
+        reason,
+        report_status,
+        created_at,
+        title,
+        category,
+        moderation_status,
+        is_active,
+    ) in rows
+    {
+        let report_badge = if report_status == "pending" {
+            r#"<span style="color:#d97706;font-weight:800;">● Ожидает</span>"#
+        } else {
+            r#"<span style="color:#16a34a;font-weight:800;">✓ Закрыта</span>"#
+        };
+
+        let resource_status = if is_active == 1 {
+            format!(
+                r#"<span style="color:#16a34a;">● Активен · {}</span>"#,
+                moderation_status
+            )
+        } else {
+            format!(
+                r#"<span style="color:#dc2626;">● Скрыт · {}</span>"#,
+                moderation_status
+            )
+        };
+
+        let close_button = if report_status == "pending" {
+            format!(
+                r#"
+<form method="post"
+      action="/app/admin/report/{report_id}/close{key_query}">
+    <button type="submit"
+            style="
+                width:100%;
+                min-height:44px;
+                border-radius:12px;
+                border:1px solid rgba(22,163,74,.35);
+                background:rgba(22,163,74,.10);
+                color:inherit;
+                font-weight:800;
+                cursor:pointer;
+            ">
+        ✓ Закрыть жалобу
+    </button>
+</form>
+"#,
+                report_id = report_id,
+                key_query = key_query,
+            )
+        } else {
+            String::new()
+        };
+
+        cards.push_str(&format!(
+            r#"
+<article style="
+    border:1px solid rgba(214,183,122,.22);
+    border-radius:20px;
+    padding:18px;
+    margin-bottom:16px;
+    background:rgba(255,255,255,.035);
+">
+
+    <div style="
+        display:flex;
+        justify-content:space-between;
+        gap:12px;
+        flex-wrap:wrap;
+        align-items:flex-start;
+    ">
+        <div>
+            <div style="
+                font-size:11px;
+                color:#8f96a3;
+                margin-bottom:6px;
+            ">
+                Жалоба #{report_id} · ресурс #{resource_id}
+            </div>
+
+            <h2 style="margin:0 0 6px;font-size:20px;">
+                {title}
+            </h2>
+
+            <div style="
+                color:#9ca3af;
+                font-size:13px;
+            ">
+                {category}
+            </div>
+        </div>
+
+        <div style="
+            display:flex;
+            gap:10px;
+            flex-wrap:wrap;
+            font-size:12px;
+        ">
+            {report_badge}
+            {resource_status}
+        </div>
+    </div>
+
+    <div style="
+        margin-top:16px;
+        padding:14px;
+        border-radius:14px;
+        background:rgba(217,119,6,.07);
+        border:1px solid rgba(217,119,6,.20);
+        line-height:1.5;
+    ">
+        <strong>Причина:</strong><br>
+        {reason}
+    </div>
+
+    <div style="
+        margin-top:10px;
+        font-size:11px;
+        color:var(--muted);
+    ">
+        Reporter Telegram ID: {reporter_user_id}
+        · created_at: {created_at}
+    </div>
+
+    <div style="
+        display:grid;
+        grid-template-columns:repeat(auto-fit,minmax(145px,1fr));
+        gap:9px;
+        margin-top:18px;
+    ">
+
+        {close_button}
+
+        <form method="post"
+              action="/app/admin/report/{report_id}/hide-resource{key_query}">
+            <button type="submit"
+                    style="
+                        width:100%;
+                        min-height:44px;
+                        border-radius:12px;
+                        border:1px solid rgba(220,38,38,.30);
+                        background:rgba(220,38,38,.07);
+                        color:inherit;
+                        font-weight:800;
+                        cursor:pointer;
+                    ">
+                Скрыть ресурс
+            </button>
+        </form>
+
+        <form method="post"
+              action="/app/admin/report/{report_id}/reject-resource{key_query}">
+            <button type="submit"
+                    style="
+                        width:100%;
+                        min-height:44px;
+                        border-radius:12px;
+                        border:1px solid rgba(220,38,38,.40);
+                        background:rgba(220,38,38,.12);
+                        color:inherit;
+                        font-weight:800;
+                        cursor:pointer;
+                    ">
+                ✕ Отклонить ресурс
+            </button>
+        </form>
+
+        <a href="/app/resource/{resource_id}"
+           target="_blank"
+           style="
+               min-height:42px;
+               border-radius:12px;
+               border:1px solid rgba(255,255,255,.12);
+               display:flex;
+               align-items:center;
+               justify-content:center;
+               text-decoration:none;
+               color:inherit;
+               font-weight:800;
+           ">
+            Открыть ресурс
+        </a>
+
+    </div>
+
+</article>
+"#,
+            report_id = report_id,
+            resource_id = resource_id,
+            title = title,
+            category = category,
+            report_badge = report_badge,
+            resource_status = resource_status,
+            reason = reason,
+            reporter_user_id = reporter_user_id,
+            created_at = created_at,
+            close_button = close_button,
+            key_query = key_query,
+        ));
+    }
+
+    if cards.is_empty() {
+        cards = r#"
+<div class="card" style="display:block;">
+    <div class="card-content">
+        <div class="card-title">Жалоб пока нет</div>
+        <div class="card-meta">Очередь модерации пуста.</div>
+    </div>
+</div>
+"#
+        .to_string();
+    }
+
+    Html(format!(
+        r#"<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Жалобы · ResursMap</title>
+<style>{style}</style>
+</head>
+
+<body>
+
+<main class="page">
+
+<header class="topbar">
+    <a class="brand" href="/app">
+        <div class="brand-mark">{logo}</div>
+        <div>
+            <div class="brand-name">RESURSMAP</div>
+            <div class="brand-sub">REPORT CENTER</div>
+        </div>
+    </a>
+</header>
+
+<section class="hero">
+
+    <div class="eyebrow">
+        {shield}
+        Администрирование
+    </div>
+
+    <h1>Жалобы</h1>
+
+    <p>
+        Проверка жалоб пользователей на опубликованные ресурсы.
+    </p>
+
+</section>
+
+<div style="
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+    margin-bottom:20px;
+">
+
+    <a href="/app/admin/resources{key_query}"
+       style="
+           padding:9px 12px;
+           border-radius:999px;
+           text-decoration:none;
+           border:1px solid rgba(255,255,255,.14);
+           color:inherit;
+           font-weight:700;
+       ">
+        Ресурсы
+    </a>
+
+    <a href="/app/admin/reports{key_query}"
+       style="
+           padding:9px 12px;
+           border-radius:999px;
+           text-decoration:none;
+           border:1px solid rgba(217,119,6,.38);
+           background:rgba(217,119,6,.08);
+           color:inherit;
+           font-weight:800;
+       ">
+        Жалобы
+    </a>
+
+</div>
+
+<div style="
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:10px;
+    margin-bottom:24px;
+">
+
+    <div class="card">
+        <div class="card-content">
+            <div class="card-title">{pending_count}</div>
+            <div class="card-meta">Ожидают</div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-content">
+            <div class="card-title">{closed_count}</div>
+            <div class="card-meta">Закрыты</div>
+        </div>
+    </div>
+
+</div>
+
+<section>
+    {cards}
+</section>
+
+</main>
+
+</body>
+</html>"#,
+        style = templates::base_style(),
+        logo = templates::icon("map"),
+        shield = templates::icon("user"),
+        pending_count = pending_count,
+        closed_count = closed_count,
+        cards = cards,
+        key_query = key_query,
+    ))
+}
+
+pub async fn admin_close_report(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    headers: HeaderMap,
+) -> Response {
+    if !is_admin_session(&state, &headers) {
+        return (StatusCode::UNAUTHORIZED, "Доступ запрещён").into_response();
+    }
+
+    let db = state.db.lock().await;
+
+    let _ = db.execute(
+        "UPDATE resource_reports
+         SET status = 'closed',
+             updated_at = strftime('%s','now')
+         WHERE id = ?1",
+        rusqlite::params![id],
+    );
+
+    drop(db);
+
+    (
+        StatusCode::SEE_OTHER,
+        [(header::LOCATION, "/app/admin/reports")],
+    )
+        .into_response()
+}
+
+pub async fn admin_hide_reported_resource(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    headers: HeaderMap,
+) -> Response {
+    if !is_admin_session(&state, &headers) {
+        return (StatusCode::UNAUTHORIZED, "Доступ запрещён").into_response();
+    }
+
+    let db = state.db.lock().await;
+
+    let resource_id: Option<i64> = db
+        .query_row(
+            "SELECT resource_id
+             FROM resource_reports
+             WHERE id = ?1",
+            rusqlite::params![id],
+            |row| row.get(0),
+        )
+        .ok();
+
+    if let Some(resource_id) = resource_id {
+        let _ = db.execute(
+            "UPDATE resources
+             SET is_active = 0,
+                 updated_at = strftime('%s','now')
+             WHERE id = ?1",
+            rusqlite::params![resource_id],
+        );
+
+        let _ = db.execute(
+            "UPDATE resource_reports
+             SET status = 'closed',
+                 updated_at = strftime('%s','now')
+             WHERE id = ?1",
+            rusqlite::params![id],
+        );
+    }
+
+    drop(db);
+
+    (
+        StatusCode::SEE_OTHER,
+        [(header::LOCATION, "/app/admin/reports")],
+    )
+        .into_response()
+}
+
+pub async fn admin_reject_reported_resource(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    headers: HeaderMap,
+) -> Response {
+    if !is_admin_session(&state, &headers) {
+        return (StatusCode::UNAUTHORIZED, "Доступ запрещён").into_response();
+    }
+
+    let db = state.db.lock().await;
+
+    let report: Option<(i64, String)> = db
+        .query_row(
+            "SELECT resource_id, reason
+             FROM resource_reports
+             WHERE id = ?1",
+            rusqlite::params![id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .ok();
+
+    if let Some((resource_id, reason)) = report {
+        let rejection_reason = format!("Жалоба пользователя: {}", reason);
+
+        let _ = db.execute(
+            "UPDATE resources
+             SET moderation_status = 'rejected',
+                 rejection_reason = ?2,
+                 is_verified = 0,
+                 is_active = 0,
+                 updated_at = strftime('%s','now')
+             WHERE id = ?1",
+            rusqlite::params![resource_id, rejection_reason,],
+        );
+
+        let _ = db.execute(
+            "UPDATE resource_reports
+             SET status = 'closed',
+                 updated_at = strftime('%s','now')
+             WHERE id = ?1",
+            rusqlite::params![id],
+        );
+    }
+
+    drop(db);
+
+    (
+        StatusCode::SEE_OTHER,
+        [(header::LOCATION, "/app/admin/reports")],
+    )
+        .into_response()
+}
+
+pub async fn admin_resources(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(params): Query<BTreeMap<String, String>>,
+) -> Html<String> {
+    let filter = params.get("filter").map(|s| s.as_str()).unwrap_or("all");
+
+    let q = params.get("q").map(|s| s.trim()).unwrap_or("");
+
+    if !is_admin_session(&state, &headers) {
+        return Html(
+            r#"<h1>403</h1>
+<p>Доступ запрещён.</p>
+<a href="/app/admin/login">Войти через Telegram</a>"#
+                .to_string(),
+        );
+    }
+
+    let key_query = String::new();
+    let key_join = "?";
+
+    let db = state.db.lock().await;
+
+    let filter_clause = match filter {
+        "pending" => "moderation_status = 'pending'",
+        "verified" => "moderation_status = 'approved'",
+        "rejected" => "moderation_status = 'rejected'",
+        "premium" => "is_premium = 1",
+        "hidden" => "is_active = 0",
+        _ => "1 = 1",
+    };
+
+    let search_clause = if q.is_empty() {
+        "1 = 1"
+    } else {
+        "(LOWER(title) LIKE LOWER(?1)
+          OR LOWER(category) LIKE LOWER(?1)
+          OR LOWER(description) LIKE LOWER(?1))"
+    };
+
+    let sql = format!(
+        "SELECT
+            id,
+            title,
+            category,
+            description,
+            rating,
+            votes,
+            is_verified,
+            is_premium,
+            is_active,
+            moderation_status,
+            rejection_reason
+         FROM resources
+         WHERE {}
+           AND {}
+         ORDER BY
+            is_verified ASC,
+            is_active DESC,
+            is_premium DESC,
+            id DESC",
+        filter_clause, search_clause
+    );
+
+    let rows: Vec<(
+        i64,
+        String,
+        String,
+        String,
+        f64,
+        i64,
+        i64,
+        i64,
+        i64,
+        String,
+        String,
+    )> = if q.is_empty() {
+        db.prepare(&sql)
+            .and_then(|mut stmt| {
+                stmt.query_map([], |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                        row.get(5)?,
+                        row.get(6)?,
+                        row.get(7)?,
+                        row.get(8)?,
+                        row.get(9)?,
+                        row.get(10)?,
+                    ))
+                })?
+                .collect::<Result<Vec<_>, _>>()
+            })
+            .unwrap_or_default()
+    } else {
+        let pattern = format!("%{}%", q);
+
+        db.prepare(&sql)
+            .and_then(|mut stmt| {
+                stmt.query_map(rusqlite::params![pattern], |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                        row.get(5)?,
+                        row.get(6)?,
+                        row.get(7)?,
+                        row.get(8)?,
+                        row.get(9)?,
+                        row.get(10)?,
+                    ))
+                })?
+                .collect::<Result<Vec<_>, _>>()
+            })
+            .unwrap_or_default()
+    };
+
+    let pending_reports_count: i64 = db
+        .query_row(
+            "SELECT COUNT(*)
+             FROM resource_reports
+             WHERE status = 'pending'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    drop(db);
+
+    let result_count = rows.len();
+
+    let pending = rows.iter().filter(|r| r.9 == "pending").count();
+
+    let verified_count = rows.iter().filter(|r| r.9 == "approved").count();
+
+    let rejected_count = rows.iter().filter(|r| r.9 == "rejected").count();
+
+    let premium_count = rows.iter().filter(|r| r.7 == 1).count();
+
+    let mut cards = String::new();
+
+    for (
+        id,
+        title,
+        category,
+        description,
+        rating,
+        votes,
+        _verified,
+        premium,
+        active,
+        moderation_status,
+        rejection_reason,
+    ) in rows
+    {
+        let moderation_badge = match moderation_status.as_str() {
+            "approved" => r#"<span style="color:#16a34a;font-weight:800;">✓ Одобрен</span>"#,
+            "rejected" => r#"<span style="color:#dc2626;font-weight:800;">✕ Отклонён</span>"#,
+            _ => r#"<span style="color:#d97706;font-weight:800;">● Ожидает проверки</span>"#,
+        };
+
+        let rejection_html =
+            if moderation_status == "rejected" && !rejection_reason.trim().is_empty() {
+                format!(
+                    r#"<div style="
+                        margin-top:12px;
+                        padding:11px 13px;
+                        border-radius:12px;
+                        border:1px solid rgba(220,38,38,.22);
+                        background:rgba(220,38,38,.07);
+                        color:#dc2626;
+                        font-size:13px;
+                        line-height:1.45;
+                    "><strong>Причина отказа:</strong> {}</div>"#,
+                    rejection_reason
+                )
+            } else {
+                String::new()
+            };
+
+        let premium_badge = if premium == 1 {
+            r#"<span style="color:#b88932;font-weight:800;">★ PREMIUM</span>"#
+        } else {
+            ""
+        };
+
+        let active_badge = if active == 1 {
+            r#"<span style="color:#16a34a;">● Активен</span>"#
+        } else {
+            r#"<span style="color:#dc2626;">● Скрыт</span>"#
+        };
+
+        let premium_label = if premium == 1 {
+            "Premium OFF"
+        } else {
+            "★ Premium ON"
+        };
+
+        let active_label = if active == 1 {
+            "Скрыть"
+        } else {
+            "Вернуть"
+        };
+
+        cards.push_str(&format!(
+            r#"
+<article style="
+    border:1px solid rgba(214,183,122,.22);
+    border-radius:20px;
+    padding:18px;
+    margin:0 0 16px;
+    background:rgba(255,255,255,.035);
+    box-shadow:0 10px 30px rgba(0,0,0,.12);
+">
+
+    <div style="
+        display:flex;
+        justify-content:space-between;
+        gap:14px;
+        align-items:flex-start;
+        flex-wrap:wrap;
+    ">
+        <div>
+            <div style="font-size:11px;color:#8f96a3;margin-bottom:6px;">
+                #{id} · {category}
+            </div>
+
+            <h2 style="margin:0 0 8px;font-size:20px;">
+                {title}
+            </h2>
+
+            <div style="color:#9ca3af;line-height:1.5;max-width:620px;">
+                {description}
+            </div>
+        </div>
+
+        <div style="font-weight:800;white-space:nowrap;">
+            ⭐ {rating:.1} · {votes}
+        </div>
+    </div>
+
+    <div style="
+        display:flex;
+        gap:12px;
+        flex-wrap:wrap;
+        margin-top:14px;
+        font-size:12px;
+    ">
+        {moderation_badge}
+        {premium_badge}
+        {active_badge}
+    </div>
+
+    {rejection_html}
+
+    <div style="
+        display:grid;
+        grid-template-columns:repeat(auto-fit,minmax(145px,1fr));
+        gap:9px;
+        margin-top:18px;
+    ">
+
+        <form method="post"
+              action="/app/admin/resource/{id}/approve{key_query}">
+            <button type="submit"
+                    style="
+                        width:100%;
+                        min-height:44px;
+                        border-radius:12px;
+                        border:1px solid rgba(22,163,74,.35);
+                        background:rgba(22,163,74,.10);
+                        color:inherit;
+                        font-weight:800;
+                        cursor:pointer;
+                    ">
+                ✓ Одобрить
+            </button>
+        </form>
+
+        <form method="post"
+              action="/app/admin/resource/{id}/reject{key_query}"
+              style="
+                  grid-column:1/-1;
+                  display:grid;
+                  grid-template-columns:minmax(0,1fr) auto;
+                  gap:9px;
+              ">
+
+            <input
+                type="text"
+                name="reason"
+                required
+                maxlength="500"
+                placeholder="Причина отклонения"
+                style="
+                    min-width:0;
+                    min-height:44px;
+                    box-sizing:border-box;
+                    padding:0 13px;
+                    border-radius:12px;
+                    border:1px solid rgba(220,38,38,.30);
+                    background:rgba(255,255,255,.04);
+                    color:inherit;
+                    font-size:14px;
+                ">
+
+            <button type="submit"
+                    style="
+                        min-height:44px;
+                        padding:0 16px;
+                        border-radius:12px;
+                        border:1px solid rgba(220,38,38,.38);
+                        background:rgba(220,38,38,.10);
+                        color:inherit;
+                        font-weight:800;
+                        cursor:pointer;
+                    ">
+                ✕ Отклонить
+            </button>
+        </form>
+
+        <form method="post"
+              action="/app/admin/resource/{id}/toggle-premium{key_query}">
+            <button type="submit"
+                    style="
+                        width:100%;
+                        min-height:44px;
+                        border-radius:12px;
+                        border:1px solid rgba(214,183,122,.42);
+                        background:rgba(214,183,122,.10);
+                        color:inherit;
+                        font-weight:800;
+                        cursor:pointer;
+                    ">
+                {premium_label}
+            </button>
+        </form>
+
+        <form method="post"
+              action="/app/admin/resource/{id}/toggle-active{key_query}">
+            <button type="submit"
+                    style="
+                        width:100%;
+                        min-height:44px;
+                        border-radius:12px;
+                        border:1px solid rgba(220,38,38,.28);
+                        background:rgba(220,38,38,.07);
+                        color:inherit;
+                        font-weight:800;
+                        cursor:pointer;
+                    ">
+                {active_label}
+            </button>
+        </form>
+
+        <a href="/app/resource/{id}"
+           target="_blank"
+           style="
+               min-height:42px;
+               border-radius:12px;
+               border:1px solid rgba(255,255,255,.12);
+               display:flex;
+               align-items:center;
+               justify-content:center;
+               text-decoration:none;
+               color:inherit;
+               font-weight:800;
+           ">
+            Открыть ресурс
+        </a>
+
+    </div>
+</article>
+"#,
+            id = id,
+            title = title,
+            category = category,
+            description = description,
+            rating = rating,
+            votes = votes,
+            moderation_badge = moderation_badge,
+            rejection_html = rejection_html,
+            premium_badge = premium_badge,
+            active_badge = active_badge,
+            premium_label = premium_label,
+            active_label = active_label,
+            key_query = key_query,
+        ));
+    }
+
+    Html(format!(
+        r#"<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Moderation · ResursMap</title>
+<style>{style}</style>
+</head>
+
+<body>
+
+<main class="page">
+
+<header class="topbar">
+    <a class="brand" href="/app">
+        <div class="brand-mark">{logo}</div>
+        <div>
+            <div class="brand-name">RESURSMAP</div>
+            <div class="brand-sub">MODERATION CENTER</div>
+        </div>
+    </a>
+</header>
+
+<section class="hero">
+
+    <div class="eyebrow">
+        {shield}
+        Администрирование
+    </div>
+
+    <h1>Модерация ресурсов</h1>
+
+    <p>
+        Проверка, Premium и видимость ресурсов.
+    </p>
+
+</section>
+
+<form method="get"
+      action="/app/admin/resources"
+      style="display:flex;gap:8px;margin-bottom:16px;">
+
+    <input type="hidden" name="filter" value="{filter}">
+
+    <input
+        type="search"
+        name="q"
+        value="{q}"
+        placeholder="Поиск по названию, категории, описанию..."
+        style="
+            flex:1;
+            min-width:0;
+            padding:13px 14px;
+            border-radius:14px;
+            border:1px solid rgba(255,255,255,.14);
+            background:rgba(255,255,255,.04);
+            color:inherit;
+            font-size:15px;
+        "
+    >
+
+    <button type="submit"
+            style="
+                min-width:92px;
+                border-radius:14px;
+                border:1px solid rgba(214,183,122,.35);
+                background:rgba(214,183,122,.10);
+                color:inherit;
+                font-weight:800;
+                cursor:pointer;
+            ">
+        Найти
+    </button>
+
+</form>
+
+<div style="
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+    margin-bottom:20px;
+">
+
+    <a href="/app/admin/reports{key_query}"
+       style="
+           padding:9px 12px;
+           border-radius:999px;
+           text-decoration:none;
+           border:1px solid rgba(220,38,38,.38);
+           background:rgba(220,38,38,.08);
+           color:inherit;
+           font-weight:800;
+       ">
+        🚩 Жалобы ({pending_reports_count})
+    </a>
+
+    <a href="/app/admin/resources{key_query}{key_join}filter=all"
+       style="padding:9px 12px;border-radius:999px;text-decoration:none;
+              border:1px solid rgba(255,255,255,.14);color:inherit;font-weight:700;">
+        Все
+    </a>
+
+    <a href="/app/admin/resources{key_query}{key_join}filter=pending"
+       style="padding:9px 12px;border-radius:999px;text-decoration:none;
+              border:1px solid rgba(217,119,6,.35);color:inherit;font-weight:700;">
+        Ожидают
+    </a>
+
+    <a href="/app/admin/resources{key_query}{key_join}filter=verified"
+       style="padding:9px 12px;border-radius:999px;text-decoration:none;
+              border:1px solid rgba(22,163,74,.35);color:inherit;font-weight:700;">
+        Проверены
+    </a>
+
+    <a href="/app/admin/resources{key_query}{key_join}filter=rejected"
+       style="padding:9px 12px;border-radius:999px;text-decoration:none;
+              border:1px solid rgba(220,38,38,.35);color:inherit;font-weight:700;">
+        Отклонённые
+    </a>
+
+    <a href="/app/admin/resources{key_query}{key_join}filter=premium"
+       style="padding:9px 12px;border-radius:999px;text-decoration:none;
+              border:1px solid rgba(214,183,122,.45);color:inherit;font-weight:700;">
+        Premium
+    </a>
+
+    <a href="/app/admin/resources{key_query}{key_join}filter=hidden"
+       style="padding:9px 12px;border-radius:999px;text-decoration:none;
+              border:1px solid rgba(220,38,38,.32);color:inherit;font-weight:700;">
+        Скрытые
+    </a>
+
+</div>
+
+<div style="
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(140px,1fr));
+    gap:10px;
+    margin-bottom:24px;
+">
+
+    <div class="card">
+        <div class="card-content">
+            <div class="card-title">{pending}</div>
+            <div class="card-meta">Ожидают проверки</div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-content">
+            <div class="card-title">{verified_count}</div>
+            <div class="card-meta">Проверены</div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-content">
+            <div class="card-title">{rejected_count}</div>
+            <div class="card-meta">Отклонены</div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-content">
+            <div class="card-title">{premium_count}</div>
+            <div class="card-meta">Premium</div>
+        </div>
+    </div>
+
+</div>
+
+<section style="margin-bottom:20px;">
+
+    <div style="
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap:12px;
+        flex-wrap:wrap;
+        margin-bottom:12px;
+    ">
+        <strong>Найдено: {result_count}</strong>
+        <span style="font-size:12px;color:var(--muted);">
+            Массовые действия применяются к текущей выборке
+        </span>
+    </div>
+
+    <div style="
+        display:grid;
+        grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+        gap:8px;
+    ">
+
+        <form method="post"
+              action="/app/admin/resources/bulk{key_query}{key_join}filter={filter}&q={q}&action=verify">
+            <button type="submit"
+                    style="width:100%;min-height:44px;border-radius:12px;
+                           border:1px solid rgba(22,163,74,.35);
+                           background:rgba(22,163,74,.10);
+                           color:inherit;font-weight:800;cursor:pointer;">
+                ✓ Одобрить найденные
+            </button>
+        </form>
+
+        <form method="post"
+              action="/app/admin/resources/bulk{key_query}{key_join}filter={filter}&q={q}&action=unverify">
+            <button type="submit"
+                    style="width:100%;min-height:44px;border-radius:12px;
+                           border:1px solid rgba(217,119,6,.35);
+                           background:rgba(217,119,6,.08);
+                           color:inherit;font-weight:800;cursor:pointer;">
+                Снять проверку
+            </button>
+        </form>
+
+        <form method="post"
+              action="/app/admin/resources/bulk{key_query}{key_join}filter={filter}&q={q}&action=premium">
+            <button type="submit"
+                    style="width:100%;min-height:44px;border-radius:12px;
+                           border:1px solid rgba(214,183,122,.42);
+                           background:rgba(214,183,122,.10);
+                           color:inherit;font-weight:800;cursor:pointer;">
+                ★ Premium ON
+            </button>
+        </form>
+
+        <form method="post"
+              action="/app/admin/resources/bulk{key_query}{key_join}filter={filter}&q={q}&action=hide">
+            <button type="submit"
+                    style="width:100%;min-height:44px;border-radius:12px;
+                           border:1px solid rgba(220,38,38,.30);
+                           background:rgba(220,38,38,.07);
+                           color:inherit;font-weight:800;cursor:pointer;">
+                Скрыть найденные
+            </button>
+        </form>
+
+    </div>
+</section>
+
+<section>
+{cards}
+</section>
+
+</main>
+
+</body>
+</html>"#,
+        style = templates::base_style(),
+        logo = templates::icon("map"),
+        shield = templates::icon("user"),
+        pending = pending,
+        pending_reports_count = pending_reports_count,
+        verified_count = verified_count,
+        rejected_count = rejected_count,
+        premium_count = premium_count,
+        cards = cards,
+        key_query = key_query,
+        key_join = key_join,
+        filter = filter,
+        q = q,
+        result_count = result_count,
+    ))
+}
+
+pub async fn admin_bulk_resources(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(params): Query<BTreeMap<String, String>>,
+) -> Html<String> {
+    let filter = params.get("filter").map(|s| s.as_str()).unwrap_or("all");
+    let q = params.get("q").map(|s| s.trim()).unwrap_or("");
+    let action = params.get("action").map(|s| s.as_str()).unwrap_or("");
+
+    if !is_admin_session(&state, &headers) {
+        return Html("<h1>403</h1><p>Доступ запрещён</p>".to_string());
+    }
+
+    let filter_clause = match filter {
+        "pending" => "is_verified = 0 AND is_active = 1",
+        "verified" => "is_verified = 1",
+        "premium" => "is_premium = 1",
+        "hidden" => "is_active = 0",
+        _ => "1 = 1",
+    };
+
+    let action_sql = match action {
+        "verify" => "is_verified = 1",
+        "unverify" => "is_verified = 0",
+        "premium" => "is_premium = 1",
+        "hide" => "is_active = 0",
+        _ => {
+            return Html("<h1>400</h1><p>Неизвестное действие</p>".to_string());
+        }
+    };
+
+    let search_clause = if q.is_empty() {
+        "1 = 1".to_string()
+    } else {
+        format!(
+            "(LOWER(title) LIKE LOWER('%{}%')
+              OR LOWER(category) LIKE LOWER('%{}%')
+              OR LOWER(description) LIKE LOWER('%{}%'))",
+            q.replace('\'', "''"),
+            q.replace('\'', "''"),
+            q.replace('\'', "''")
+        )
+    };
+
+    let sql = format!(
+        "UPDATE resources
+         SET {},
+             updated_at = strftime('%s','now')
+         WHERE {}
+           AND {}",
+        action_sql, filter_clause, search_clause
+    );
+
+    let db = state.db.lock().await;
+    let changed = db.execute(&sql, []).unwrap_or(0);
+    drop(db);
+
+    Html(format!(
+        r#"<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Готово · ResursMap</title>
+<meta http-equiv="refresh" content="1;url=/app/admin/resources?filter={filter}&q={q}">
+</head>
+<body style="font-family:system-ui;padding:30px;">
+<h2>Изменено ресурсов: {changed}</h2>
+<p>Возвращаемся в модерацию…</p>
+</body>
+</html>"#,
+        filter = filter,
+        q = q,
+        changed = changed,
+    ))
+}
+
+async fn admin_toggle_field(
+    state: &AppState,
+    headers: &HeaderMap,
+    id: i64,
+    field: &str,
+) -> Html<String> {
+    if !is_admin_session(state, headers) {
+        return Html("<h1>403</h1>".to_string());
+    }
+
+    let allowed = ["is_verified", "is_premium", "is_active"];
+
+    if !allowed.contains(&field) {
+        return Html("<h1>400</h1>".to_string());
+    }
+
+    let sql = format!(
+        "UPDATE resources
+         SET {0} = CASE WHEN {0}=1 THEN 0 ELSE 1 END,
+             updated_at = strftime('%s','now')
+         WHERE id=?1",
+        field
+    );
+
+    let db = state.db.lock().await;
+    let _ = db.execute(&sql, rusqlite::params![id]);
+    drop(db);
+
+    Html(r#"<meta http-equiv="refresh" content="0;url=/app/admin/resources">"#.to_string())
+}
+
+pub async fn admin_toggle_verified(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<i64>,
+) -> Html<String> {
+    admin_toggle_field(&state, &headers, id, "is_verified").await
+}
+
+pub async fn admin_toggle_premium(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<i64>,
+) -> Html<String> {
+    admin_toggle_field(&state, &headers, id, "is_premium").await
+}
+
+pub async fn admin_toggle_active(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<i64>,
+) -> Html<String> {
+    admin_toggle_field(&state, &headers, id, "is_active").await
+}
+
 pub async fn health() -> &'static str {
     "ok"
 }
@@ -317,136 +3750,976 @@ pub async fn health() -> &'static str {
 // ------------------------------------------------------------
 // API-обработчики (реальная логика)
 // ------------------------------------------------------------
-pub async fn api_vote(
-    State(state): State<AppState>,
-    Json(payload): Json<serde_json::Value>,
-) -> Json<serde_json::Value> {
-    let db = state.db.lock().await;
-    let client_id = payload.get("client_id").and_then(|v| v.as_str()).unwrap_or("");
-    let city = payload.get("city").and_then(|v| v.as_str()).unwrap_or("");
-    let category = payload.get("category").and_then(|v| v.as_str()).unwrap_or("");
-    let mark = payload.get("mark").and_then(|v| v.as_str()).unwrap_or("");
+#[derive(Debug, serde::Deserialize)]
+pub struct ReportResourcePayload {
+    pub reason: String,
+}
 
-    let _ = db.execute(
-        "INSERT OR REPLACE INTO votes (client_id, city, category, mark, updated_at) VALUES (?1, ?2, ?3, ?4, strftime('%s','now'))",
-        rusqlite::params![client_id, city, category, mark],
+pub async fn api_report_resource(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    headers: HeaderMap,
+    Json(payload): Json<ReportResourcePayload>,
+) -> Response {
+    let user_id = match verify_user_session(&state, &headers) {
+        Some(id) => id,
+
+        None => {
+            return (
+                StatusCode::UNAUTHORIZED,
+                Json(json!({
+                    "ok": false,
+                    "error": "login_required"
+                })),
+            )
+                .into_response();
+        }
+    };
+
+    let reason = payload.reason.trim();
+
+    if reason.len() < 3 {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({
+                "ok": false,
+                "error": "reason_too_short"
+            })),
+        )
+            .into_response();
+    }
+
+    if reason.chars().count() > 500 {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({
+                "ok": false,
+                "error": "reason_too_long"
+            })),
+        )
+            .into_response();
+    }
+
+    let db = state.db.lock().await;
+
+    let resource_exists: bool = db
+        .query_row(
+            "SELECT EXISTS(
+                SELECT 1
+                FROM resources
+                WHERE id = ?1
+                  AND is_active = 1
+                  AND moderation_status = 'approved'
+            )",
+            rusqlite::params![id],
+            |row| row.get(0),
+        )
+        .unwrap_or(false);
+
+    if !resource_exists {
+        drop(db);
+
+        return (
+            StatusCode::NOT_FOUND,
+            Json(json!({
+                "ok": false,
+                "error": "resource_not_found"
+            })),
+        )
+            .into_response();
+    }
+
+    let result = db.execute(
+        "INSERT INTO resource_reports (
+            reporter_user_id,
+            resource_id,
+            reason,
+            status,
+            created_at,
+            updated_at
+        )
+        VALUES (
+            ?1,
+            ?2,
+            ?3,
+            'pending',
+            strftime('%s','now'),
+            strftime('%s','now')
+        )
+
+        ON CONFLICT(reporter_user_id, resource_id)
+        DO UPDATE SET
+            reason = excluded.reason,
+            status = 'pending',
+            updated_at = strftime('%s','now')",
+        rusqlite::params![user_id, id, reason,],
     );
 
-    Json(json!({ "ok": true }))
-}
+    drop(db);
 
-pub async fn api_points(
-    State(state): State<AppState>,
-    Query(params): Query<BTreeMap<String, String>>,
-) -> Json<serde_json::Value> {
-    let db = state.db.lock().await;
-    let client_id = params.get("client_id").map(|s| s.as_str()).unwrap_or("");
-
-    let count: i64 = db.query_row(
-        "SELECT COUNT(*) FROM votes WHERE client_id = ?1",
-        rusqlite::params![client_id],
-        |row| row.get(0),
-    ).unwrap_or(0);
-
-    Json(json!({ "points": count }))
-}
-
-pub async fn api_my(
-    State(state): State<AppState>,
-    Query(params): Query<BTreeMap<String, String>>,
-) -> Json<serde_json::Value> {
-    let db = state.db.lock().await;
-    let client_id = params.get("client_id").map(|s| s.as_str()).unwrap_or("");
-
-    let rows = db.prepare(
-        "SELECT city, category, mark FROM votes WHERE client_id = ?1"
-    ).unwrap().query_map(rusqlite::params![client_id], |row| {
-        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?))
-    }).unwrap().collect::<Result<Vec<_>, _>>().unwrap_or(vec![]);
-
-    Json(json!({ "votes": rows }))
-}
-
-pub async fn api_stats(
-    State(state): State<AppState>,
-    Query(params): Query<BTreeMap<String, String>>,
-) -> Json<serde_json::Value> {
-    let db = state.db.lock().await;
-    let city = params.get("city").map(|s| s.as_str()).unwrap_or("");
-
-    let stats: Vec<(String, i64)> = db.prepare(
-        "SELECT category, COUNT(*) FROM votes WHERE city = ?1 GROUP BY category"
-    ).unwrap().query_map(rusqlite::params![city], |row| {
-        Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
-    }).unwrap().collect::<Result<Vec<_>, _>>().unwrap_or(vec![]);
-
-    Json(json!({ "stats": stats }))
-}
-
-pub async fn api_profile_get(
-    State(state): State<AppState>,
-    Query(params): Query<BTreeMap<String, String>>,
-) -> Json<serde_json::Value> {
-    let db = state.db.lock().await;
-    let client_id = params.get("client_id").map(|s| s.as_str()).unwrap_or("");
-
-    let profile: Option<(String, i64, String, i64)> = db.query_row(
-        "SELECT username, open_contact, intent_text, intent_until FROM profiles WHERE client_id = ?1",
-        rusqlite::params![client_id],
-        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
-    ).ok();
-
-    if let Some((username, open_contact, intent_text, intent_until)) = profile {
-        Json(json!({
-            "username": username,
-            "open_contact": open_contact == 1,
-            "intent_text": intent_text,
-            "intent_until": intent_until
+    match result {
+        Ok(_) => Json(json!({
+            "ok": true,
+            "status": "pending"
         }))
-    } else {
-        Json(json!({ "username": "", "open_contact": false, "intent_text": "", "intent_until": 0 }))
+        .into_response(),
+
+        Err(err) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({
+                "ok": false,
+                "error": "database_error",
+                "message": err.to_string()
+            })),
+        )
+            .into_response(),
     }
+}
+
+pub async fn api_favorite_toggle(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    headers: HeaderMap,
+) -> Response {
+    let user_id = match verify_user_session(&state, &headers) {
+        Some(id) => id,
+        None => {
+            return (
+                StatusCode::UNAUTHORIZED,
+                Json(json!({
+                    "ok": false,
+                    "error": "login_required"
+                })),
+            )
+                .into_response();
+        }
+    };
+
+    let db = state.db.lock().await;
+
+    let allowed: bool = db
+        .query_row(
+            "SELECT EXISTS(
+                SELECT 1
+                FROM resources
+                WHERE id = ?1
+                  AND is_active = 1
+                  AND moderation_status = 'approved'
+            )",
+            rusqlite::params![id],
+            |row| row.get(0),
+        )
+        .unwrap_or(false);
+
+    if !allowed {
+        drop(db);
+
+        return (
+            StatusCode::NOT_FOUND,
+            Json(json!({
+                "ok": false,
+                "error": "resource_not_found"
+            })),
+        )
+            .into_response();
+    }
+
+    let exists: bool = db
+        .query_row(
+            "SELECT EXISTS(
+                SELECT 1
+                FROM favorites
+                WHERE user_id = ?1
+                  AND resource_id = ?2
+            )",
+            rusqlite::params![user_id, id],
+            |row| row.get(0),
+        )
+        .unwrap_or(false);
+
+    let favorite = if exists {
+        let _ = db.execute(
+            "DELETE FROM favorites
+             WHERE user_id = ?1
+               AND resource_id = ?2",
+            rusqlite::params![user_id, id],
+        );
+
+        false
+    } else {
+        let _ = db.execute(
+            "INSERT OR IGNORE INTO favorites
+             (user_id, resource_id, created_at)
+             VALUES (?1, ?2, strftime('%s','now'))",
+            rusqlite::params![user_id, id],
+        );
+
+        true
+    };
+
+    drop(db);
+
+    Json(json!({
+        "ok": true,
+        "favorite": favorite
+    }))
+    .into_response()
+}
+
+pub async fn api_favorite_status(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    headers: HeaderMap,
+) -> Response {
+    let user_id = match verify_user_session(&state, &headers) {
+        Some(id) => id,
+        None => {
+            return Json(json!({
+                "ok": true,
+                "favorite": false,
+                "authenticated": false
+            }))
+            .into_response();
+        }
+    };
+
+    let db = state.db.lock().await;
+
+    let favorite: bool = db
+        .query_row(
+            "SELECT EXISTS(
+                SELECT 1
+                FROM favorites
+                WHERE user_id = ?1
+                  AND resource_id = ?2
+            )",
+            rusqlite::params![user_id, id],
+            |row| row.get(0),
+        )
+        .unwrap_or(false);
+
+    drop(db);
+
+    Json(json!({
+        "ok": true,
+        "favorite": favorite,
+        "authenticated": true
+    }))
+    .into_response()
+}
+
+pub async fn api_resource_vote(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    headers: HeaderMap,
+    Json(payload): Json<serde_json::Value>,
+) -> Response {
+    let user_id = match verify_user_session(&state, &headers) {
+        Some(id) => id,
+        None => {
+            return (
+                StatusCode::UNAUTHORIZED,
+                Json(json!({
+                    "ok": false,
+                    "error": "login_required"
+                })),
+            )
+                .into_response();
+        }
+    };
+
+    let score = payload.get("score").and_then(|v| v.as_i64()).unwrap_or(0);
+
+    if !(1..=5).contains(&score) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({
+                "ok": false,
+                "error": "invalid_vote"
+            })),
+        )
+            .into_response();
+    }
+
+    let client_id = format!("tg:{}", user_id);
+
+    let db = state.db.lock().await;
+
+    let allowed: bool = db
+        .query_row(
+            "SELECT EXISTS(
+                SELECT 1
+                FROM resources
+                WHERE id = ?1
+                  AND is_active = 1
+                  AND moderation_status = 'approved'
+            )",
+            rusqlite::params![id],
+            |row| row.get(0),
+        )
+        .unwrap_or(false);
+
+    if !allowed {
+        drop(db);
+
+        return (
+            StatusCode::NOT_FOUND,
+            Json(json!({
+                "ok": false,
+                "error": "resource_not_found"
+            })),
+        )
+            .into_response();
+    }
+
+    let result = db.execute(
+        "INSERT INTO resource_votes
+            (resource_id, client_id, score, updated_at)
+         VALUES
+            (?1, ?2, ?3, strftime('%s','now'))
+         ON CONFLICT(resource_id, client_id)
+         DO UPDATE SET
+            score = excluded.score,
+            updated_at = excluded.updated_at",
+        rusqlite::params![id, client_id, score],
+    );
+
+    if let Err(err) = result {
+        drop(db);
+
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({
+                "ok": false,
+                "error": "vote_write_failed",
+                "message": err.to_string()
+            })),
+        )
+            .into_response();
+    }
+
+    let stats: (f64, i64) = db
+        .query_row(
+            "SELECT
+                COALESCE(AVG(score), 0),
+                COUNT(*)
+             FROM resource_votes
+             WHERE resource_id = ?1",
+            rusqlite::params![id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap_or((0.0, 0));
+
+    let _ = db.execute(
+        "UPDATE resources
+         SET rating = ?1,
+             votes = ?2,
+             updated_at = strftime('%s','now')
+         WHERE id = ?3",
+        rusqlite::params![stats.0, stats.1, id],
+    );
+
+    drop(db);
+
+    Json(json!({
+        "ok": true,
+        "resource_id": id,
+        "rating": stats.0,
+        "votes": stats.1
+    }))
+    .into_response()
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct ContactRequestPayload {
+    pub public_id: String,
+    pub message: String,
+}
+
+pub async fn api_contact_request(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<ContactRequestPayload>,
+) -> Response {
+    let sender_user_id = match verify_user_session(&state, &headers) {
+        Some(id) => id,
+
+        None => {
+            return (
+                StatusCode::UNAUTHORIZED,
+                Json(json!({
+                    "ok": false,
+                    "error": "login_required"
+                })),
+            )
+                .into_response();
+        }
+    };
+
+    let public_id = payload.public_id.trim();
+    let message = payload.message.trim();
+
+    if public_id.is_empty()
+        || public_id.len() > 64
+        || !public_id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({
+                "ok": false,
+                "error": "invalid_public_id"
+            })),
+        )
+            .into_response();
+    }
+
+    if message.chars().count() < 2 {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({
+                "ok": false,
+                "error": "message_too_short"
+            })),
+        )
+            .into_response();
+    }
+
+    if message.chars().count() > 500 {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({
+                "ok": false,
+                "error": "message_too_long"
+            })),
+        )
+            .into_response();
+    }
+
+    let db = state.db.lock().await;
+
+    let receiver_user_id: Option<i64> = db
+        .query_row(
+            "SELECT CAST(
+                substr(client_id, 4)
+                AS INTEGER
+            )
+             FROM profiles
+             WHERE public_id = ?1
+               AND client_id LIKE 'tg:%'
+             LIMIT 1",
+            rusqlite::params![public_id],
+            |row| row.get(0),
+        )
+        .ok();
+
+    let receiver_user_id = match receiver_user_id {
+        Some(id) if id > 0 => id,
+
+        _ => {
+            drop(db);
+
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({
+                    "ok": false,
+                    "error": "user_not_found"
+                })),
+            )
+                .into_response();
+        }
+    };
+
+    if sender_user_id == receiver_user_id {
+        drop(db);
+
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({
+                "ok": false,
+                "error": "cannot_contact_self"
+            })),
+        )
+            .into_response();
+    }
+
+    let existing_status: Option<String> = db
+        .query_row(
+            "SELECT status
+             FROM contact_requests
+             WHERE sender_user_id = ?1
+               AND receiver_user_id = ?2
+             LIMIT 1",
+            rusqlite::params![sender_user_id, receiver_user_id,],
+            |row| row.get(0),
+        )
+        .ok();
+
+    if let Some(status) = existing_status.as_deref() {
+        if status == "pending" {
+            drop(db);
+
+            return (
+                StatusCode::CONFLICT,
+                Json(json!({
+                    "ok": false,
+                    "error": "request_already_pending"
+                })),
+            )
+                .into_response();
+        }
+
+        if status == "accepted" {
+            drop(db);
+
+            return (
+                StatusCode::CONFLICT,
+                Json(json!({
+                    "ok": false,
+                    "error": "already_connected"
+                })),
+            )
+                .into_response();
+        }
+    }
+
+    let result = db.execute(
+        "INSERT INTO contact_requests (
+            sender_user_id,
+            receiver_user_id,
+            message,
+            status,
+            created_at,
+            updated_at
+         )
+         VALUES (
+            ?1,
+            ?2,
+            ?3,
+            'pending',
+            strftime('%s','now'),
+            strftime('%s','now')
+         )
+
+         ON CONFLICT(sender_user_id, receiver_user_id)
+         DO UPDATE SET
+            message = excluded.message,
+            status = 'pending',
+            updated_at = strftime('%s','now')",
+        rusqlite::params![sender_user_id, receiver_user_id, message,],
+    );
+
+    drop(db);
+
+    match result {
+        Ok(_) => Json(json!({
+            "ok": true,
+            "status": "pending"
+        }))
+        .into_response(),
+
+        Err(err) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({
+                "ok": false,
+                "error": "database_error",
+                "message": err.to_string()
+            })),
+        )
+            .into_response(),
+    }
+}
+
+pub async fn api_profile_get(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    let user_id = match verify_user_session(&state, &headers) {
+        Some(id) => id,
+
+        None => {
+            return (
+                StatusCode::UNAUTHORIZED,
+                Json(json!({
+                    "ok": false,
+                    "error": "login_required"
+                })),
+            )
+                .into_response();
+        }
+    };
+
+    let client_id = format!("tg:{}", user_id);
+
+    let db = state.db.lock().await;
+
+    let profile: Option<(String, String, String, i64, String, i64)> = db
+        .query_row(
+            "SELECT
+                username,
+                first_name,
+                last_name,
+                open_contact,
+                intent_text,
+                intent_until
+             FROM profiles
+             WHERE client_id = ?1",
+            rusqlite::params![&client_id],
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                ))
+            },
+        )
+        .ok();
+
+    drop(db);
+
+    let (username, first_name, last_name, open_contact, intent_text, intent_until) = profile
+        .unwrap_or_else(|| {
+            (
+                String::new(),
+                String::new(),
+                String::new(),
+                0,
+                String::new(),
+                0,
+            )
+        });
+
+    Json(json!({
+        "ok": true,
+        "username": username,
+        "first_name": first_name,
+        "last_name": last_name,
+        "open_contact": open_contact == 1,
+        "intent_text": intent_text,
+        "intent_until": intent_until
+    }))
+    .into_response()
 }
 
 pub async fn api_profile_set(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Json(payload): Json<serde_json::Value>,
-) -> Json<serde_json::Value> {
-    let db = state.db.lock().await;
-    let client_id = payload.get("client_id").and_then(|v| v.as_str()).unwrap_or("");
-    let username = payload.get("username").and_then(|v| v.as_str()).unwrap_or("");
-    let open_contact = payload.get("open_contact").and_then(|v| v.as_bool()).unwrap_or(false);
-    let intent_text = payload.get("intent_text").and_then(|v| v.as_str()).unwrap_or("");
-    let intent_until = payload.get("intent_until").and_then(|v| v.as_i64()).unwrap_or(0);
+) -> Response {
+    let user_id = match verify_user_session(&state, &headers) {
+        Some(id) => id,
 
-    let _ = db.execute(
-        "INSERT OR REPLACE INTO profiles (client_id, username, open_contact, intent_text, intent_until, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, strftime('%s','now'))",
-        rusqlite::params![client_id, username, open_contact, intent_text, intent_until],
+        None => {
+            return (
+                StatusCode::UNAUTHORIZED,
+                Json(json!({
+                    "ok": false,
+                    "error": "login_required"
+                })),
+            )
+                .into_response();
+        }
+    };
+
+    let client_id = format!("tg:{}", user_id);
+
+    let open_contact = payload
+        .get("open_contact")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    let intent_text = payload
+        .get("intent_text")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim();
+
+    if intent_text.chars().count() > 300 {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({
+                "ok": false,
+                "error": "intent_too_long"
+            })),
+        )
+            .into_response();
+    }
+
+    let duration_days = payload
+        .get("duration_days")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0);
+
+    let allowed_days = [0_i64, 1, 3, 7, 30];
+
+    if !allowed_days.contains(&duration_days) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({
+                "ok": false,
+                "error": "invalid_duration"
+            })),
+        )
+            .into_response();
+    }
+
+    let intent_until = if intent_text.is_empty() {
+        0
+    } else if duration_days == 0 {
+        0
+    } else {
+        unix_now() + duration_days * 86_400
+    };
+
+    let db = state.db.lock().await;
+
+    let result = db.execute(
+        "INSERT INTO profiles (
+            client_id,
+            open_contact,
+            intent_text,
+            intent_until,
+            updated_at
+         )
+         VALUES (
+            ?1,
+            ?2,
+            ?3,
+            ?4,
+            strftime('%s','now')
+         )
+
+         ON CONFLICT(client_id)
+         DO UPDATE SET
+            open_contact = excluded.open_contact,
+            intent_text = excluded.intent_text,
+            intent_until = excluded.intent_until,
+            updated_at = strftime('%s','now')",
+        rusqlite::params![
+            &client_id,
+            if open_contact { 1 } else { 0 },
+            intent_text,
+            intent_until,
+        ],
     );
 
-    Json(json!({ "ok": true }))
+    drop(db);
+
+    match result {
+        Ok(_) => Json(json!({
+            "ok": true,
+            "open_contact": open_contact,
+            "intent_text": intent_text,
+            "intent_until": intent_until
+        }))
+        .into_response(),
+
+        Err(err) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({
+                "ok": false,
+                "error": "database_error",
+                "message": err.to_string()
+            })),
+        )
+            .into_response(),
+    }
 }
 
-pub async fn api_open_count(
-    State(state): State<AppState>,
-    Query(params): Query<BTreeMap<String, String>>,
-) -> Json<serde_json::Value> {
+pub async fn api_open_count(State(state): State<AppState>) -> Json<serde_json::Value> {
     let db = state.db.lock().await;
-    let city = params.get("city").map(|s| s.as_str()).unwrap_or("");
 
-    let count: i64 = db.query_row(
-        "SELECT COUNT(*) FROM profiles WHERE open_contact = 1 AND city = ?1",
-        rusqlite::params![city],
-        |row| row.get(0),
-    ).unwrap_or(0);
+    let count: i64 = db
+        .query_row(
+            "SELECT COUNT(*)
+             FROM profiles
+             WHERE open_contact = 1",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
 
-    Json(json!({ "count": count }))
+    Json(json!({
+        "count": count
+    }))
 }
 
-pub async fn webhook_handler(
-    State(_state): State<AppState>,
-    Query(_params): Query<serde_json::Value>,
-) -> String {
-    "OK".to_string()
+// ============================================================
+// TASK 7.3B — MODERATION APPROVE / REJECT
+// ============================================================
+
+#[derive(serde::Deserialize)]
+pub struct RejectResourceForm {
+    pub reason: String,
+}
+
+pub async fn admin_approve_resource(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    headers: HeaderMap,
+) -> Response {
+    if !is_admin_session(&state, &headers) {
+        return (StatusCode::UNAUTHORIZED, "Доступ запрещён").into_response();
+    }
+
+    let db = state.db.lock().await;
+
+    let result = db.execute(
+        "UPDATE resources
+         SET moderation_status = 'approved',
+             rejection_reason = '',
+             is_verified = 1,
+             is_active = 1,
+             updated_at = strftime('%s','now')
+         WHERE id = ?1",
+        rusqlite::params![id],
+    );
+
+    if result.is_ok() {
+        let owner: Option<(String, String)> = db
+            .query_row(
+                "SELECT client_id, title
+                 FROM resources
+                 WHERE id = ?1",
+                rusqlite::params![id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .ok();
+
+        if let Some((client_id, resource_title)) = owner {
+            if let Some(user_id) = telegram_owner_user_id(&client_id) {
+                let _ = db.execute(
+                    "INSERT INTO user_notifications (
+                        user_id,
+                        resource_id,
+                        kind,
+                        title,
+                        message,
+                        is_read,
+                        created_at
+                     )
+                     VALUES (
+                        ?1,
+                        ?2,
+                        'resource_approved',
+                        'Ресурс одобрен',
+                        ?3,
+                        0,
+                        strftime('%s','now')
+                     )",
+                    rusqlite::params![
+                        user_id,
+                        id,
+                        format!(
+                            "Ваш ресурс «{}» прошёл модерацию и опубликован.",
+                            resource_title
+                        ),
+                    ],
+                );
+            }
+        }
+    }
+
+    drop(db);
+
+    match result {
+        Ok(_) => (
+            StatusCode::SEE_OTHER,
+            [(header::LOCATION, "/app/admin/resources?filter=pending")],
+        )
+            .into_response(),
+
+        Err(err) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Ошибка одобрения ресурса: {}", err),
+        )
+            .into_response(),
+    }
+}
+
+pub async fn admin_reject_resource(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    headers: HeaderMap,
+    Form(form): Form<RejectResourceForm>,
+) -> Response {
+    if !is_admin_session(&state, &headers) {
+        return (StatusCode::UNAUTHORIZED, "Доступ запрещён").into_response();
+    }
+
+    let reason = form.reason.trim();
+
+    if reason.is_empty() {
+        return (StatusCode::BAD_REQUEST, "Укажите причину отклонения").into_response();
+    }
+
+    let db = state.db.lock().await;
+
+    let result = db.execute(
+        "UPDATE resources
+         SET moderation_status = 'rejected',
+             rejection_reason = ?2,
+             is_verified = 0,
+             is_active = 0,
+             updated_at = strftime('%s','now')
+         WHERE id = ?1",
+        rusqlite::params![id, reason],
+    );
+
+    if result.is_ok() {
+        let owner: Option<(String, String)> = db
+            .query_row(
+                "SELECT client_id, title
+                 FROM resources
+                 WHERE id = ?1",
+                rusqlite::params![id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .ok();
+
+        if let Some((client_id, resource_title)) = owner {
+            if let Some(user_id) = telegram_owner_user_id(&client_id) {
+                let message = format!("Ресурс «{}» отклонён. Причина: {}", resource_title, reason);
+
+                let _ = db.execute(
+                    "INSERT INTO user_notifications (
+                        user_id,
+                        resource_id,
+                        kind,
+                        title,
+                        message,
+                        is_read,
+                        created_at
+                     )
+                     VALUES (
+                        ?1,
+                        ?2,
+                        'resource_rejected',
+                        'Ресурс требует исправления',
+                        ?3,
+                        0,
+                        strftime('%s','now')
+                     )",
+                    rusqlite::params![user_id, id, message,],
+                );
+            }
+        }
+    }
+
+    drop(db);
+
+    match result {
+        Ok(_) => (
+            StatusCode::SEE_OTHER,
+            [(header::LOCATION, "/app/admin/resources?filter=pending")],
+        )
+            .into_response(),
+
+        Err(err) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Ошибка отклонения ресурса: {}", err),
+        )
+            .into_response(),
+    }
 }

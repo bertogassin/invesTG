@@ -1,19 +1,46 @@
-use teloxide::prelude::*;
-use teloxide::types::{InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo};
 use serde_json::Value;
 use std::collections::HashMap;
+use std::env;
 use std::fs;
+use teloxide::prelude::*;
+use teloxide::types::{InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo};
 
 pub async fn start_handler(bot: Bot, msg: Message) -> ResponseResult<()> {
-    let web_app = WebAppInfo {
-        url: "https://resursmap.de/app".to_string().parse().unwrap(),
+    let map_web_app = WebAppInfo {
+        url: "https://resursmap.de/app/auth".to_string().parse().unwrap(),
     };
-    let keyboard = InlineKeyboardMarkup::new(vec![
-        vec![InlineKeyboardButton::web_app("🌍 Открыть карту", web_app)],
-    ]);
+
+    let mut keyboard_rows = vec![vec![InlineKeyboardButton::web_app(
+        "🌍 Открыть карту",
+        map_web_app,
+    )]];
+
+    // Кнопку модерации получает только ADMIN_TELEGRAM_ID.
+    let admin_telegram_id = env::var("ADMIN_TELEGRAM_ID")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok());
+
+    let current_user_id = msg.from.as_ref().map(|user| user.id.0);
+
+    if admin_telegram_id.is_some() && current_user_id == admin_telegram_id {
+        let admin_web_app = WebAppInfo {
+            url: "https://resursmap.de/app/admin/login"
+                .to_string()
+                .parse()
+                .unwrap(),
+        };
+
+        keyboard_rows.push(vec![InlineKeyboardButton::web_app(
+            "🛡 Модерация",
+            admin_web_app,
+        )]);
+    }
+
+    let keyboard = InlineKeyboardMarkup::new(keyboard_rows);
 
     let cities = load_cities();
     let mut city_list = String::new();
+
     for (city, _) in cities.iter().take(10) {
         city_list.push_str(&format!("• {}\n", city));
     }
@@ -21,11 +48,18 @@ pub async fn start_handler(bot: Bot, msg: Message) -> ResponseResult<()> {
     bot.send_message(
         msg.chat.id,
         format!(
-            "Привет! Я бот Карта ресурсов.\n\nДоступные команды:\n/start — приветствие\n/help — помощь\n/cities — список городов\n\n🌍 Города (первые 10):\n{}",
+            "Привет! Я бот Карта ресурсов.\n\n\
+             Доступные команды:\n\
+             /start — приветствие\n\
+             /help — помощь\n\
+             /cities — список городов\n\n\
+             🌍 Города (первые 10):\n{}",
             city_list
         ),
-    ).reply_markup(keyboard)
+    )
+    .reply_markup(keyboard)
     .await?;
+
     Ok(())
 }
 

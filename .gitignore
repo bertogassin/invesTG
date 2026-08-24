@@ -5,4 +5,20 @@
 .env.*
 !.env.example
 *.log
-.env
+
+# Local databases
+*.db
+data/*.db
+# Local backups / snapshots
+backups/
+*.before-*
+*.before_*
+*.backup
+*.broken*
+*current-broken*
+*luxury-backup*
+# Local audit files
+RESURSMAP_AUDIT.txt
+# Rust build
+target/
+# Environment / secrets

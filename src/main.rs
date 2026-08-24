@@ -24,13 +24,18 @@ enum Command {
 
 #[tokio::main]
 async fn main() {
-    let db = db::queries::init_db()
-        .expect("Не удалось открыть базу данных");
+    let db = db::queries::init_db().expect("Не удалось открыть базу данных");
 
-    let bot_token = env::var("TELEGRAM_BOT_TOKEN")
-        .expect("TELEGRAM_BOT_TOKEN не задан");
+    let bot_token = env::var("TELEGRAM_BOT_TOKEN").expect("TELEGRAM_BOT_TOKEN не задан");
 
-    let state = AppState::new(db, bot_token.clone());
+    let admin_key = env::var("ADMIN_KEY").expect("ADMIN_KEY не задан");
+
+    let admin_telegram_id: i64 = env::var("ADMIN_TELEGRAM_ID")
+        .expect("ADMIN_TELEGRAM_ID не задан")
+        .parse()
+        .expect("ADMIN_TELEGRAM_ID должен быть числом");
+
+    let state = AppState::new(db, bot_token.clone(), admin_key, admin_telegram_id);
 
     let app = web::routes::routes(state);
 
@@ -44,15 +49,13 @@ async fn main() {
 
     let handler = Update::filter_message()
         .filter_command::<Command>()
-        .endpoint(
-            |bot: Bot, msg: Message, command: Command| async move {
-                match command {
-                    Command::Start => start_handler(bot, msg).await,
-                    Command::Help => help_handler(bot, msg).await,
-                    Command::Cities => cities_handler(bot, msg).await,
-                }
-            },
-        );
+        .endpoint(|bot: Bot, msg: Message, command: Command| async move {
+            match command {
+                Command::Start => start_handler(bot, msg).await,
+                Command::Help => help_handler(bot, msg).await,
+                Command::Cities => cities_handler(bot, msg).await,
+            }
+        });
 
     tokio::spawn(async move {
         Dispatcher::builder(bot, handler)
