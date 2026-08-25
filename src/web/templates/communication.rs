@@ -684,24 +684,7 @@ pub fn render_messages(
 {topbar}
 
 
-<section class="hero">
-
-    {back_link}
-
-    <div class="eyebrow">
-        {message_icon}
-        Внутренняя связь
-    </div>
-
-    <h1>
-        Сообщения
-    </h1>
-
-    <p>
-        Ваши личные диалоги внутри ResursMap.
-    </p>
-
-</section>
+{hero}
 
 
 {section_head_dialogs}
@@ -721,8 +704,13 @@ pub fn render_messages(
 </html>"#,
         style = base_style(),
         topbar = topbar("MESSAGES", "search"),
-        back_link = back_link("/app/me", "Назад", "chevron-left"),
-        message_icon = icon("message-circle"),
+        hero = back_hero(
+            &back_link("/app/me", "Назад", "chevron-left",),
+            "message-circle",
+            "Внутренняя связь",
+            "Сообщения",
+            "Ваши личные диалоги внутри ResursMap.",
+        ),
         content = content,
     )
 }
