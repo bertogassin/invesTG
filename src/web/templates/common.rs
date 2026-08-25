@@ -1003,6 +1003,49 @@ pub(crate) fn search_hero(
     )
 }
 
+pub(crate) fn search_form_hero(
+    eyebrow: &str,
+    title: &str,
+    description: &str,
+    query: &str,
+    placeholder: &str,
+) -> String {
+    format!(
+        r#"<section class="hero">
+
+    <div class="eyebrow">
+        {search_icon}
+        {eyebrow}
+    </div>
+
+    <h1>{title}</h1>
+
+    <p>{description}</p>
+
+    <form method="get"
+          action="/app/search"
+          class="search">
+        {search_input_icon}
+
+        <input
+            name="q"
+            autofocus
+            value="{query}"
+            placeholder="{placeholder}"
+        >
+    </form>
+
+</section>"#,
+        search_icon = icon("search"),
+        search_input_icon = icon("search"),
+        eyebrow = escape_html(eyebrow),
+        title = escape_html(title),
+        description = escape_html(description),
+        query = escape_html(query),
+        placeholder = escape_html(placeholder),
+    )
+}
+
 pub(crate) fn back_hero(
     back_html: &str,
     icon_name: &str,

@@ -1,5 +1,6 @@
 use super::common::{
-    base_style, bottom_nav, escape_html, icon, search_hero, section_head, simple_hero, topbar,
+    base_style, bottom_nav, escape_html, icon, search_form_hero, search_hero, section_head,
+    simple_hero, topbar,
 };
 use std::collections::BTreeMap;
 
@@ -893,33 +894,7 @@ pub fn render_search(
 
 {topbar}
 
-<section class="hero">
-
-    <div class="eyebrow">
-        {search_icon}
-        Поиск
-    </div>
-
-    <h1>Найти ресурс</h1>
-
-    <p>
-        Ищите услуги, компании, специалистов и другие ресурсы.
-    </p>
-
-    <form method="get"
-          action="/app/search"
-          class="search">
-        {search_input_icon}
-
-        <input
-            name="q"
-            autofocus
-            value="{q}"
-            placeholder="Например: охранник, бизнес, улица..."
-        >
-    </form>
-
-</section>
+{hero}
 
 {location_section}
 
@@ -939,10 +914,14 @@ pub fn render_search(
 </html>"#,
         style = base_style(),
         topbar = topbar("SEARCH", "search"),
-        search_icon = icon("search"),
-        search_input_icon = icon("search"),
+        hero = search_form_hero(
+            "Поиск",
+            "Найти ресурс",
+            "Ищите услуги, компании, специалистов и другие ресурсы.",
+            q,
+            "Например: охранник, бизнес, улица...",
+        ),
         bottom_nav = bottom_nav("search"),
-        q = q,
         location_section = location_section,
         people_section = people_section,
         result_header = result_header,
