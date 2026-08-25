@@ -1991,21 +1991,9 @@ pub fn render_public_user_not_found() -> String {
 
 <main class="page">
 
-<section class="hero">
+{hero}
 
-    <div class="eyebrow">
-        ⚠ ResursMap
-    </div>
-
-    <h1>
-        Профиль не найден
-    </h1>
-
-    <p>
-        Пользователь недоступен
-        или публичный профиль ещё не создан.
-    </p>
-
+<section>
     <a class="card"
        href="/app"
        style="
@@ -2030,7 +2018,6 @@ pub fn render_public_user_not_found() -> String {
         </div>
 
     </a>
-
 </section>
 
 </main>
@@ -2038,6 +2025,12 @@ pub fn render_public_user_not_found() -> String {
 </body>
 </html>"#,
         style = base_style(),
+        hero = simple_hero(
+            "alert-triangle",
+            "ResursMap",
+            "Профиль не найден",
+            "Пользователь недоступен или публичный профиль ещё не создан.",
+        ),
         map = icon("map"),
         arrow = icon("chevron"),
     )
