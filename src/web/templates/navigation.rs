@@ -1,6 +1,6 @@
 use super::common::{
-    base_style, bottom_nav, escape_html, icon, search_form_hero, search_hero, section_head,
-    simple_hero, topbar,
+    base_style, bottom_nav, escape_html, icon, navigation_card, search_form_hero, search_hero,
+    section_head, simple_hero, topbar,
 };
 use std::collections::BTreeMap;
 
@@ -33,21 +33,11 @@ pub fn render_continents() -> String {
 
     for (ci, (continent, countries)) in w.iter().enumerate() {
         for (si, country) in countries.keys().enumerate() {
-            cards.push_str(&format!(
-                r#"
-<a class="card" href="/app/{ci}/{si}">
-    <div class="card-icon">{building}</div>
-
-    <div class="card-content">
-        <div class="card-title">{country}</div>
-        <div class="card-meta">{continent} · страна</div>
-    </div>
-
-    <div class="card-arrow">{arrow}</div>
-</a>
-"#,
-                building = icon("building"),
-                arrow = icon("chevron"),
+            cards.push_str(&navigation_card(
+                &format!("/app/{}/{}", ci, si),
+                "building",
+                country,
+                &format!("{} · страна", continent),
             ));
         }
     }
@@ -133,23 +123,11 @@ pub fn render_continent(ci: usize) -> String {
         let mut cards = String::new();
 
         for (si, country) in countries.keys().enumerate() {
-            cards.push_str(&format!(
-                r#"
-<a class="card" href="/app/{ci}/{si}">
-    <div class="card-icon">
-        {icon}
-    </div>
-
-    <div class="card-content">
-        <div class="card-title">{country}</div>
-        <div class="card-meta">Открыть города</div>
-    </div>
-
-    <div class="card-arrow">{arrow}</div>
-</a>
-"#,
-                icon = icon("building"),
-                arrow = icon("chevron"),
+            cards.push_str(&navigation_card(
+                &format!("/app/{}/{}", ci, si),
+                "building",
+                country,
+                "Открыть города",
             ));
         }
 
@@ -213,23 +191,11 @@ pub fn render_country(ci: usize, si: usize) -> String {
             let mut cards = String::new();
 
             for (zi, city) in cities.iter().enumerate() {
-                cards.push_str(&format!(
-                    r#"
-<a class="card" href="/app/{ci}/{si}/{zi}">
-    <div class="card-icon">
-        {pin}
-    </div>
-
-    <div class="card-content">
-        <div class="card-title">{city}</div>
-        <div class="card-meta">{country}</div>
-    </div>
-
-    <div class="card-arrow">{arrow}</div>
-</a>
-"#,
-                    pin = icon("map-pin"),
-                    arrow = icon("chevron"),
+                cards.push_str(&navigation_card(
+                    &format!("/app/{}/{}/{}", ci, si, zi),
+                    "map-pin",
+                    city,
+                    country,
                 ));
             }
 

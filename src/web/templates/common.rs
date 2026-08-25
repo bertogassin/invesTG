@@ -926,6 +926,30 @@ pub(crate) fn back_link(href: &str, label: &str, icon_name: &str) -> String {
     )
 }
 
+pub(crate) fn navigation_card(href: &str, icon_name: &str, title: &str, meta: &str) -> String {
+    format!(
+        r#"
+<a class="card" href="{href}">
+    <div class="card-icon">
+        {icon}
+    </div>
+
+    <div class="card-content">
+        <div class="card-title">{title}</div>
+        <div class="card-meta">{meta}</div>
+    </div>
+
+    <div class="card-arrow">{arrow}</div>
+</a>
+"#,
+        href = escape_html(href),
+        icon = icon(icon_name),
+        title = escape_html(title),
+        meta = escape_html(meta),
+        arrow = icon("chevron"),
+    )
+}
+
 pub(crate) fn section_head(title: &str, caption: &str, margin_top: Option<u32>) -> String {
     let style = match margin_top {
         Some(px) => format!(r#" style="margin-top:{px}px;""#),
