@@ -1015,6 +1015,112 @@ pub(crate) fn people_result_card(
     )
 }
 
+pub(crate) fn resource_result_card(
+    href: &str,
+    title_html: &str,
+    category_html: &str,
+    description_html: &str,
+    rating: f64,
+    votes: i64,
+    location_html: &str,
+    address_html: &str,
+    premium_badge_html: &str,
+    verified_badge_html: &str,
+) -> String {
+    format!(
+        r#"
+<a href="{href}"
+   class="card"
+   style="
+       text-decoration:none;
+       color:inherit;
+       margin-bottom:14px;
+       align-items:flex-start;
+   ">
+
+    <div class="card-icon">{resource_icon}</div>
+
+    <div class="card-content" style="min-width:0;">
+
+        <div style="
+            display:flex;
+            justify-content:space-between;
+            align-items:flex-start;
+            gap:10px;
+        ">
+            <div class="card-title"
+                 style="font-size:17px;min-width:0;">
+                {title}
+            </div>
+
+            <div style="
+                flex:0 0 auto;
+                font-size:12px;
+                color:var(--muted);
+                white-space:nowrap;
+            ">
+                ⭐ {rating:.1} · {votes}
+            </div>
+        </div>
+
+        <div class="card-meta"
+             style="margin-top:5px;">
+            {category}
+        </div>
+
+        <div class="card-meta"
+             style="
+                 margin-top:8px;
+                 line-height:1.45;
+                 overflow-wrap:anywhere;
+             ">
+            {description}
+        </div>
+
+        <div class="card-meta"
+             style="margin-top:9px;">
+            📍 {location}
+        </div>
+
+        <div class="card-meta"
+             style="
+                 margin-top:4px;
+                 overflow-wrap:anywhere;
+             ">
+            {address}
+        </div>
+
+        <div style="
+            display:flex;
+            gap:8px;
+            align-items:center;
+            flex-wrap:wrap;
+            margin-top:10px;
+        ">
+            {premium_badge}
+            {verified_badge}
+        </div>
+
+    </div>
+
+    <div class="card-arrow">{arrow}</div>
+</a>
+"#,
+        href = escape_html(href),
+        resource_icon = icon("map-pin"),
+        title = title_html,
+        category = category_html,
+        description = description_html,
+        rating = rating,
+        votes = votes,
+        location = location_html,
+        address = address_html,
+        premium_badge = premium_badge_html,
+        verified_badge = verified_badge_html,
+        arrow = icon("chevron"),
+    )
+}
+
 pub(crate) fn section_head(title: &str, caption: &str, margin_top: Option<u32>) -> String {
     let style = match margin_top {
         Some(px) => format!(r#" style="margin-top:{px}px;""#),
