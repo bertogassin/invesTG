@@ -1,6 +1,6 @@
 use super::common::{
-    base_style, bottom_nav, escape_html, icon, navigation_card, search_form_hero, search_hero,
-    section_head, simple_hero, topbar,
+    base_style, bottom_nav, escape_html, icon, navigation_card, people_result_card,
+    search_form_hero, search_hero, section_head, simple_hero, topbar,
 };
 use std::collections::BTreeMap;
 
@@ -517,61 +517,12 @@ pub fn render_search(
                             ">Контакт закрыт</span>"#
                     };
 
-                    format!(
-                        r#"
-<a href="/app/user/{public_id}"
-   class="card"
-   style="
-       text-decoration:none;
-       color:inherit;
-       margin-bottom:14px;
-       align-items:flex-start;
-   ">
-
-    <div class="card-icon">
-        {user_icon}
-    </div>
-
-    <div class="card-content"
-         style="min-width:0;">
-
-        <div class="card-title"
-             style="
-                 font-size:17px;
-                 line-height:1.3;
-                 overflow-wrap:anywhere;
-             ">
-            {display_name}
-        </div>
-
-        {username_html}
-
-        {intent_html}
-
-        <div style="
-            display:flex;
-            gap:8px;
-            flex-wrap:wrap;
-            margin-top:10px;
-        ">
-            {contact_html}
-        </div>
-
-    </div>
-
-    <div class="card-arrow">
-        {arrow}
-    </div>
-
-</a>
-"#,
-                        public_id = public_id,
-                        user_icon = icon("user"),
-                        display_name = display_name,
-                        username_html = username_html,
-                        intent_html = intent_html,
-                        contact_html = contact_html,
-                        arrow = icon("chevron"),
+                    people_result_card(
+                        &format!("/app/user/{}", public_id),
+                        &display_name,
+                        &username_html,
+                        &intent_html,
+                        contact_html,
                     )
                 },
             )

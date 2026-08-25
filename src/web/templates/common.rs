@@ -950,6 +950,71 @@ pub(crate) fn navigation_card(href: &str, icon_name: &str, title: &str, meta: &s
     )
 }
 
+pub(crate) fn people_result_card(
+    href: &str,
+    display_name_html: &str,
+    username_html: &str,
+    intent_html: &str,
+    contact_html: &str,
+) -> String {
+    format!(
+        r#"
+<a href="{href}"
+   class="card"
+   style="
+       text-decoration:none;
+       color:inherit;
+       margin-bottom:14px;
+       align-items:flex-start;
+   ">
+
+    <div class="card-icon">
+        {user_icon}
+    </div>
+
+    <div class="card-content"
+         style="min-width:0;">
+
+        <div class="card-title"
+             style="
+                 font-size:17px;
+                 line-height:1.3;
+                 overflow-wrap:anywhere;
+             ">
+            {display_name}
+        </div>
+
+        {username_html}
+
+        {intent_html}
+
+        <div style="
+            display:flex;
+            gap:8px;
+            flex-wrap:wrap;
+            margin-top:10px;
+        ">
+            {contact_html}
+        </div>
+
+    </div>
+
+    <div class="card-arrow">
+        {arrow}
+    </div>
+
+</a>
+"#,
+        href = escape_html(href),
+        user_icon = icon("user"),
+        display_name = display_name_html,
+        username_html = username_html,
+        intent_html = intent_html,
+        contact_html = contact_html,
+        arrow = icon("chevron"),
+    )
+}
+
 pub(crate) fn section_head(title: &str, caption: &str, margin_top: Option<u32>) -> String {
     let style = match margin_top {
         Some(px) => format!(r#" style="margin-top:{px}px;""#),
