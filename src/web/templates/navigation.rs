@@ -1,4 +1,6 @@
-use super::common::{base_style, bottom_nav, escape_html, icon, section_head, simple_hero, topbar};
+use super::common::{
+    base_style, bottom_nav, escape_html, icon, search_hero, section_head, simple_hero, topbar,
+};
 use std::collections::BTreeMap;
 
 pub fn world() -> BTreeMap<&'static str, BTreeMap<&'static str, Vec<&'static str>>> {
@@ -67,28 +69,7 @@ pub fn render_continents() -> String {
 
 {topbar}
 
-<section class="hero">
-    <div class="eyebrow">
-        <span class="eyebrow-dot"></span>
-        ResursMap
-    </div>
-
-    <h1>Карта ресурсов</h1>
-
-    <p>
-        Люди, города, услуги и возможности —
-        всё необходимое рядом с вами.
-    </p>
-
-    <div class="search">
-        {search_icon}
-        <input
-            type="text"
-            placeholder="Найти город, услугу или ресурс..."
-            onkeydown="if(event.key==='Enter') window.location='/app/search?q='+encodeURIComponent(this.value)"
-        >
-    </div>
-</section>
+{hero}
 
 {section_head_countries}
 
@@ -126,7 +107,12 @@ pub fn render_continents() -> String {
 </html>"#,
         style = base_style(),
         topbar = topbar("RESOURCE NETWORK", "globe"),
-        search_icon = icon("search"),
+        hero = search_hero(
+            "ResursMap",
+            "Карта ресурсов",
+            "Люди, города, услуги и возможности — всё необходимое рядом с вами.",
+            "Найти город, услугу или ресурс...",
+        ),
         cards = cards,
         map_icon = icon("map"),
         heart_icon = icon("heart"),
