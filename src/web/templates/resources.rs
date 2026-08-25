@@ -1344,18 +1344,7 @@ pub fn render_my_resources(
 
 {topbar}
 
-<section class="hero">
-    {back_link}
-
-    <div class="eyebrow">
-        {user_icon}
-        Управление
-    </div>
-
-    <h1>Мои ресурсы</h1>
-
-    <p>Ваши объявления, компании, услуги и другие ресурсы.</p>
-</section>
+{hero}
 
 <section>
     {cards}
@@ -1366,8 +1355,13 @@ pub fn render_my_resources(
 </html>"#,
         style = base_style(),
         topbar = topbar("MY RESOURCES", "map"),
-        back_link = back_link("/app/me", "Профиль", "arrow-left"),
-        user_icon = icon("user"),
+        hero = back_hero(
+            &back_link("/app/me", "Профиль", "arrow-left",),
+            "user",
+            "Управление",
+            "Мои ресурсы",
+            "Ваши объявления, компании, услуги и другие ресурсы.",
+        ),
         cards = cards,
     )
 }
