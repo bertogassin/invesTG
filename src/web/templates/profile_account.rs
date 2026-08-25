@@ -1274,6 +1274,18 @@ pub fn render_public_user_profile(
     chat_user_id: Option<i64>,
     resources: Vec<(i64, String, String, String, f64, i64, i64, i64)>,
 ) -> String {
+    let hero_full_name = format!("{} {}", first_name.trim(), last_name.trim(),)
+        .trim()
+        .to_string();
+
+    let hero_display_name = if !hero_full_name.is_empty() {
+        hero_full_name
+    } else if !username.trim().is_empty() {
+        format!("@{}", username.trim())
+    } else {
+        "Участник ResursMap".to_string()
+    };
+
     let safe_username = escape_html(username);
     let safe_first_name = escape_html(first_name);
     let safe_last_name = escape_html(last_name);
@@ -1694,22 +1706,7 @@ pub fn render_public_user_profile(
 {topbar}
 
 
-<section class="hero">
-
-    {back_link}
-
-    <div class="eyebrow">
-        {user_icon}
-        Участник ResursMap
-    </div>
-
-    <h1>{display_name}</h1>
-
-    <p>
-        Публичный профиль участника сообщества.
-    </p>
-
-</section>
+{hero}
 
 
 <section class="card"
@@ -1956,8 +1953,13 @@ pub fn render_public_user_profile(
 </html>"#,
         style = base_style(),
         topbar = topbar("MEMBER", "user"),
-        back_link = back_link("javascript:history.back()", "Назад", "arrow-left"),
-        user_icon = icon("user"),
+        hero = back_hero(
+            &back_link("javascript:history.back()", "Назад", "arrow-left",),
+            "user",
+            "Участник ResursMap",
+            &hero_display_name,
+            "Публичный профиль участника сообщества.",
+        ),
         profile_icon = icon("user"),
         display_name = display_name,
         resource_count = resource_count,
