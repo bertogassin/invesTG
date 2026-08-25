@@ -1382,8 +1382,6 @@ pub fn render_edit_resource(
     let safe_description = escape_html(description);
     let safe_contact = escape_html(contact);
     let safe_address = escape_html(address);
-    let safe_category = escape_html(category);
-
     format!(
         r##"<!DOCTYPE html>
 <html lang="ru">
@@ -1400,17 +1398,7 @@ pub fn render_edit_resource(
 
 {topbar}
 
-<section class="hero">
-    {back_link}
-
-    <div class="eyebrow">
-        {edit_icon}
-        Редактирование
-    </div>
-
-    <h1>Редактировать ресурс</h1>
-    <p>Категория: <strong>{category}</strong></p>
-</section>
+{hero}
 
 <form method="post"
       action="/app/resource/{id}/edit"
@@ -1479,18 +1467,22 @@ pub fn render_edit_resource(
 </html>"##,
         style = base_style(),
         topbar = topbar("EDIT RESOURCE", "map"),
-        back_link = back_link(
-            &format!("/app/resource/{}", id),
-            "Назад к ресурсу",
-            "arrow-left"
+        hero = back_hero(
+            &back_link(
+                &format!("/app/resource/{}", id),
+                "Назад к ресурсу",
+                "arrow-left",
+            ),
+            "user",
+            "Редактирование",
+            "Редактировать ресурс",
+            &format!("Категория: {}", category),
         ),
-        edit_icon = icon("user"),
         id = id,
         title = safe_title,
         description = safe_description,
         contact = safe_contact,
         address = safe_address,
-        category = safe_category,
     )
 }
 
