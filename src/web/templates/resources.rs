@@ -1,5 +1,5 @@
 use super::common::escape_html;
-use super::common::{back_link, base_style, bottom_nav, icon, section_head, topbar};
+use super::common::{back_hero, back_link, base_style, bottom_nav, icon, section_head, topbar};
 
 pub fn render_category(
     ci: usize,
@@ -160,22 +160,7 @@ pub fn render_category(
 
 {topbar}
 
-<section class="hero">
-
-    {back_link}
-
-    <div class="eyebrow">
-        {category_icon}
-        Категория
-    </div>
-
-    <h1>{category}</h1>
-
-    <p>
-        Ресурсы города в выбранной категории.
-    </p>
-
-</section>
+{hero}
 
 {section_head_resources}
 
@@ -219,8 +204,13 @@ pub fn render_category(
 </html>"#,
         style = base_style(),
         topbar = topbar("RESOURCE NETWORK", "globe"),
-        back_link = back_link(&city_url, "Вернуться к городу", "chevron"),
-        category_icon = icon("map"),
+        hero = back_hero(
+            &back_link(&city_url, "Вернуться к городу", "chevron",),
+            "map",
+            "Категория",
+            category,
+            "Ресурсы города в выбранной категории.",
+        ),
         city_icon = icon("map"),
         bottom_nav = bottom_nav("map"),
         category = safe_category,
