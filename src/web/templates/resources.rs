@@ -245,7 +245,6 @@ pub fn render_resource_profile(
     let safe_description = escape_html(description);
     let safe_contact = escape_html(contact);
     let safe_address = escape_html(address);
-    let safe_category = escape_html(category);
 
     let premium_badge = if premium != 0 {
         r#"<span style="
@@ -277,6 +276,28 @@ pub fn render_resource_profile(
     } else {
         ""
     };
+
+    let hero_description = format!(
+        r#"<span style="
+            display:flex;
+            align-items:center;
+            gap:9px;
+            flex-wrap:wrap;
+            margin-bottom:10px;
+        ">
+            {premium_badge}
+            {verified_badge}
+        </span>
+
+        <span id="rating-summary"
+              style="display:block;">
+            ⭐ <strong>{rating:.1}</strong> · {votes} голосов
+        </span>"#,
+        premium_badge = premium_badge,
+        verified_badge = verified_badge,
+        rating = rating,
+        votes = votes,
+    );
 
     let premium_style = if premium != 0 {
         "border:1px solid rgba(214,183,122,.55);background:linear-gradient(145deg,#fff,#faf6ee);box-shadow:0 12px 38px rgba(214,183,122,.14);"
@@ -399,33 +420,10 @@ pub fn render_resource_profile(
 
 {topbar}
 
-<section class="hero">
+{hero}
 
-    {back_link}
-
-    <div class="eyebrow">
-        {category_icon}
-        {category}
-    </div>
-
-    <div style="
-        margin-top:14px;
-        display:flex;
-        align-items:center;
-        gap:9px;
-        flex-wrap:wrap;
-    ">
-        {premium_badge}
-        {verified_badge}
-    </div>
-
-    <h1 style="margin-top:14px;">{title}</h1>
-
-    <p id="rating-summary">
-        ⭐ <strong>{rating:.1}</strong> · {votes} голосов
-    </p>
-
-    <button
+<section>
+<button
         id="favorite-button"
         type="button"
         style="
@@ -585,7 +583,6 @@ pub fn render_resource_profile(
             color:var(--muted);
         "></div>
     </div>
-
 </section>
 
 <section
@@ -1030,20 +1027,20 @@ pub fn render_resource_profile(
 </html>"##,
         style = base_style(),
         topbar = topbar("RESOURCE NETWORK", "map"),
-        back_link = back_link("/app", "Вернуться к карте", "arrow-left"),
-        category_icon = icon("map-pin"),
-        category = safe_category,
+        hero = back_hero(
+            &back_link("/app", "Вернуться к карте", "arrow-left",),
+            "map-pin",
+            category,
+            title,
+            &hero_description,
+        ),
         title = safe_title,
         description = safe_description,
         owner_profile_html = owner_profile_html,
-        rating = rating,
-        votes = votes,
         address = safe_address,
         contact = safe_contact,
         contact_href = safe_contact_href,
         map_href = safe_map_href,
-        premium_badge = premium_badge,
-        verified_badge = verified_badge,
         premium_style = premium_style,
         id = id,
     )
