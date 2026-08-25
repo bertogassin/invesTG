@@ -1,4 +1,6 @@
-use super::common::{back_link, base_style, bottom_nav, escape_html, icon, section_head, topbar};
+use super::common::{
+    back_hero, back_link, base_style, bottom_nav, escape_html, icon, section_head, topbar,
+};
 
 pub fn render_contact_requests(
     requests: Vec<(i64, i64, String, String, String, String, String, i64, i64)>,
@@ -353,27 +355,7 @@ pub fn render_contact_requests(
 {topbar}
 
 
-<section class="hero">
-
-    {back_link}
-
-
-    <div class="eyebrow">
-        {user_icon}
-        Связи
-    </div>
-
-    <h1>
-        Запросы на связь
-    </h1>
-
-    <p>
-        Здесь вы решаете,
-        кто сможет начать общение с вами
-        внутри ResursMap.
-    </p>
-
-</section>
+{hero}
 
 
 <div class="card"
@@ -424,8 +406,13 @@ pub fn render_contact_requests(
 </html>"#,
         style = base_style(),
         topbar = topbar("CONTACT REQUESTS", "user"),
-        back_link = back_link("/app/me", "Профиль", "arrow-left"),
-        user_icon = icon("user"),
+        hero = back_hero(
+            &back_link("/app/me", "Профиль", "arrow-left",),
+            "user",
+            "Связи",
+            "Запросы на связь",
+            "Здесь вы решаете, кто сможет начать общение с вами внутри ResursMap.",
+        ),
         pending_count = pending_count,
         cards = cards,
         bottom_nav = bottom_nav("profile"),

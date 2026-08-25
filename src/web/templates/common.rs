@@ -968,3 +968,31 @@ pub(crate) fn simple_hero(
         description = description_html,
     )
 }
+
+pub(crate) fn back_hero(
+    back_html: &str,
+    icon_name: &str,
+    eyebrow: &str,
+    title: &str,
+    description_html: &str,
+) -> String {
+    format!(
+        r#"<section class="hero">
+    {back}
+
+    <div class="eyebrow">
+        {icon}
+        {eyebrow}
+    </div>
+
+    <h1>{title}</h1>
+
+    <p>{description}</p>
+</section>"#,
+        back = back_html,
+        icon = icon(icon_name),
+        eyebrow = escape_html(eyebrow),
+        title = escape_html(title),
+        description = description_html,
+    )
+}
