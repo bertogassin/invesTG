@@ -2186,20 +2186,7 @@ pub fn render_favorites(
 
 {topbar}
 
-<section class="hero">
-
-    {back_link}
-
-    <div class="eyebrow">
-        {heart}
-        Избранное
-    </div>
-
-    <h1>Сохранённые ресурсы</h1>
-
-    <p>Всё, что вы отметили сердцем.</p>
-
-</section>
+{hero}
 
 <section>
     {cards}
@@ -2213,8 +2200,13 @@ pub fn render_favorites(
 </html>"#,
         style = base_style(),
         topbar = topbar("FAVORITES", "heart"),
-        back_link = back_link("/app/me", "Профиль", "arrow-left"),
-        heart = icon("heart"),
+        hero = back_hero(
+            &back_link("/app/me", "Профиль", "arrow-left",),
+            "heart",
+            "Избранное",
+            "Сохранённые ресурсы",
+            "Всё, что вы отметили сердцем.",
+        ),
         cards = cards,
         bottom_nav = bottom_nav("profile"),
     )
