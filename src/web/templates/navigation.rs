@@ -392,31 +392,11 @@ pub fn render_search(
                 if country_match {
                     location_count += 1;
 
-                    location_results.push_str(&format!(
-                        r#"
-<a href="/app/{ci}/{si}"
-   class="card"
-   style="
-       text-decoration:none;
-       color:inherit;
-       margin-bottom:12px;
-   ">
-    <div class="card-icon">{icon}</div>
-
-    <div class="card-content">
-        <div class="card-title">{country}</div>
-        <div class="card-meta">{continent} · страна</div>
-    </div>
-
-    <div class="card-arrow">{arrow}</div>
-</a>
-"#,
-                        ci = ci,
-                        si = si,
-                        icon = icon("building"),
-                        country = country,
-                        continent = continent,
-                        arrow = icon("chevron"),
+                    location_results.push_str(&navigation_card(
+                        &format!("/app/{}/{}", ci, si),
+                        "building",
+                        country,
+                        &format!("{} · страна", continent),
                     ));
                 }
 
@@ -424,32 +404,11 @@ pub fn render_search(
                     if city.to_lowercase().contains(&query_lower) {
                         location_count += 1;
 
-                        location_results.push_str(&format!(
-                            r#"
-<a href="/app/{ci}/{si}/{zi}"
-   class="card"
-   style="
-       text-decoration:none;
-       color:inherit;
-       margin-bottom:12px;
-   ">
-    <div class="card-icon">{icon}</div>
-
-    <div class="card-content">
-        <div class="card-title">{city}</div>
-        <div class="card-meta">{country} · город</div>
-    </div>
-
-    <div class="card-arrow">{arrow}</div>
-</a>
-"#,
-                            ci = ci,
-                            si = si,
-                            zi = zi,
-                            icon = icon("map-pin"),
-                            city = city,
-                            country = country,
-                            arrow = icon("chevron"),
+                        location_results.push_str(&navigation_card(
+                            &format!("/app/{}/{}/{}", ci, si, zi),
+                            "map-pin",
+                            city,
+                            &format!("{} · город", country),
                         ));
                     }
                 }
