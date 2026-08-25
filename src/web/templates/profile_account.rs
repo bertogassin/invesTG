@@ -1,5 +1,6 @@
 use super::common::{
-    back_link, base_style, bottom_nav, escape_html, icon, section_head, simple_hero, topbar,
+    back_hero, back_link, base_style, bottom_nav, escape_html, icon, section_head, simple_hero,
+    topbar,
 };
 
 pub fn render_me(
@@ -1229,28 +1230,7 @@ pub fn render_notifications(
 {topbar}
 
 
-<section class="hero">
-
-    {back_link}
-
-
-    <div class="eyebrow">
-        🔔
-        Уведомления
-    </div>
-
-
-    <h1>
-        Центр уведомлений
-    </h1>
-
-
-    <p>
-        Статусы модерации и важные изменения
-        ваших ресурсов.
-    </p>
-
-</section>
+{hero}
 
 
 <section>
@@ -1268,7 +1248,13 @@ pub fn render_notifications(
 </html>"#,
         style = base_style(),
         topbar = topbar("NOTIFICATIONS", "user"),
-        back_link = back_link("/app/me", "Профиль", "arrow-left"),
+        hero = back_hero(
+            &back_link("/app/me", "Профиль", "arrow-left",),
+            "user",
+            "Уведомления",
+            "Центр уведомлений",
+            "Статусы модерации и важные изменения ваших ресурсов.",
+        ),
         cards = cards,
         bottom_nav = bottom_nav("profile"),
     )
