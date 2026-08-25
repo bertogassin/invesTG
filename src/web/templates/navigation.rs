@@ -682,21 +682,14 @@ pub fn render_search(
 
         format!(
             r#"
-<div class="section-head"
-     style="margin-top:24px;">
-    <div>
-        <h2 class="section-title">Участники</h2>
-        <p class="section-caption">
-            Найдено: {people_count}
-        </p>
-    </div>
-</div>
+{people_head}
 
 <section>
     {people_cards}
 </section>
 "#,
-            people_count = people_count,
+            people_head =
+                section_head("Участники", &format!("Найдено: {}", people_count), Some(24),),
             people_cards = people_cards,
         )
     };
@@ -890,21 +883,14 @@ pub fn render_search(
     } else {
         format!(
             r#"
-<div class="section-head"
-     style="margin-top:24px;">
-    <div>
-        <h2 class="section-title">Места</h2>
-        <p class="section-caption">
-            Найдено: {location_count}
-        </p>
-    </div>
-</div>
+{location_head}
 
 <section>
     {location_results}
 </section>
 "#,
-            location_count = location_count,
+            location_head =
+                section_head("Места", &format!("Найдено: {}", location_count), Some(24),),
             location_results = location_results,
         )
     };
@@ -912,19 +898,10 @@ pub fn render_search(
     let result_header = if q.trim().is_empty() || resources.is_empty() {
         String::new()
     } else {
-        format!(
-            r#"
-<div class="section-head"
-     style="margin-top:24px;">
-    <div>
-        <h2 class="section-title">Результаты</h2>
-        <p class="section-caption">
-            Найдено: {}
-        </p>
-    </div>
-</div>
-"#,
-            result_count
+        section_head(
+            "Результаты",
+            &format!("Найдено: {}", result_count),
+            Some(24),
         )
     };
 
