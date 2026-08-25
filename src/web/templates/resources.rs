@@ -1508,22 +1508,7 @@ pub fn render_add_resource(ci: usize, si: usize, zi: usize, category: &str) -> S
 
 {}
 
-<section class="hero">
-
-    {back_link}
-
-    <div class="eyebrow">
-        {plus_icon}
-        Добавление ресурса
-    </div>
-
-    <h1>Добавить ресурс</h1>
-
-    <p>
-        Категория: <strong>{}</strong>
-    </p>
-
-</section>
+{hero}
 
 <form method="post"
       action="/app/{}/{}/{}/cat/{}/add"
@@ -1627,12 +1612,16 @@ pub fn render_add_resource(ci: usize, si: usize, zi: usize, category: &str) -> S
 </html>"#,
         base_style(),
         topbar("ADD RESOURCE", "globe"),
-        category,
         ci,
         si,
         zi,
         category,
-        back_link = back_link(&back_url, "Вернуться", "chevron"),
-        plus_icon = icon("plus"),
+        hero = back_hero(
+            &back_link(&back_url, "Вернуться", "chevron",),
+            "plus",
+            "Добавление ресурса",
+            "Добавить ресурс",
+            &format!("Категория: {}", category),
+        ),
     )
 }
