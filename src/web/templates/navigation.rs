@@ -1,4 +1,4 @@
-use super::common::{base_style, bottom_nav, icon, section_head, topbar};
+use super::common::{base_style, bottom_nav, escape_html, icon, section_head, simple_hero, topbar};
 use std::collections::BTreeMap;
 
 pub fn world() -> BTreeMap<&'static str, BTreeMap<&'static str, Vec<&'static str>>> {
@@ -185,16 +185,7 @@ pub fn render_continent(ci: usize) -> String {
 
 {}
 
-<section class="hero">
-    <div class="eyebrow">
-        {}
-        Регион
-    </div>
-
-    <h1>{name}</h1>
-
-    <p>Выберите страну, чтобы открыть доступные города и ресурсы.</p>
-</section>
+{}
 
 {section_head_countries}
 
@@ -210,7 +201,12 @@ pub fn render_continent(ci: usize) -> String {
 </html>"#,
             base_style(),
             topbar("RESOURCE NETWORK", "globe"),
-            icon("map"),
+            simple_hero(
+                "map",
+                "Регион",
+                name,
+                "Выберите страну, чтобы открыть доступные города и ресурсы.",
+            ),
             bottom_nav = bottom_nav("map"),
         );
     }
@@ -269,16 +265,7 @@ pub fn render_country(ci: usize, si: usize) -> String {
 
 {}
 
-<section class="hero">
-    <div class="eyebrow">
-        {}
-        {cname}
-    </div>
-
-    <h1>{country}</h1>
-
-    <p>Выберите город и откройте его карту ресурсов.</p>
-</section>
+{}
 
 {section_head_cities}
 
@@ -294,7 +281,12 @@ pub fn render_country(ci: usize, si: usize) -> String {
 </html>"#,
                 base_style(),
                 topbar("RESOURCE NETWORK", "globe"),
-                icon("map-pin"),
+                simple_hero(
+                    "map-pin",
+                    cname,
+                    country,
+                    "Выберите город и откройте его карту ресурсов.",
+                ),
                 bottom_nav = bottom_nav("map"),
             );
         }
@@ -331,22 +323,7 @@ pub fn render_city(ci: usize, si: usize, zi: usize) -> String {
 
 {}
 
-<section class="hero">
-
-    <div class="eyebrow">
-        {}
-        {country}
-    </div>
-
-    <h1>{city}</h1>
-
-    <p>
-        {cname} · {country}
-        <br>
-        Карта ресурсов города.
-    </p>
-
-</section>
+{}
 
 {section_head_sections}
 
@@ -398,7 +375,16 @@ pub fn render_city(ci: usize, si: usize, zi: usize) -> String {
 </html>"#,
                     base_style(),
                     topbar("RESOURCE NETWORK", "globe"),
-                    icon("map-pin"),
+                    simple_hero(
+                        "map-pin",
+                        country,
+                        city,
+                        &format!(
+                            "{} · {}<br>Карта ресурсов города.",
+                            escape_html(cname),
+                            escape_html(country),
+                        ),
+                    ),
                     icon("briefcase"),
                     icon("chevron"),
                     icon("building"),

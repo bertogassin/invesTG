@@ -944,3 +944,27 @@ pub(crate) fn section_head(title: &str, caption: &str, margin_top: Option<u32>) 
         caption = escape_html(caption),
     )
 }
+
+pub(crate) fn simple_hero(
+    icon_name: &str,
+    eyebrow: &str,
+    title: &str,
+    description_html: &str,
+) -> String {
+    format!(
+        r#"<section class="hero">
+    <div class="eyebrow">
+        {icon}
+        {eyebrow}
+    </div>
+
+    <h1>{title}</h1>
+
+    <p>{description}</p>
+</section>"#,
+        icon = icon(icon_name),
+        eyebrow = escape_html(eyebrow),
+        title = escape_html(title),
+        description = description_html,
+    )
+}

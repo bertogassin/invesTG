@@ -1,4 +1,6 @@
-use super::common::{back_link, base_style, bottom_nav, escape_html, icon, section_head, topbar};
+use super::common::{
+    back_link, base_style, bottom_nav, escape_html, icon, section_head, simple_hero, topbar,
+};
 
 pub fn render_me(
     authenticated: bool,
@@ -328,21 +330,7 @@ pub fn render_me(
 {topbar}
 
 
-<section class="hero">
-
-    <div class="eyebrow">
-        {profile_icon}
-        Личный кабинет
-    </div>
-
-    <h1>Мой профиль</h1>
-
-    <p>
-        Ваши ресурсы, сохранённые места
-        и активность в ResursMap.
-    </p>
-
-</section>
+{simple_hero}
 
 
 {account_header}
@@ -969,7 +957,12 @@ pub fn render_me(
 </html>"#,
         style = base_style(),
         topbar = topbar("PROFILE", "user"),
-        profile_icon = icon("user"),
+        simple_hero = simple_hero(
+            "user",
+            "Личный кабинет",
+            "Мой профиль",
+            "Ваши ресурсы, сохранённые места и активность в ResursMap.",
+        ),
         account_header = account_header,
         statistics = statistics,
         settings_icon = icon("user"),
