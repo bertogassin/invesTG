@@ -52,12 +52,50 @@ pub fn render_continents() -> String {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="manifest" href="/static/manifest.webmanifest">
+<meta name="theme-color" content="rgb(17,17,17)">
+<link rel="apple-touch-icon" href="/static/app-icon.svg">
 <title>ResursMap</title>
 <style>{style}</style>
 </head>
 
 <body>
 <main class="page">
+<section class="card"
+         style="
+             display:block;
+             margin-bottom:16px;
+             padding:18px;
+             border:1px solid rgba(214,183,122,.35);
+         ">
+    <div class="card-title">
+        ResursMap на телефоне
+    </div>
+
+    <div id="resursmap-install-hint"
+         class="card-meta"
+         style="margin-top:6px;line-height:1.45;">
+        Установите ResursMap как приложение на главный экран.
+    </div>
+
+    <button id="resursmap-install-app"
+            type="button"
+            class="ui-button"
+            style="
+                width:100%;
+                min-height:48px;
+                margin-top:14px;
+                border-radius:14px;
+                border:1px solid rgba(214,183,122,.45);
+                background:rgba(214,183,122,.12);
+                color:var(--text);
+                font-weight:850;
+                cursor:pointer;
+            ">
+        ↓ Установить ResursMap
+    </button>
+</section>
+
 
 {topbar}
 
@@ -95,6 +133,7 @@ pub fn render_continents() -> String {
 
 {bottom_nav}
 
+<script src="/static/pwa-install.js" defer></script>
 </body>
 </html>"#,
         style = base_style(),
