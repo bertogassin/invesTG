@@ -416,7 +416,7 @@ pub fn render_me(
                 height:20px;
                 flex:0 0 auto;
             "
-        >
+         class="ui-input">
 
         <div>
             <div style="
@@ -467,7 +467,7 @@ pub fn render_me(
                 font:inherit;
                 line-height:1.5;
             "
-        >{safe_intent_text}</textarea>
+         class="ui-textarea">{safe_intent_text}</textarea>
 
     </label>
 
@@ -498,7 +498,7 @@ pub fn render_me(
                 color:var(--text);
                 font:inherit;
             "
-        >
+         class="ui-select">
             <option value="0">
                 Без срока
             </option>
@@ -542,7 +542,7 @@ pub fn render_me(
                 #b88932
             );
         "
-    >
+     class="ui-button">
         Сохранить статус
     </button>
 
@@ -554,7 +554,7 @@ pub fn render_me(
              font-size:12px;
              color:var(--muted);
              line-height:1.4;
-         ">
+         " class="ui-status">
     </div>
 
 </section>
@@ -1384,7 +1384,7 @@ pub fn render_public_user_profile(
             color:var(--text);
             font-weight:850;
             cursor:pointer;
-        ">
+        " class="ui-button">
         Связаться через ResursMap
     </button>
 
@@ -1410,7 +1410,7 @@ pub fn render_public_user_profile(
                 color:var(--text);
                 font:inherit;
                 line-height:1.45;
-            "></textarea>
+            " class="ui-textarea"></textarea>
 
         <div style="
             display:grid;
@@ -1430,7 +1430,7 @@ pub fn render_public_user_profile(
                     color:var(--text);
                     font-weight:800;
                     cursor:pointer;
-                ">
+                " class="ui-button">
                 Отправить
             </button>
 
@@ -1445,7 +1445,7 @@ pub fn render_public_user_profile(
                     color:var(--text);
                     font-weight:750;
                     cursor:pointer;
-                ">
+                " class="ui-button">
                 Отмена
             </button>
 
@@ -1458,7 +1458,7 @@ pub fn render_public_user_profile(
                 font-size:12px;
                 color:var(--muted);
                 line-height:1.4;
-            ">
+            " class="ui-status">
         </div>
 
     </div>

@@ -809,6 +809,83 @@ body::before {
     color: rgba(255,255,255,.48);
 }
 
+
+/* RESURSMAP_STAGE9_UI_SYSTEM */
+
+.ui-form {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.ui-button {
+    font-family: inherit;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    transition:
+        transform .14s ease,
+        opacity .14s ease,
+        border-color .14s ease,
+        background-color .14s ease;
+}
+
+.ui-button:active {
+    transform: scale(.985);
+}
+
+.ui-button:disabled {
+    cursor: not-allowed;
+    opacity: .58;
+}
+
+.ui-input,
+.ui-textarea,
+.ui-select {
+    font-family: inherit;
+    box-sizing: border-box;
+    max-width: 100%;
+}
+
+.ui-input:not([type="checkbox"]):not([type="radio"]),
+.ui-textarea,
+.ui-select {
+    width: 100%;
+}
+
+.ui-input:not([type="checkbox"]):not([type="radio"]),
+.ui-select {
+    min-height: 46px;
+}
+
+.ui-textarea {
+    min-height: 96px;
+}
+
+.ui-input:focus-visible,
+.ui-textarea:focus-visible,
+.ui-select:focus-visible,
+.ui-button:focus-visible {
+    outline: 2px solid rgba(214,183,122,.72);
+    outline-offset: 2px;
+}
+
+.ui-badge {
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+.ui-status {
+    min-height: 18px;
+    overflow-wrap: anywhere;
+}
+
+@media (hover:hover) {
+    .ui-button:hover {
+        opacity: .94;
+    }
+}
+
 @media (max-width: 620px) {
     .page {
         width: min(100% - 20px, 900px);

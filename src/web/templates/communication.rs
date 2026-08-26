@@ -143,7 +143,7 @@ pub fn render_contact_requests(
 ">
 
     <form method="post"
-          action="/app/contact-request/{id}/accept">
+          action="/app/contact-request/{id}/accept" class="ui-form">
 
         <button type="submit"
                 style="
@@ -155,14 +155,14 @@ pub fn render_contact_requests(
                     color:inherit;
                     font-weight:850;
                     cursor:pointer;
-                ">
+                " class="ui-button">
             ✓ Принять
         </button>
 
     </form>
 
     <form method="post"
-          action="/app/contact-request/{id}/reject">
+          action="/app/contact-request/{id}/reject" class="ui-form">
 
         <button type="submit"
                 style="
@@ -174,7 +174,7 @@ pub fn render_contact_requests(
                     color:inherit;
                     font-weight:850;
                     cursor:pointer;
-                ">
+                " class="ui-button">
             ✕ Отклонить
         </button>
 
@@ -935,7 +935,7 @@ pub fn render_chat(
           background:rgba(10,12,15,.95);
           border:1px solid rgba(255,255,255,.08);
           backdrop-filter:blur(14px);
-      ">
+      " class="ui-form">
 
     <textarea
         name="message"
@@ -958,7 +958,7 @@ pub fn render_chat(
             line-height:1.4;
             outline:none;
         "
-    ></textarea>
+     class="ui-textarea"></textarea>
 
     <button type="submit"
             style="
@@ -972,7 +972,7 @@ pub fn render_chat(
                 font-weight:900;
                 cursor:pointer;
                 flex:0 0 auto;
-            ">
+            " class="ui-button">
         ➤
     </button>
 

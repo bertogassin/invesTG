@@ -438,7 +438,7 @@ pub fn render_resource_profile(
             color:var(--text);
             font-weight:800;
             cursor:pointer;
-        ">
+        " class="ui-button">
         ♡ В избранное
     </button>
 
@@ -448,7 +448,7 @@ pub fn render_resource_profile(
             margin-top:7px;
             font-size:12px;
             color:var(--muted);
-        ">
+        " class="ui-status">
     </div>
 
     <button
@@ -464,7 +464,7 @@ pub fn render_resource_profile(
             color:var(--text);
             font-weight:700;
             cursor:pointer;
-        ">
+        " class="ui-button">
         ⚑ Пожаловаться
     </button>
 
@@ -502,7 +502,7 @@ pub fn render_resource_profile(
                 color:var(--text);
                 resize:vertical;
                 font-size:14px;
-            "></textarea>
+            " class="ui-textarea"></textarea>
 
         <div style="
             display:flex;
@@ -523,7 +523,7 @@ pub fn render_resource_profile(
                     color:var(--text);
                     font-weight:800;
                     cursor:pointer;
-                ">
+                " class="ui-button">
                 Отправить жалобу
             </button>
 
@@ -539,7 +539,7 @@ pub fn render_resource_profile(
                     color:var(--text);
                     font-weight:700;
                     cursor:pointer;
-                ">
+                " class="ui-button">
                 Отмена
             </button>
 
@@ -551,7 +551,7 @@ pub fn render_resource_profile(
                 margin-top:9px;
                 font-size:12px;
                 color:var(--muted);
-            ">
+            " class="ui-status">
         </div>
 
     </div>
@@ -572,18 +572,18 @@ pub fn render_resource_profile(
             gap:8px;
             align-items:center;
         ">
-            <button type="button" data-score="1" style="font-size:28px;background:none;border:0;cursor:pointer;padding:2px;">☆</button>
-            <button type="button" data-score="2" style="font-size:28px;background:none;border:0;cursor:pointer;padding:2px;">☆</button>
-            <button type="button" data-score="3" style="font-size:28px;background:none;border:0;cursor:pointer;padding:2px;">☆</button>
-            <button type="button" data-score="4" style="font-size:28px;background:none;border:0;cursor:pointer;padding:2px;">☆</button>
-            <button type="button" data-score="5" style="font-size:28px;background:none;border:0;cursor:pointer;padding:2px;">☆</button>
+            <button type="button" data-score="1" style="font-size:28px;background:none;border:0;cursor:pointer;padding:2px;" class="ui-button">☆</button>
+            <button type="button" data-score="2" style="font-size:28px;background:none;border:0;cursor:pointer;padding:2px;" class="ui-button">☆</button>
+            <button type="button" data-score="3" style="font-size:28px;background:none;border:0;cursor:pointer;padding:2px;" class="ui-button">☆</button>
+            <button type="button" data-score="4" style="font-size:28px;background:none;border:0;cursor:pointer;padding:2px;" class="ui-button">☆</button>
+            <button type="button" data-score="5" style="font-size:28px;background:none;border:0;cursor:pointer;padding:2px;" class="ui-button">☆</button>
         </div>
 
         <div id="vote-status" style="
             margin-top:7px;
             font-size:12px;
             color:var(--muted);
-        "></div>
+        " class="ui-status"></div>
     </div>
 </section>
 
@@ -1390,7 +1390,7 @@ pub fn render_edit_resource(
 
 <form method="post"
       action="/app/resource/{id}/edit"
-      style="display:flex;flex-direction:column;gap:16px;">
+      style="display:flex;flex-direction:column;gap:16px;" class="ui-form">
 
     <label>
         <div style="margin-bottom:7px;font-weight:600;">Название</div>
@@ -1400,7 +1400,7 @@ pub fn render_edit_resource(
             maxlength="120"
             value="{title}"
             style="width:100%;padding:15px;border-radius:14px;
-                   border:1px solid #ddd;font-size:16px;box-sizing:border-box;">
+                   border:1px solid #ddd;font-size:16px;box-sizing:border-box;" class="ui-input">
     </label>
 
     <label>
@@ -1412,7 +1412,7 @@ pub fn render_edit_resource(
             rows="6"
             style="width:100%;padding:15px;border-radius:14px;
                    border:1px solid #ddd;font-size:16px;
-                   box-sizing:border-box;resize:vertical;">{description}</textarea>
+                   box-sizing:border-box;resize:vertical;" class="ui-textarea">{description}</textarea>
     </label>
 
     <label>
@@ -1422,7 +1422,7 @@ pub fn render_edit_resource(
             maxlength="120"
             value="{contact}"
             style="width:100%;padding:15px;border-radius:14px;
-                   border:1px solid #ddd;font-size:16px;box-sizing:border-box;">
+                   border:1px solid #ddd;font-size:16px;box-sizing:border-box;" class="ui-input">
     </label>
 
     <label>
@@ -1432,14 +1432,14 @@ pub fn render_edit_resource(
             maxlength="250"
             value="{address}"
             style="width:100%;padding:15px;border-radius:14px;
-                   border:1px solid #ddd;font-size:16px;box-sizing:border-box;">
+                   border:1px solid #ddd;font-size:16px;box-sizing:border-box;" class="ui-input">
     </label>
 
     <button type="submit"
             style="min-height:52px;border:0;border-radius:16px;
                    font-size:16px;font-weight:800;cursor:pointer;
                    background:linear-gradient(135deg,#d6b77a,#b88932);
-                   color:#111;">
+                   color:#111;" class="ui-button">
         Сохранить изменения
     </button>
 
@@ -1500,7 +1500,7 @@ pub fn render_add_resource(ci: usize, si: usize, zi: usize, category: &str) -> S
 
 <form method="post"
       action="/app/{}/{}/{}/cat/{}/add"
-      style="display:flex;flex-direction:column;gap:16px;">
+      style="display:flex;flex-direction:column;gap:16px;" class="ui-form">
 
     <input type="hidden" name="init_data" id="telegram-init-data" value="">
 
@@ -1517,7 +1517,7 @@ pub fn render_add_resource(ci: usize, si: usize, zi: usize, category: &str) -> S
             maxlength="120"
             placeholder="Например: Охранная компания"
             style="width:100%;padding:15px;border-radius:14px;
-                   border:1px solid #ddd;font-size:16px;box-sizing:border-box;">
+                   border:1px solid #ddd;font-size:16px;box-sizing:border-box;" class="ui-input">
     </label>
 
     <label>
@@ -1533,7 +1533,7 @@ pub fn render_add_resource(ci: usize, si: usize, zi: usize, category: &str) -> S
             placeholder="Расскажите о ресурсе..."
             style="width:100%;padding:15px;border-radius:14px;
                    border:1px solid #ddd;font-size:16px;
-                   box-sizing:border-box;resize:vertical;"></textarea>
+                   box-sizing:border-box;resize:vertical;" class="ui-textarea"></textarea>
     </label>
 
     <label>
@@ -1546,7 +1546,7 @@ pub fn render_add_resource(ci: usize, si: usize, zi: usize, category: &str) -> S
             maxlength="120"
             placeholder="+33... или @username"
             style="width:100%;padding:15px;border-radius:14px;
-                   border:1px solid #ddd;font-size:16px;box-sizing:border-box;">
+                   border:1px solid #ddd;font-size:16px;box-sizing:border-box;" class="ui-input">
     </label>
 
     <label>
@@ -1559,13 +1559,13 @@ pub fn render_add_resource(ci: usize, si: usize, zi: usize, category: &str) -> S
             maxlength="200"
             placeholder="Город, улица..."
             style="width:100%;padding:15px;border-radius:14px;
-                   border:1px solid #ddd;font-size:16px;box-sizing:border-box;">
+                   border:1px solid #ddd;font-size:16px;box-sizing:border-box;" class="ui-input">
     </label>
 
     <button
         type="submit"
         style="margin-top:8px;padding:16px;border:0;border-radius:16px;
-               font-size:17px;font-weight:700;cursor:pointer;">
+               font-size:17px;font-weight:700;cursor:pointer;" class="ui-button">
         ➕ Добавить ресурс
     </button>
 
