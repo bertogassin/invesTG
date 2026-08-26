@@ -57,6 +57,131 @@ pub fn render_continents() -> String {
 <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
 <title>ResursMap</title>
 <style>{style}</style>
+
+<style id="resursmap-home-layout-v1">
+    .rm-home-section {{
+        margin-top:18px;
+    }}
+
+    .rm-home-label {{
+        margin-bottom:10px;
+        font-size:11px;
+        font-weight:900;
+        letter-spacing:.08em;
+        text-transform:uppercase;
+        color:var(--muted);
+    }}
+
+    .rm-quick-grid {{
+        display:grid;
+        grid-template-columns:repeat(2,minmax(0,1fr));
+        gap:10px;
+    }}
+
+    .rm-quick-card {{
+        display:block;
+        padding:15px;
+        text-decoration:none;
+        min-width:0;
+    }}
+
+    .rm-quick-icon {{
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        width:34px;
+        height:34px;
+        margin-bottom:10px;
+        border-radius:11px;
+        background:rgba(214,183,122,.10);
+        border:1px solid rgba(214,183,122,.15);
+    }}
+
+    .rm-install-grid {{
+        display:grid;
+        grid-template-columns:1fr 1fr;
+        gap:10px;
+        margin-top:14px;
+    }}
+
+    .rm-install-button {{
+        min-height:54px;
+        padding:9px 10px;
+        border-radius:14px;
+        border:1px solid rgba(255,255,255,.12);
+        background:rgba(255,255,255,.035);
+        color:var(--text);
+        cursor:pointer;
+        font:inherit;
+        text-align:left;
+    }}
+
+    .rm-install-button strong {{
+        display:block;
+        font-size:14px;
+        line-height:1.15;
+    }}
+
+    .rm-install-button span {{
+        display:block;
+        margin-bottom:3px;
+        font-size:10px;
+        color:var(--muted);
+    }}
+
+    .rm-install-android {{
+        border-color:rgba(74,222,128,.28);
+    }}
+
+    .rm-flow {{
+        display:grid;
+        gap:10px;
+    }}
+
+    .rm-flow-item {{
+        padding:16px;
+    }}
+
+    .rm-flow-number {{
+        color:#d6b77a;
+        font-size:11px;
+        font-weight:900;
+        letter-spacing:.08em;
+    }}
+
+    @media (min-width: 860px) {{
+        main.page {{
+            max-width:1180px;
+        }}
+
+        .rm-desktop-two {{
+            display:grid;
+            grid-template-columns:minmax(0,1.45fr) minmax(300px,.75fr);
+            gap:14px;
+            align-items:start;
+        }}
+
+        .rm-quick-grid {{
+            grid-template-columns:repeat(3,minmax(0,1fr));
+        }}
+
+        .rm-flow {{
+            grid-template-columns:repeat(3,minmax(0,1fr));
+        }}
+    }}
+
+    @media (max-width: 420px) {{
+        .rm-install-grid {{
+            gap:8px;
+        }}
+
+        .rm-install-button {{
+            min-height:50px;
+            padding:8px;
+        }}
+    }}
+</style>
+
 </head>
 
 <body>
@@ -147,39 +272,43 @@ pub fn render_continents() -> String {
     </div>
 </div>
 
-<section class="card"
+
+<section id="resursmap-install-panel"
+         class="card"
          style="
-             display:block;
-             margin-bottom:16px;
-             padding:18px;
-             border:1px solid rgba(214,183,122,.35);
+            display:block;
+            padding:17px;
+            margin-bottom:16px;
          ">
+
     <div class="card-title">
-        ResursMap на телефоне
+        Приложение ResursMap
     </div>
 
     <div id="resursmap-install-hint"
          class="card-meta"
-         style="margin-top:6px;line-height:1.45;">
-        Установите ResursMap как приложение на главный экран.
+         style="margin-top:5px;line-height:1.45;">
+        Установите ResursMap на телефон.
     </div>
 
-    <button id="resursmap-install-app"
-            type="button"
-            class="ui-button"
-            style="
-                width:100%;
-                min-height:48px;
-                margin-top:14px;
-                border-radius:14px;
-                border:1px solid rgba(214,183,122,.45);
-                background:rgba(214,183,122,.12);
-                color:var(--text);
-                font-weight:850;
-                cursor:pointer;
-            ">
-        ↓ Установить ResursMap
-    </button>
+    <div class="rm-install-grid">
+
+        <button id="resursmap-install-android"
+                type="button"
+                class="rm-install-button rm-install-android">
+            <span>Android</span>
+            <strong>↓ Скачать</strong>
+        </button>
+
+        <button id="resursmap-install-ios"
+                type="button"
+                class="rm-install-button">
+            <span>iPhone</span>
+            <strong>＋ Установить</strong>
+        </button>
+
+    </div>
+
 </section>
 
 
@@ -214,6 +343,158 @@ pub fn render_continents() -> String {
         <span>Ваши данные, голоса и активность.</span>
     </div>
 </div>
+
+
+<section id="resursmap-app-home" class="rm-home-section">
+
+    <div class="rm-desktop-two">
+
+        <div>
+            <div class="rm-home-label">
+                Быстрый доступ
+            </div>
+
+            <div class="rm-quick-grid">
+
+                <a href="/app/search" class="card rm-quick-card">
+                    <div class="rm-quick-icon">⌕</div>
+                    <div class="card-title">Поиск</div>
+                    <div class="card-meta" style="margin-top:5px;">
+                        Люди, услуги и ресурсы
+                    </div>
+                </a>
+
+                <a href="/app/me" class="card rm-quick-card">
+                    <div class="rm-quick-icon">◎</div>
+                    <div class="card-title">Профиль</div>
+                    <div class="card-meta" style="margin-top:5px;">
+                        Аккаунт и настройки
+                    </div>
+                </a>
+
+                <a href="/app/my-resources" class="card rm-quick-card">
+                    <div class="rm-quick-icon">◆</div>
+                    <div class="card-title">Мои ресурсы</div>
+                    <div class="card-meta" style="margin-top:5px;">
+                        Ваши публикации
+                    </div>
+                </a>
+
+                <a href="/app/favorites" class="card rm-quick-card">
+                    <div class="rm-quick-icon">♡</div>
+                    <div class="card-title">Избранное</div>
+                    <div class="card-meta" style="margin-top:5px;">
+                        Сохранённые ресурсы
+                    </div>
+                </a>
+
+                <a href="/app/messages" class="card rm-quick-card">
+                    <div class="rm-quick-icon">✉</div>
+                    <div class="card-title">Сообщения</div>
+                    <div class="card-meta" style="margin-top:5px;">
+                        Личные диалоги
+                    </div>
+                </a>
+
+                <a href="/app/notifications" class="card rm-quick-card">
+                    <div class="rm-quick-icon">◉</div>
+                    <div class="card-title">Уведомления</div>
+                    <div class="card-meta" style="margin-top:5px;">
+                        Важные события
+                    </div>
+                </a>
+
+            </div>
+        </div>
+
+        <div>
+            <div class="rm-home-label">
+                Начать
+            </div>
+
+            <div class="card"
+                 style="
+                    display:block;
+                    padding:18px;
+                 ">
+
+                <div class="card-title"
+                     style="font-size:18px;line-height:1.3;">
+                    Всё нужное — в одном месте
+                </div>
+
+                <div class="card-meta"
+                     style="
+                        margin-top:8px;
+                        line-height:1.5;
+                     ">
+                    Найдите человека, специалиста, услугу,
+                    бизнес или другой ресурс через поиск и карту.
+                </div>
+
+                <a href="/app/search"
+                   class="ui-button"
+                   style="
+                      display:flex;
+                      align-items:center;
+                      justify-content:center;
+                      min-height:46px;
+                      margin-top:15px;
+                      border-radius:14px;
+                      text-decoration:none;
+                      font-weight:850;
+                   ">
+                    Открыть поиск
+                </a>
+
+            </div>
+        </div>
+
+    </div>
+
+    <div class="rm-home-section">
+
+        <div class="rm-home-label">
+            Как работает ResursMap
+        </div>
+
+        <div class="rm-flow">
+
+            <div class="card rm-flow-item">
+                <div class="rm-flow-number">01</div>
+                <div class="card-title" style="margin-top:7px;">
+                    Найдите
+                </div>
+                <div class="card-meta" style="margin-top:5px;">
+                    Используйте карту или поиск.
+                </div>
+            </div>
+
+            <div class="card rm-flow-item">
+                <div class="rm-flow-number">02</div>
+                <div class="card-title" style="margin-top:7px;">
+                    Изучите
+                </div>
+                <div class="card-meta" style="margin-top:5px;">
+                    Посмотрите профиль и детали ресурса.
+                </div>
+            </div>
+
+            <div class="card rm-flow-item">
+                <div class="rm-flow-number">03</div>
+                <div class="card-title" style="margin-top:7px;">
+                    Свяжитесь
+                </div>
+                <div class="card-meta" style="margin-top:5px;">
+                    Отправьте запрос и продолжите общение.
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+</section>
 
 </main>
 

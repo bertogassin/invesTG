@@ -1,77 +1,90 @@
 (() => {
   let deferredPrompt = null;
 
-  const button = document.getElementById("resursmap-install-app");
-  const hint = document.getElementById("resursmap-install-hint");
+  const ready = () => {
+    const androidButton =
+      document.getElementById("resursmap-install-android");
 
-  if (!button) return;
+    const iosButton =
+      document.getElementById("resursmap-install-ios");
 
-  const ua = navigator.userAgent || "";
-  const isIOS = /iphone|ipad|ipod/i.test(ua);
-  const isStandalone =
-    window.matchMedia("(display-mode: standalone)").matches ||
-    window.navigator.standalone === true;
+    const hint =
+      document.getElementById("resursmap-install-hint");
 
-  if (isStandalone) {
-    button.textContent = "✓ Приложение установлено";
-    button.disabled = true;
-    if (hint) hint.textContent = "ResursMap уже открыт как приложение.";
-    return;
-  }
+    const isIOS =
+      /iphone|ipad|ipod/i.test(navigator.userAgent);
 
-  window.addEventListener("beforeinstallprompt", (event) => {
-    event.preventDefault();
-    deferredPrompt = event;
-    button.hidden = false;
-    button.textContent = "↓ Установить ResursMap";
-  });
+    const isStandalone =
+      window.matchMedia("(display-mode: standalone)").matches ||
+      window.navigator.standalone === true;
 
-  button.addEventListener("click", async () => {
-    if (deferredPrompt) {
-      deferredPrompt.prompt();
-      await deferredPrompt.userChoice;
-      deferredPrompt = null;
-      return;
+    if (isStandalone) {
+      if (hint) {
+        hint.textContent = "ResursMap уже установлен на этом устройстве.";
+      }
+
+      if (androidButton) androidButton.disabled = true;
+      if (iosButton) iosButton.disabled = true;
     }
 
-    if (isIOS) {
-      alert(
-        "Чтобы установить ResursMap на iPhone:\n\n" +
-        "1. Нажмите кнопку «Поделиться» в Safari.\n" +
-        "2. Выберите «На экран Домой».\n" +
-        "3. Нажмите «Добавить»."
-      );
-      return;
+    window.addEventListener("beforeinstallprompt", (event) => {
+      event.preventDefault();
+      deferredPrompt = event;
+    });
+
+    if (androidButton) {
+      androidButton.addEventListener("click", async () => {
+        if (isStandalone) return;
+
+        if (deferredPrompt) {
+          deferredPrompt.prompt();
+          await deferredPrompt.userChoice;
+          deferredPrompt = null;
+          return;
+        }
+
+        alert(
+          "На Android откройте ResursMap в Chrome и выберите " +
+          "«Установить приложение» или «Добавить на главный экран»."
+        );
+      });
     }
 
-    alert(
-      "Откройте меню браузера и выберите «Установить приложение» " +
-      "или «Добавить на главный экран»."
-    );
-  });
+    if (iosButton) {
+      iosButton.addEventListener("click", () => {
+        if (isStandalone) return;
 
-  if (isIOS) {
-    button.hidden = false;
-    button.textContent = "↓ Установить на iPhone";
-    if (hint) {
-      hint.textContent = "Установка через Safari → Поделиться → На экран Домой.";
+        alert(
+          "На iPhone откройте ResursMap в Safari.\n\n" +
+          "1. Нажмите «Поделиться».\n" +
+          "2. Выберите «На экран Домой».\n" +
+          "3. Нажмите «Добавить»."
+        );
+      });
     }
+
+    if (isIOS && hint && !isStandalone) {
+      hint.textContent =
+        "Android — установка приложения. iPhone — через Safari.";
+    }
+
+    const splash = document.getElementById("resursmap-splash");
+
+    if (splash) {
+      window.setTimeout(() => {
+        splash.style.opacity = "0";
+        splash.style.visibility = "hidden";
+
+        window.setTimeout(() => {
+          splash.remove();
+        }, 500);
+      }, 900);
+    }
+  };
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", ready);
   } else {
-    button.hidden = false;
+    ready();
   }
 })();
-
-document.addEventListener("DOMContentLoaded", () => {
-  const splash = document.getElementById("resursmap-splash");
-
-  if (!splash) return;
-
-  window.setTimeout(() => {
-    splash.style.opacity = "0";
-    splash.style.visibility = "hidden";
-
-    window.setTimeout(() => {
-      splash.remove();
-    }, 500);
-  }, 900);
-});
