@@ -21,16 +21,6 @@ pub fn mute_seconds_for_critical(occurrence: u32) -> i64 {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PersistentRiskState {
-    pub chat_id: i64,
-    pub user_id: i64,
-    pub risk_score: u32,
-    pub last_decay_at: i64,
-    pub last_warning_at: i64,
-    pub updated_at: i64,
-}
-
 #[derive(Debug, Clone)]
 pub struct NewModerationAuditEvent<'a> {
     pub chat_id: i64,
@@ -43,17 +33,6 @@ pub struct NewModerationAuditEvent<'a> {
     pub critical_occurrence: u32,
     pub mute_seconds: i64,
     pub success: bool,
-    pub created_at: i64,
-}
-
-#[derive(Debug, Clone)]
-pub struct NewSecurityEvent<'a> {
-    pub chat_id: i64,
-    pub user_id: i64,
-    pub reason: &'a str,
-    pub weight: u32,
-    pub risk_score: u32,
-    pub message_id: i32,
     pub created_at: i64,
 }
 
@@ -336,111 +315,6 @@ pub fn update_persistent_risk(
     Ok(score)
 }
 
-pub fn record_event(pool: &DbPool, event: &NewSecurityEvent<'_>) -> SecurityDbResult<i64> {
-    let conn = get_connection(pool)?;
-
-    conn.execute(
-        "
-        INSERT INTO security_events (
-            chat_id,
-            user_id,
-            reason,
-            weight,
-            risk_score,
-            message_id,
-            created_at
-        )
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
-        ",
-        params![
-            event.chat_id,
-            event.user_id,
-            event.reason,
-            i64::from(event.weight),
-            i64::from(event.risk_score),
-            event.message_id,
-            event.created_at,
-        ],
-    )?;
-
-    Ok(conn.last_insert_rowid())
-}
-
-pub fn save_risk_state(pool: &DbPool, state: &PersistentRiskState) -> SecurityDbResult<()> {
-    let conn = get_connection(pool)?;
-
-    conn.execute(
-        "
-        INSERT INTO security_risk_state (
-            chat_id,
-            user_id,
-            risk_score,
-            last_decay_at,
-            last_warning_at,
-            updated_at
-        )
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-
-        ON CONFLICT(chat_id, user_id)
-        DO UPDATE SET
-            risk_score = excluded.risk_score,
-            last_decay_at = excluded.last_decay_at,
-            last_warning_at = excluded.last_warning_at,
-            updated_at = excluded.updated_at
-        ",
-        params![
-            state.chat_id,
-            state.user_id,
-            i64::from(state.risk_score),
-            state.last_decay_at,
-            state.last_warning_at,
-            state.updated_at,
-        ],
-    )?;
-
-    Ok(())
-}
-
-pub fn load_risk_state(
-    pool: &DbPool,
-    chat_id: i64,
-    user_id: i64,
-) -> SecurityDbResult<Option<PersistentRiskState>> {
-    let conn = get_connection(pool)?;
-
-    let row = conn
-        .query_row(
-            "
-            SELECT
-                chat_id,
-                user_id,
-                risk_score,
-                last_decay_at,
-                last_warning_at,
-                updated_at
-            FROM security_risk_state
-            WHERE chat_id = ?1
-              AND user_id = ?2
-            ",
-            params![chat_id, user_id],
-            |row| {
-                let score: i64 = row.get(2)?;
-
-                Ok(PersistentRiskState {
-                    chat_id: row.get(0)?,
-                    user_id: row.get(1)?,
-                    risk_score: u32::try_from(score).unwrap_or(u32::MAX),
-                    last_decay_at: row.get(3)?,
-                    last_warning_at: row.get(4)?,
-                    updated_at: row.get(5)?,
-                })
-            },
-        )
-        .optional()?;
-
-    Ok(row)
-}
-
 pub fn record_moderation_audit(
     pool: &DbPool,
     event: &NewModerationAuditEvent<'_>,
@@ -607,65 +481,6 @@ mod tests {
     }
 
     #[test]
-    fn risk_state_roundtrip() {
-        let pool = test_pool();
-
-        let state = PersistentRiskState {
-            chat_id: -100123,
-            user_id: 777,
-            risk_score: 8,
-            last_decay_at: 1000,
-            last_warning_at: 1100,
-            updated_at: 1200,
-        };
-
-        save_risk_state(&pool, &state).expect("save");
-
-        let loaded = load_risk_state(&pool, state.chat_id, state.user_id)
-            .expect("load")
-            .expect("state");
-
-        assert_eq!(loaded, state);
-    }
-
-    #[test]
-    fn event_is_persisted() {
-        let pool = test_pool();
-
-        let event = NewSecurityEvent {
-            chat_id: -100555,
-            user_id: 999,
-            reason: "SuspiciousLink",
-            weight: 4,
-            risk_score: 4,
-            message_id: 42,
-            created_at: 123456,
-        };
-
-        let id = record_event(&pool, &event).expect("record event");
-
-        assert!(id > 0);
-
-        let conn = get_connection(&pool).expect("connection");
-
-        let values: (String, i64, i64) = conn
-            .query_row(
-                "
-                SELECT reason, weight, risk_score
-                FROM security_events
-                WHERE id = ?1
-                ",
-                [id],
-                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
-            )
-            .expect("stored event");
-
-        assert_eq!(values.0, "SuspiciousLink");
-        assert_eq!(values.1, 4);
-        assert_eq!(values.2, 4);
-    }
-
-    #[test]
     fn persistent_risk_accumulates() {
         let pool = test_pool();
 
@@ -679,11 +494,22 @@ mod tests {
 
         assert_eq!(second, 8);
 
-        let stored = load_risk_state(&pool, -300001, 3001)
-            .expect("load")
-            .expect("state");
+        let conn = get_connection(&pool).expect("connection");
 
-        assert_eq!(stored.risk_score, 8);
+        let stored: i64 = conn
+            .query_row(
+                "
+                SELECT risk_score
+                FROM security_risk_state
+                WHERE chat_id = ?1
+                  AND user_id = ?2
+                ",
+                params![-300001_i64, 3001_i64],
+                |row| row.get(0),
+            )
+            .expect("stored risk");
+
+        assert_eq!(stored, 8);
     }
 
     #[test]
@@ -742,11 +568,24 @@ mod tests {
                 .build(manager)
                 .expect("second pool");
 
-            let stored = load_risk_state(&pool, -300003, 3003)
-                .expect("load after recreation")
+            let conn = get_connection(&pool).expect("connection");
+
+            let stored: i64 = conn
+                .query_row(
+                    "
+                    SELECT risk_score
+                    FROM security_risk_state
+                    WHERE chat_id = ?1
+                      AND user_id = ?2
+                    ",
+                    params![-300003_i64, 3003_i64],
+                    |row| row.get(0),
+                )
                 .expect("persistent state");
 
-            assert_eq!(stored.risk_score, 4);
+            assert_eq!(stored, 4);
+
+            drop(conn);
 
             let score = update_persistent_risk(&pool, -300003, 3003, "SuspiciousLink", 4, 2, 2001)
                 .expect("second write");
@@ -763,97 +602,55 @@ mod tests {
     fn warning_cooldown_is_atomic() {
         let pool = test_pool();
 
-        let state = PersistentRiskState {
-            chat_id: -100777,
-            user_id: 123,
-            risk_score: 6,
-            last_decay_at: 1000,
-            last_warning_at: 0,
-            updated_at: 1000,
-        };
+        update_persistent_risk(&pool, -100777, 123, "SuspiciousLink", 4, 1, 1000)
+            .expect("seed risk");
 
-        save_risk_state(&pool, &state).expect("save");
+        assert!(
+            claim_warning_slot(&pool, -100777, 123, 2000, DEFAULT_WARNING_COOLDOWN_SECONDS,)
+                .expect("first claim")
+        );
 
-        assert!(claim_warning_slot(
-            &pool,
-            state.chat_id,
-            state.user_id,
-            2000,
-            DEFAULT_WARNING_COOLDOWN_SECONDS,
-        )
-        .expect("first claim"));
+        assert!(
+            !claim_warning_slot(&pool, -100777, 123, 2020, DEFAULT_WARNING_COOLDOWN_SECONDS,)
+                .expect("second claim")
+        );
 
-        assert!(!claim_warning_slot(
-            &pool,
-            state.chat_id,
-            state.user_id,
-            2020,
-            DEFAULT_WARNING_COOLDOWN_SECONDS,
-        )
-        .expect("second claim"));
-
-        assert!(claim_warning_slot(
-            &pool,
-            state.chat_id,
-            state.user_id,
-            2061,
-            DEFAULT_WARNING_COOLDOWN_SECONDS,
-        )
-        .expect("third claim"));
+        assert!(
+            claim_warning_slot(&pool, -100777, 123, 2061, DEFAULT_WARNING_COOLDOWN_SECONDS,)
+                .expect("third claim")
+        );
     }
 
     #[test]
     fn warning_cooldown_is_scoped_per_user_and_chat() {
         let pool = test_pool();
 
-        let states = [
-            PersistentRiskState {
-                chat_id: -1001,
-                user_id: 101,
-                risk_score: 8,
-                last_decay_at: 1000,
-                last_warning_at: 0,
-                updated_at: 1000,
-            },
-            PersistentRiskState {
-                chat_id: -1001,
-                user_id: 202,
-                risk_score: 8,
-                last_decay_at: 1000,
-                last_warning_at: 0,
-                updated_at: 1000,
-            },
-            PersistentRiskState {
-                chat_id: -2002,
-                user_id: 101,
-                risk_score: 8,
-                last_decay_at: 1000,
-                last_warning_at: 0,
-                updated_at: 1000,
-            },
-        ];
+        update_persistent_risk(&pool, -1001, 101, "SuspiciousLink", 4, 1, 1000)
+            .expect("seed first");
 
-        for state in &states {
-            save_risk_state(&pool, state).expect("save state");
-        }
+        update_persistent_risk(&pool, -1001, 202, "SuspiciousLink", 4, 2, 1000)
+            .expect("seed second");
+
+        update_persistent_risk(&pool, -2002, 101, "SuspiciousLink", 4, 3, 1000)
+            .expect("seed third");
 
         assert!(
-            claim_warning_slot(&pool, -1001, 101, 2000, DEFAULT_WARNING_COOLDOWN_SECONDS)
+            claim_warning_slot(&pool, -1001, 101, 2000, DEFAULT_WARNING_COOLDOWN_SECONDS,)
                 .expect("first user")
         );
 
         assert!(
-            !claim_warning_slot(&pool, -1001, 101, 2020, DEFAULT_WARNING_COOLDOWN_SECONDS)
+            !claim_warning_slot(&pool, -1001, 101, 2020, DEFAULT_WARNING_COOLDOWN_SECONDS,)
                 .expect("same user cooldown")
         );
 
         assert!(
-            claim_warning_slot(&pool, -1001, 202, 2020, DEFAULT_WARNING_COOLDOWN_SECONDS)
+            claim_warning_slot(&pool, -1001, 202, 2020, DEFAULT_WARNING_COOLDOWN_SECONDS,)
                 .expect("different user")
         );
 
         assert!(
-            claim_warning_slot(&pool, -2002, 101, 2020, DEFAULT_WARNING_COOLDOWN_SECONDS)
+            claim_warning_slot(&pool, -2002, 101, 2020, DEFAULT_WARNING_COOLDOWN_SECONDS,)
                 .expect("different chat")
         );
     }
@@ -884,37 +681,25 @@ mod tests {
         {
             let pool = make_pool();
 
-            let state = PersistentRiskState {
-                chat_id: -3003,
-                user_id: 303,
-                risk_score: 8,
-                last_decay_at: 1000,
-                last_warning_at: 0,
-                updated_at: 1000,
-            };
+            update_persistent_risk(&pool, -3003, 303, "SuspiciousLink", 4, 1, 1000)
+                .expect("seed risk");
 
-            save_risk_state(&pool, &state).expect("save");
-
-            assert!(claim_warning_slot(
-                &pool,
-                state.chat_id,
-                state.user_id,
-                2000,
-                DEFAULT_WARNING_COOLDOWN_SECONDS
-            )
-            .expect("first claim"));
+            assert!(
+                claim_warning_slot(&pool, -3003, 303, 2000, DEFAULT_WARNING_COOLDOWN_SECONDS,)
+                    .expect("first claim")
+            );
         }
 
         {
             let pool = make_pool();
 
             assert!(
-                !claim_warning_slot(&pool, -3003, 303, 2020, DEFAULT_WARNING_COOLDOWN_SECONDS)
+                !claim_warning_slot(&pool, -3003, 303, 2020, DEFAULT_WARNING_COOLDOWN_SECONDS,)
                     .expect("claim after pool recreation")
             );
 
             assert!(
-                claim_warning_slot(&pool, -3003, 303, 2061, DEFAULT_WARNING_COOLDOWN_SECONDS)
+                claim_warning_slot(&pool, -3003, 303, 2061, DEFAULT_WARNING_COOLDOWN_SECONDS,)
                     .expect("claim after cooldown")
             );
         }
