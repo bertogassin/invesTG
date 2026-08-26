@@ -1,6 +1,7 @@
 use super::common::{
-    base_style, bottom_nav, escape_html, icon, navigation_card, people_result_card,
-    resource_result_card, search_form_hero, search_hero, section_head, simple_hero, topbar,
+    base_style, bottom_nav, empty_state_card, escape_html, icon, navigation_card,
+    people_result_card, resource_result_card, search_form_hero, search_hero, section_head,
+    simple_hero, topbar,
 };
 use std::collections::BTreeMap;
 
@@ -546,30 +547,14 @@ pub fn render_search(
     let result_count = resources.len();
 
     let results = if q.trim().is_empty() {
-        r#"
-        <div class="card" style="display:block;margin-top:18px;">
-            <div class="card-content">
-                <div class="card-title">Начните поиск</div>
-                <div class="card-meta" style="margin-top:5px;">
-                    Введите название, услугу, категорию или адрес.
-                </div>
-            </div>
-        </div>
-        "#
-        .to_string()
+        empty_state_card(
+            "Начните поиск",
+            "Введите название, услугу, категорию или адрес.",
+        )
     } else if resources.is_empty() && people.is_empty() && location_results.is_empty() {
-        format!(
-            r#"
-        <div class="card" style="display:block;margin-top:18px;">
-            <div class="card-content">
-                <div class="card-title">Ничего не найдено</div>
-                <div class="card-meta" style="margin-top:5px;">
-                    По запросу «{}» пока ничего не найдено.
-                </div>
-            </div>
-        </div>
-        "#,
-            q
+        empty_state_card(
+            "Ничего не найдено",
+            &format!("По запросу «{}» пока ничего не найдено.", escape_html(q),),
         )
     } else if resources.is_empty() {
         String::new()

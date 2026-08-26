@@ -1121,6 +1121,23 @@ pub(crate) fn resource_result_card(
     )
 }
 
+pub(crate) fn empty_state_card(title: &str, description_html: &str) -> String {
+    format!(
+        r#"
+<div class="card" style="display:block;margin-top:18px;">
+    <div class="card-content">
+        <div class="card-title">{title}</div>
+        <div class="card-meta" style="margin-top:5px;">
+            {description}
+        </div>
+    </div>
+</div>
+"#,
+        title = escape_html(title),
+        description = description_html,
+    )
+}
+
 pub(crate) fn section_head(title: &str, caption: &str, margin_top: Option<u32>) -> String {
     let style = match margin_top {
         Some(px) => format!(r#" style="margin-top:{px}px;""#),
