@@ -32,22 +32,9 @@ pub async fn app_search(
             .into_response();
     }
 
-    let mut resources: Vec<(
-        i64,
-        String,
-        String,
-        String,
-        String,
-        f64,
-        i64,
-        i64,
-        i64,
-        usize,
-        usize,
-        usize,
-    )> = Vec::new();
+    let mut resources: Vec<crate::web::view_models::SearchResourceRow> = Vec::new();
 
-    let mut people: Vec<(String, String, String, String, i64, String, i64)> = Vec::new();
+    let mut people: Vec<crate::web::view_models::SearchPersonRow> = Vec::new();
 
     if !q.is_empty() {
         let query_lower = q.to_lowercase();

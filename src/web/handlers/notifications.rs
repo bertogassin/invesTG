@@ -19,7 +19,7 @@ pub async fn notifications_page(State(state): State<AppState>, headers: HeaderMa
         }
     };
 
-    let notifications: Vec<(i64, Option<i64>, String, String, String, i64, i64)> = db
+    let notifications: Vec<crate::web::view_models::NotificationRow> = db
         .prepare(
             "SELECT
                 id,

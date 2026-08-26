@@ -4,7 +4,7 @@ use super::common::{
 };
 
 pub fn render_contact_requests(
-    requests: Vec<(i64, i64, String, String, String, String, String, i64, i64)>,
+    requests: Vec<crate::web::view_models::ContactRequestRow>,
     authenticated: bool,
 ) -> String {
     let pending_count = requests.iter().filter(|r| r.3 == "pending").count();
@@ -408,7 +408,7 @@ pub fn render_contact_requests(
 
 pub fn render_messages(
     authenticated: bool,
-    conversations: Vec<(i64, i64, String, String, String, String, i64, i64)>,
+    conversations: Vec<crate::web::view_models::ConversationRow>,
 ) -> String {
     let total_unread: i64 = conversations.iter().map(|c| c.6).sum();
 

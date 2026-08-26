@@ -25,7 +25,7 @@ pub async fn favorites_page(State(state): State<AppState>, headers: HeaderMap) -
         }
     };
 
-    let resources: Vec<(i64, String, String, String, String, f64, i64, i64, i64)> = db
+    let resources: Vec<crate::web::view_models::FavoriteResourceRow> = db
         .prepare(
             "SELECT
                 r.id,

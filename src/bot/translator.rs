@@ -47,10 +47,8 @@ fn parse_translation_command(text: &str) -> Option<(&str, &str)> {
 
     let rest = if let Some(rest) = trimmed.strip_prefix("/tr") {
         rest
-    } else if let Some(rest) = trimmed.strip_prefix("/translate") {
-        rest
     } else {
-        return None;
+        trimmed.strip_prefix("/translate")?
     };
 
     if !rest.is_empty() && !rest.starts_with(char::is_whitespace) {

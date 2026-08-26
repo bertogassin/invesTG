@@ -8,7 +8,7 @@ pub fn render_category(
     si: usize,
     zi: usize,
     category: &str,
-    resources: Vec<(i64, String, String, String, String, f64, i64, i64, i64)>,
+    resources: Vec<crate::web::view_models::CategoryResourceRow>,
 ) -> String {
     let city_url = format!("/app/{}/{}/{}", ci, si, zi);
     let safe_category = escape_html(category);
@@ -229,20 +229,36 @@ pub fn render_category(
 // PUBLIC USER PROFILE
 // ============================================================
 
-pub fn render_resource_profile(
-    id: i64,
-    title: &str,
-    description: &str,
-    contact: &str,
-    address: &str,
-    rating: f64,
-    votes: i64,
-    premium: i64,
-    verified: i64,
-    category: &str,
-    _created_at: i64,
-    owner_public_id: &str,
-) -> String {
+pub struct RenderResourceProfileParams<'a> {
+    pub id: i64,
+    pub title: &'a str,
+    pub description: &'a str,
+    pub contact: &'a str,
+    pub address: &'a str,
+    pub rating: f64,
+    pub votes: i64,
+    pub premium: i64,
+    pub verified: i64,
+    pub category: &'a str,
+    pub _created_at: i64,
+    pub owner_public_id: &'a str,
+}
+
+pub fn render_resource_profile(params: RenderResourceProfileParams<'_>) -> String {
+    let RenderResourceProfileParams {
+        id,
+        title,
+        description,
+        contact,
+        address,
+        rating,
+        votes,
+        premium,
+        verified,
+        category,
+        _created_at,
+        owner_public_id,
+    } = params;
     let safe_title = escape_html(title);
     let safe_description = escape_html(description);
     let safe_contact = escape_html(contact);
@@ -1054,19 +1070,7 @@ pub fn render_resource_profile(
 
 pub fn render_my_resources(
     client_id: &str,
-    resources: Vec<(
-        i64,
-        String,
-        String,
-        String,
-        f64,
-        i64,
-        i64,
-        i64,
-        String,
-        String,
-        i64,
-    )>,
+    resources: Vec<crate::web::view_models::MyResourceRow>,
 ) -> String {
     let cards = if client_id.is_empty() {
         empty_state_card(

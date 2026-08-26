@@ -3,24 +3,44 @@ use super::common::{
     section_head, simple_hero, topbar,
 };
 
-pub fn render_me(
-    authenticated: bool,
-    user_id: i64,
-    username: &str,
-    first_name: &str,
-    last_name: &str,
-    resources_count: i64,
-    approved_count: i64,
-    pending_count: i64,
-    rejected_count: i64,
-    favorites_count: i64,
-    unread_notifications_count: i64,
-    pending_contact_requests_count: i64,
-    unread_messages_count: i64,
-    open_contact: bool,
-    intent_text: &str,
-    intent_until: i64,
-) -> String {
+pub struct RenderMeParams<'a> {
+    pub authenticated: bool,
+    pub user_id: i64,
+    pub username: &'a str,
+    pub first_name: &'a str,
+    pub last_name: &'a str,
+    pub resources_count: i64,
+    pub approved_count: i64,
+    pub pending_count: i64,
+    pub rejected_count: i64,
+    pub favorites_count: i64,
+    pub unread_notifications_count: i64,
+    pub pending_contact_requests_count: i64,
+    pub unread_messages_count: i64,
+    pub open_contact: bool,
+    pub intent_text: &'a str,
+    pub intent_until: i64,
+}
+
+pub fn render_me(params: RenderMeParams<'_>) -> String {
+    let RenderMeParams {
+        authenticated,
+        user_id,
+        username,
+        first_name,
+        last_name,
+        resources_count,
+        approved_count,
+        pending_count,
+        rejected_count,
+        favorites_count,
+        unread_notifications_count,
+        pending_contact_requests_count,
+        unread_messages_count,
+        open_contact,
+        intent_text,
+        intent_until,
+    } = params;
     let safe_username = escape_html(username);
     let safe_first_name = escape_html(first_name);
     let safe_last_name = escape_html(last_name);
@@ -53,7 +73,7 @@ pub fn render_me(
     let intent_status_text = if safe_intent_text.is_empty() {
         "Статус пока не указан".to_string()
     } else if intent_until > 0 {
-        format!("{}", safe_intent_text)
+        safe_intent_text.to_string()
     } else {
         safe_intent_text.clone()
     };
@@ -969,7 +989,7 @@ pub fn render_me(
 // ============================================================
 
 pub fn render_notifications(
-    notifications: Vec<(i64, Option<i64>, String, String, String, i64, i64)>,
+    notifications: Vec<crate::web::view_models::NotificationRow>,
     authenticated: bool,
 ) -> String {
     let cards = if !authenticated {
@@ -1212,16 +1232,28 @@ pub fn render_notifications(
 // CATEGORY
 // ============================================================
 
-pub fn render_public_user_profile(
-    public_id: &str,
-    username: &str,
-    first_name: &str,
-    last_name: &str,
-    open_contact: bool,
-    intent_text: &str,
-    chat_user_id: Option<i64>,
-    resources: Vec<(i64, String, String, String, f64, i64, i64, i64)>,
-) -> String {
+pub struct RenderPublicUserProfileParams<'a> {
+    pub public_id: &'a str,
+    pub username: &'a str,
+    pub first_name: &'a str,
+    pub last_name: &'a str,
+    pub open_contact: bool,
+    pub intent_text: &'a str,
+    pub chat_user_id: Option<i64>,
+    pub resources: Vec<crate::web::view_models::PublicProfileResourceRow>,
+}
+
+pub fn render_public_user_profile(params: RenderPublicUserProfileParams<'_>) -> String {
+    let RenderPublicUserProfileParams {
+        public_id,
+        username,
+        first_name,
+        last_name,
+        open_contact,
+        intent_text,
+        chat_user_id,
+        resources,
+    } = params;
     let hero_full_name = format!("{} {}", first_name.trim(), last_name.trim(),)
         .trim()
         .to_string();
@@ -1344,8 +1376,7 @@ pub fn render_public_user_profile(
             chat_user_id = chat_user_id,
         )
     } else {
-        format!(
-            r#"
+        r#"
 <section class="card"
          style="
              display:block;
@@ -1464,8 +1495,8 @@ pub fn render_public_user_profile(
     </div>
 
 </section>
-"#,
-        )
+"#
+        .to_string()
     };
 
     let intent_html = if safe_intent.is_empty() {
@@ -1977,7 +2008,7 @@ pub fn render_public_user_not_found() -> String {
 // ============================================================
 
 pub fn render_favorites(
-    resources: Vec<(i64, String, String, String, String, f64, i64, i64, i64)>,
+    resources: Vec<crate::web::view_models::FavoriteResourceRow>,
     authenticated: bool,
 ) -> String {
     let cards = if !authenticated {

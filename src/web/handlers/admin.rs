@@ -167,18 +167,7 @@ pub async fn admin_reports(State(state): State<AppState>, headers: HeaderMap) ->
         }
     };
 
-    let rows: Vec<(
-        i64,
-        i64,
-        i64,
-        String,
-        String,
-        i64,
-        String,
-        String,
-        String,
-        i64,
-    )> = db
+    let rows: Vec<crate::web::view_models::AdminReportRow> = db
         .prepare(
             "SELECT
                 rr.id,
@@ -839,19 +828,7 @@ pub async fn admin_resources(
         filter_clause, search_clause
     );
 
-    let rows: Vec<(
-        i64,
-        String,
-        String,
-        String,
-        f64,
-        i64,
-        i64,
-        i64,
-        i64,
-        String,
-        String,
-    )> = if q.is_empty() {
+    let rows: Vec<crate::web::view_models::AdminResourceRow> = if q.is_empty() {
         db.prepare(&sql)
             .and_then(|mut stmt| {
                 stmt.query_map([], |row| {

@@ -59,21 +59,31 @@ struct RiskRecord {
     last_decay_at: Instant,
 }
 
-static FLOOD_STATE: OnceLock<Mutex<HashMap<(i64, u64), VecDeque<Instant>>>> = OnceLock::new();
+type SecurityKey = (i64, u64);
+type FloodHistory = VecDeque<Instant>;
+type FloodMap = HashMap<SecurityKey, FloodHistory>;
+type DuplicateMap = HashMap<SecurityKey, LastMessage>;
+type RiskMap = HashMap<SecurityKey, RiskRecord>;
 
-static DUPLICATE_STATE: OnceLock<Mutex<HashMap<(i64, u64), LastMessage>>> = OnceLock::new();
+type FloodState = Mutex<FloodMap>;
+type DuplicateState = Mutex<DuplicateMap>;
+type RiskState = Mutex<RiskMap>;
 
-static RISK_STATE: OnceLock<Mutex<HashMap<(i64, u64), RiskRecord>>> = OnceLock::new();
+static FLOOD_STATE: OnceLock<FloodState> = OnceLock::new();
 
-fn flood_state() -> &'static Mutex<HashMap<(i64, u64), VecDeque<Instant>>> {
+static DUPLICATE_STATE: OnceLock<DuplicateState> = OnceLock::new();
+
+static RISK_STATE: OnceLock<RiskState> = OnceLock::new();
+
+fn flood_state() -> &'static FloodState {
     FLOOD_STATE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-fn duplicate_state() -> &'static Mutex<HashMap<(i64, u64), LastMessage>> {
+fn duplicate_state() -> &'static DuplicateState {
     DUPLICATE_STATE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-fn risk_state() -> &'static Mutex<HashMap<(i64, u64), RiskRecord>> {
+fn risk_state() -> &'static RiskState {
     RISK_STATE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 

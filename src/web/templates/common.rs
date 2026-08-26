@@ -1092,18 +1092,32 @@ pub(crate) fn people_result_card(
     )
 }
 
-pub(crate) fn resource_result_card(
-    href: &str,
-    title_html: &str,
-    category_html: &str,
-    description_html: &str,
-    rating: f64,
-    votes: i64,
-    location_html: &str,
-    address_html: &str,
-    premium_badge_html: &str,
-    verified_badge_html: &str,
-) -> String {
+pub(crate) struct ResourceResultCardParams<'a> {
+    pub href: &'a str,
+    pub title_html: &'a str,
+    pub category_html: &'a str,
+    pub description_html: &'a str,
+    pub rating: f64,
+    pub votes: i64,
+    pub location_html: &'a str,
+    pub address_html: &'a str,
+    pub premium_badge_html: &'a str,
+    pub verified_badge_html: &'a str,
+}
+
+pub(crate) fn resource_result_card(params: ResourceResultCardParams<'_>) -> String {
+    let ResourceResultCardParams {
+        href,
+        title_html,
+        category_html,
+        description_html,
+        rating,
+        votes,
+        location_html,
+        address_html,
+        premium_badge_html,
+        verified_badge_html,
+    } = params;
     format!(
         r#"
 <a href="{href}"

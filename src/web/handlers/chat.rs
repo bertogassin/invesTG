@@ -27,7 +27,7 @@ pub async fn messages_page(State(state): State<AppState>, headers: HeaderMap) ->
         }
     };
 
-    let conversations: Vec<(i64, i64, String, String, String, String, i64, i64)> = db
+    let conversations: Vec<crate::web::view_models::ConversationRow> = db
         .prepare(
             "SELECT
                 c.id,

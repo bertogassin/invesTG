@@ -32,7 +32,7 @@ pub async fn contact_requests_page(
         }
     };
 
-    let requests: Vec<(i64, i64, String, String, String, String, String, i64, i64)> = db
+    let requests: Vec<crate::web::view_models::ContactRequestRow> = db
         .prepare(
             "SELECT
                 cr.id,

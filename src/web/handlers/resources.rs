@@ -24,7 +24,7 @@ pub async fn app_cat(
         }
     };
 
-    let resources: Vec<(i64, String, String, String, String, f64, i64, i64, i64)> = db
+    let resources: Vec<crate::web::view_models::CategoryResourceRow> = db
         .prepare(
             "SELECT id, title, description, contact, address, rating, votes, is_verified, is_premium
              FROM resources
@@ -134,18 +134,20 @@ pub async fn resource_profile(State(state): State<AppState>, Path(id): Path<i64>
             created_at,
             owner_public_id,
         )) => Html(templates::render_resource_profile(
-            id,
-            &title,
-            &description,
-            &contact,
-            &address,
-            rating,
-            votes,
-            premium,
-            verified,
-            &category,
-            created_at,
-            &owner_public_id,
+            templates::RenderResourceProfileParams {
+                id,
+                title: &title,
+                description: &description,
+                contact: &contact,
+                address: &address,
+                rating,
+                votes,
+                premium,
+                verified,
+                category: &category,
+                _created_at: created_at,
+                owner_public_id: &owner_public_id,
+            },
         )),
 
         None => Html(format!(
@@ -459,19 +461,7 @@ pub async fn my_resources(State(state): State<AppState>, headers: HeaderMap) -> 
         }
     };
 
-    let resources: Vec<(
-        i64,
-        String,
-        String,
-        String,
-        f64,
-        i64,
-        i64,
-        i64,
-        String,
-        String,
-        i64,
-    )> = db
+    let resources: Vec<crate::web::view_models::MyResourceRow> = db
         .prepare(
             "SELECT
                 id,

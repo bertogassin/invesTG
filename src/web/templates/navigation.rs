@@ -362,21 +362,8 @@ pub fn render_city(ci: usize, si: usize, zi: usize) -> String {
 
 pub fn render_search(
     q: &str,
-    resources: Vec<(
-        i64,
-        String,
-        String,
-        String,
-        String,
-        f64,
-        i64,
-        i64,
-        i64,
-        usize,
-        usize,
-        usize,
-    )>,
-    people: Vec<(String, String, String, String, i64, String, i64)>,
+    resources: Vec<crate::web::view_models::SearchResourceRow>,
+    people: Vec<crate::web::view_models::SearchPersonRow>,
 ) -> String {
     let world_data = world();
 
@@ -614,18 +601,18 @@ pub fn render_search(
                         ""
                     };
 
-                    resource_result_card(
-                        &format!("/app/resource/{}", id),
-                        title,
-                        category,
-                        description,
-                        *rating,
-                        *votes,
-                        &location,
-                        address,
-                        premium_badge,
-                        verified_badge,
-                    )
+                    resource_result_card(crate::web::templates::common::ResourceResultCardParams {
+                        href: &format!("/app/resource/{}", id),
+                        title_html: title,
+                        category_html: category,
+                        description_html: description,
+                        rating: *rating,
+                        votes: *votes,
+                        location_html: &location,
+                        address_html: address,
+                        premium_badge_html: premium_badge,
+                        verified_badge_html: verified_badge,
+                    })
                 },
             )
             .collect::<Vec<_>>()

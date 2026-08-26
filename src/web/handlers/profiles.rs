@@ -18,9 +18,24 @@ pub async fn app_me(State(state): State<AppState>, headers: HeaderMap) -> Html<S
         Some(id) => id,
 
         None => {
-            return Html(templates::render_me(
-                false, 0, "", "", "", 0, 0, 0, 0, 0, 0, 0, 0, false, "", 0,
-            ));
+            return Html(templates::render_me(templates::RenderMeParams {
+                authenticated: false,
+                user_id: 0,
+                username: "",
+                first_name: "",
+                last_name: "",
+                resources_count: 0,
+                approved_count: 0,
+                pending_count: 0,
+                rejected_count: 0,
+                favorites_count: 0,
+                unread_notifications_count: 0,
+                pending_contact_requests_count: 0,
+                unread_messages_count: 0,
+                open_contact: false,
+                intent_text: "",
+                intent_until: 0,
+            }));
         }
     };
 
@@ -161,12 +176,12 @@ pub async fn app_me(State(state): State<AppState>, headers: HeaderMap) -> Html<S
 
     drop(db);
 
-    Html(templates::render_me(
-        true,
+    Html(templates::render_me(templates::RenderMeParams {
+        authenticated: true,
         user_id,
-        &username,
-        &first_name,
-        &last_name,
+        username: &username,
+        first_name: &first_name,
+        last_name: &last_name,
         resources_count,
         approved_count,
         pending_count,
@@ -175,10 +190,10 @@ pub async fn app_me(State(state): State<AppState>, headers: HeaderMap) -> Html<S
         unread_notifications_count,
         pending_contact_requests_count,
         unread_messages_count,
-        open_contact == 1,
-        &intent_text,
+        open_contact: open_contact == 1,
+        intent_text: &intent_text,
         intent_until,
-    ))
+    }))
 }
 
 pub async fn public_user_profile(
@@ -250,7 +265,7 @@ pub async fn public_user_profile(
         return Html(templates::render_public_user_not_found());
     }
 
-    let resources: Vec<(i64, String, String, String, f64, i64, i64, i64)> = db
+    let resources: Vec<crate::web::view_models::PublicProfileResourceRow> = db
         .prepare(
             "SELECT
                 id,
@@ -335,14 +350,16 @@ pub async fn public_user_profile(
     };
 
     Html(templates::render_public_user_profile(
-        public_id,
-        &username,
-        &first_name,
-        &last_name,
-        open_contact == 1,
-        &visible_intent,
-        chat_user_id,
-        resources,
+        templates::RenderPublicUserProfileParams {
+            public_id,
+            username: &username,
+            first_name: &first_name,
+            last_name: &last_name,
+            open_contact: open_contact == 1,
+            intent_text: &visible_intent,
+            chat_user_id,
+            resources,
+        },
     ))
 }
 
@@ -492,9 +509,7 @@ pub async fn api_profile_set(
             .into_response();
     }
 
-    let intent_until = if intent_text.is_empty() {
-        0
-    } else if duration_days == 0 {
+    let intent_until = if intent_text.is_empty() || duration_days == 0 {
         0
     } else {
         unix_now() + duration_days * 86_400
