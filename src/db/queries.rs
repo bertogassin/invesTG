@@ -25,6 +25,73 @@ pub fn init_db() -> Result<Connection> {
     conn.pragma_update(None, "synchronous", "NORMAL")?;
     conn.busy_timeout(Duration::from_secs(5))?;
 
+    // ========================================================
+    // Unified ResursMap accounts.
+    //
+    // Existing Telegram users keep their current numeric ID as
+    // the internal account ID. This preserves favorites, chats,
+    // notifications and contact requests without destructive
+    // remapping.
+    // ========================================================
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY,
+            created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+            updated_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+            is_active INTEGER NOT NULL DEFAULT 1
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS auth_identities (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            provider TEXT NOT NULL,
+            provider_subject TEXT NOT NULL,
+            email TEXT NOT NULL DEFAULT '',
+            verified_at INTEGER NOT NULL DEFAULT 0,
+            created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+            updated_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+            UNIQUE(provider, provider_subject),
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_auth_identities_user
+         ON auth_identities(user_id)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_auth_email_unique
+         ON auth_identities(email)
+         WHERE provider = 'email' AND email <> ''",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS email_login_codes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT NOT NULL,
+            code_hash TEXT NOT NULL,
+            expires_at INTEGER NOT NULL,
+            attempts INTEGER NOT NULL DEFAULT 0,
+            consumed_at INTEGER NOT NULL DEFAULT 0,
+            created_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_email_login_codes_lookup
+         ON email_login_codes(email, created_at DESC)",
+        [],
+    )?;
+
     conn.execute(
         "CREATE TABLE IF NOT EXISTS profiles (
             client_id TEXT PRIMARY KEY,
@@ -34,6 +101,63 @@ pub fn init_db() -> Result<Connection> {
             intent_text TEXT NOT NULL DEFAULT '',
             intent_until INTEGER NOT NULL DEFAULT 0
         )",
+        [],
+    )?;
+
+    // profiles.user_id becomes the stable internal account link.
+    let profile_columns: Vec<String> = {
+        let mut stmt = conn.prepare("PRAGMA table_info(profiles)")?;
+        let columns = stmt
+            .query_map([], |row| row.get::<_, String>(1))?
+            .collect::<Result<Vec<_>, _>>()?;
+        columns
+    };
+
+    if !profile_columns.iter().any(|name| name == "user_id") {
+        conn.execute("ALTER TABLE profiles ADD COLUMN user_id INTEGER", [])?;
+    }
+
+    // Backfill all existing Telegram profiles.
+    conn.execute(
+        "INSERT OR IGNORE INTO users (id)
+         SELECT CAST(substr(client_id, 4) AS INTEGER)
+         FROM profiles
+         WHERE client_id LIKE 'tg:%'
+           AND CAST(substr(client_id, 4) AS INTEGER) > 0",
+        [],
+    )?;
+
+    conn.execute(
+        "UPDATE profiles
+         SET user_id = CAST(substr(client_id, 4) AS INTEGER)
+         WHERE user_id IS NULL
+           AND client_id LIKE 'tg:%'
+           AND CAST(substr(client_id, 4) AS INTEGER) > 0",
+        [],
+    )?;
+
+    conn.execute(
+        "INSERT OR IGNORE INTO auth_identities (
+            user_id,
+            provider,
+            provider_subject,
+            verified_at
+         )
+         SELECT
+            CAST(substr(client_id, 4) AS INTEGER),
+            'telegram',
+            substr(client_id, 4),
+            updated_at
+         FROM profiles
+         WHERE client_id LIKE 'tg:%'
+           AND CAST(substr(client_id, 4) AS INTEGER) > 0",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_profiles_user_id
+         ON profiles(user_id)
+         WHERE user_id IS NOT NULL",
         [],
     )?;
 
