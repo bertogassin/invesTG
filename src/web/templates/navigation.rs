@@ -297,7 +297,7 @@ pub fn render_continents() -> String {
                 type="button"
                 class="rm-install-button rm-install-android">
             <span>Android</span>
-            <strong>↓ Скачать</strong>
+            <strong>↓ Установить</strong>
         </button>
 
         <button id="resursmap-install-ios"
