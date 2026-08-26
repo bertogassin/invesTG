@@ -9,8 +9,10 @@ use axum::{
     Json,
 };
 use hmac::{Hmac, Mac};
+use serde::Deserialize;
 use serde_json::json;
 use sha2::Sha256;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 pub(super) fn verify_telegram_init_data(init_data: &str, bot_token: &str) -> Option<i64> {
     let mut hash_from_telegram = String::new();
@@ -124,6 +126,595 @@ fn telegram_profile_from_init_data(init_data: &str) -> (String, String, String) 
         .to_string();
 
     (username, first_name, last_name)
+}
+
+const EMAIL_CODE_TTL_SECONDS: i64 = 600;
+const EMAIL_CODE_MAX_ATTEMPTS: i64 = 5;
+
+// Email IDs live in a reserved positive range so they never collide
+// with existing/future Telegram numeric IDs while the compatibility
+// migration is active.
+const EMAIL_USER_ID_BASE: i64 = 4_000_000_000_000_000_000;
+
+#[derive(Debug, Deserialize)]
+pub struct EmailCodeRequest {
+    pub email: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct EmailCodeVerifyRequest {
+    pub email: String,
+    pub code: String,
+}
+
+fn normalize_email(raw: &str) -> Option<String> {
+    let email = raw.trim().to_lowercase();
+
+    if email.is_empty() || email.len() > 254 || email.chars().any(char::is_whitespace) {
+        return None;
+    }
+
+    let (local, domain) = email.split_once('@')?;
+
+    if local.is_empty()
+        || domain.is_empty()
+        || local.len() > 64
+        || domain.starts_with('.')
+        || domain.ends_with('.')
+        || domain.contains("..")
+    {
+        return None;
+    }
+
+    if !domain.contains('.') {
+        return None;
+    }
+
+    Some(email)
+}
+
+fn email_rate_limit_id(state: &AppState, email: &str) -> i64 {
+    type HmacSha256 = Hmac<Sha256>;
+
+    let mut mac = HmacSha256::new_from_slice(state.admin_key.as_bytes()).expect("HMAC key");
+
+    mac.update(b"email-rate-limit:");
+    mac.update(email.as_bytes());
+
+    let digest = mac.finalize().into_bytes();
+
+    let mut bytes = [0u8; 8];
+    bytes.copy_from_slice(&digest[..8]);
+
+    i64::from_be_bytes(bytes) & i64::MAX
+}
+
+fn generate_email_code(state: &AppState, email: &str) -> String {
+    type HmacSha256 = Hmac<Sha256>;
+
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+
+    let payload = format!("email-code:{}:{}:{}", email, unix_now(), nanos);
+
+    let mut mac = HmacSha256::new_from_slice(state.admin_key.as_bytes()).expect("HMAC key");
+
+    mac.update(payload.as_bytes());
+
+    let digest = mac.finalize().into_bytes();
+
+    let value = u32::from_be_bytes([digest[0], digest[1], digest[2], digest[3]]) % 1_000_000;
+
+    format!("{value:06}")
+}
+
+fn hash_email_code(state: &AppState, email: &str, code: &str, expires_at: i64) -> String {
+    type HmacSha256 = Hmac<Sha256>;
+
+    let payload = format!("email-login-code:{}:{}:{}", email, code, expires_at);
+
+    let mut mac = HmacSha256::new_from_slice(state.admin_key.as_bytes()).expect("HMAC key");
+
+    mac.update(payload.as_bytes());
+
+    hex::encode(mac.finalize().into_bytes())
+}
+
+async fn send_email_code(email: &str, code: &str) -> Result<(), String> {
+    let api_key = std::env::var("RESEND_API_KEY")
+        .map_err(|_| "RESEND_API_KEY is not configured".to_string())?;
+
+    let from = std::env::var("RESURSMAP_MAIL_FROM")
+        .unwrap_or_else(|_| "ResursMap <noreply@resursmap.de>".to_string());
+
+    let client = reqwest::Client::new();
+
+    let response = client
+        .post("https://api.resend.com/emails")
+        .bearer_auth(api_key)
+        .json(&json!({
+            "from": from,
+            "to": [email],
+            "subject": "Код входа в ResursMap",
+            "html": format!(
+                "<div style=\"font-family:Arial,sans-serif;max-width:520px;margin:auto;padding:32px\">\
+                    <h2 style=\"margin:0 0 18px\">ResursMap</h2>\
+                    <p>Ваш код входа:</p>\
+                    <div style=\"font-size:34px;font-weight:800;letter-spacing:8px;margin:24px 0\">{}</div>\
+                    <p>Код действует 10 минут.</p>\
+                    <p style=\"color:#777;font-size:13px\">Если вы не запрашивали вход, просто проигнорируйте это письмо.</p>\
+                </div>",
+                code
+            )
+        }))
+        .send()
+        .await
+        .map_err(|_| "mail_transport_error".to_string())?;
+
+    if !response.status().is_success() {
+        return Err(format!("mail_provider_status_{}", response.status()));
+    }
+
+    Ok(())
+}
+
+pub async fn email_auth_request(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<EmailCodeRequest>,
+) -> Response {
+    if request_is_cross_site(&headers) {
+        return csrf_rejected_response();
+    }
+
+    let email = match normalize_email(&payload.email) {
+        Some(email) => email,
+
+        None => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({
+                    "ok": false,
+                    "error": "invalid_email"
+                })),
+            )
+                .into_response();
+        }
+    };
+
+    let rate_id = email_rate_limit_id(&state, &email);
+
+    // Не больше 5 запросов кода за 10 минут на один email.
+    if let Some(retry_after) =
+        rate_limit_retry_after(&state, rate_id, "email_code_request", 5, 600).await
+    {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(json!({
+                "ok": false,
+                "error": "rate_limited",
+                "retry_after": retry_after
+            })),
+        )
+            .into_response();
+    }
+
+    let code = generate_email_code(&state, &email);
+    let expires_at = unix_now() + EMAIL_CODE_TTL_SECONDS;
+    let code_hash = hash_email_code(&state, &email, &code, expires_at);
+
+    // Сначала отправляем письмо. Если почтовый сервис не работает,
+    // не создаём бесполезный код в БД.
+    if let Err(error) = send_email_code(&email, &code).await {
+        eprintln!("email auth send failed: {error}");
+
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({
+                "ok": false,
+                "error": "mail_unavailable"
+            })),
+        )
+            .into_response();
+    }
+
+    let db = match crate::db::pool::get_connection(&state.db_pool) {
+        Ok(db) => db,
+
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({
+                    "ok": false,
+                    "error": "database_unavailable"
+                })),
+            )
+                .into_response();
+        }
+    };
+
+    // Все предыдущие неиспользованные коды для адреса инвалидируем.
+    let _ = db.execute(
+        "UPDATE email_login_codes
+         SET consumed_at = ?2
+         WHERE email = ?1
+           AND consumed_at = 0",
+        rusqlite::params![&email, unix_now()],
+    );
+
+    let result = db.execute(
+        "INSERT INTO email_login_codes (
+            email,
+            code_hash,
+            expires_at,
+            attempts,
+            consumed_at,
+            created_at
+         )
+         VALUES (?1, ?2, ?3, 0, 0, ?4)",
+        rusqlite::params![&email, &code_hash, expires_at, unix_now(),],
+    );
+
+    if result.is_err() {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({
+                "ok": false,
+                "error": "code_store_failed"
+            })),
+        )
+            .into_response();
+    }
+
+    (
+        StatusCode::OK,
+        Json(json!({
+            "ok": true,
+            "expires_in": EMAIL_CODE_TTL_SECONDS
+        })),
+    )
+        .into_response()
+}
+
+pub async fn email_auth_verify(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<EmailCodeVerifyRequest>,
+) -> Response {
+    if request_is_cross_site(&headers) {
+        return csrf_rejected_response();
+    }
+
+    let email = match normalize_email(&payload.email) {
+        Some(email) => email,
+
+        None => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({
+                    "ok": false,
+                    "error": "invalid_email"
+                })),
+            )
+                .into_response();
+        }
+    };
+
+    let code = payload.code.trim();
+
+    if code.len() != 6 || !code.bytes().all(|byte| byte.is_ascii_digit()) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({
+                "ok": false,
+                "error": "invalid_code"
+            })),
+        )
+            .into_response();
+    }
+
+    let rate_id = email_rate_limit_id(&state, &email);
+
+    if let Some(retry_after) =
+        rate_limit_retry_after(&state, rate_id, "email_code_verify", 15, 600).await
+    {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(json!({
+                "ok": false,
+                "error": "rate_limited",
+                "retry_after": retry_after
+            })),
+        )
+            .into_response();
+    }
+
+    let mut db = match crate::db::pool::get_connection(&state.db_pool) {
+        Ok(db) => db,
+
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({
+                    "ok": false,
+                    "error": "database_unavailable"
+                })),
+            )
+                .into_response();
+        }
+    };
+
+    let row: Option<(i64, String, i64, i64, i64)> = db
+        .query_row(
+            "SELECT
+                id,
+                code_hash,
+                expires_at,
+                attempts,
+                consumed_at
+             FROM email_login_codes
+             WHERE email = ?1
+             ORDER BY id DESC
+             LIMIT 1",
+            rusqlite::params![&email],
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                ))
+            },
+        )
+        .ok();
+
+    let (code_id, expected_hash, expires_at, attempts, consumed_at) = match row {
+        Some(row) => row,
+
+        None => {
+            return (
+                StatusCode::UNAUTHORIZED,
+                Json(json!({
+                    "ok": false,
+                    "error": "code_not_found"
+                })),
+            )
+                .into_response();
+        }
+    };
+
+    if consumed_at != 0 {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({
+                "ok": false,
+                "error": "code_used"
+            })),
+        )
+            .into_response();
+    }
+
+    if expires_at < unix_now() {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({
+                "ok": false,
+                "error": "code_expired"
+            })),
+        )
+            .into_response();
+    }
+
+    if attempts >= EMAIL_CODE_MAX_ATTEMPTS {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(json!({
+                "ok": false,
+                "error": "too_many_attempts"
+            })),
+        )
+            .into_response();
+    }
+
+    let actual_hash = hash_email_code(&state, &email, code, expires_at);
+
+    if actual_hash != expected_hash {
+        let _ = db.execute(
+            "UPDATE email_login_codes
+             SET attempts = attempts + 1
+             WHERE id = ?1",
+            rusqlite::params![code_id],
+        );
+
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({
+                "ok": false,
+                "error": "wrong_code"
+            })),
+        )
+            .into_response();
+    }
+
+    let transaction = match db.transaction() {
+        Ok(transaction) => transaction,
+
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({
+                    "ok": false,
+                    "error": "transaction_failed"
+                })),
+            )
+                .into_response();
+        }
+    };
+
+    let existing_user_id: Option<i64> = transaction
+        .query_row(
+            "SELECT user_id
+             FROM auth_identities
+             WHERE provider = 'email'
+               AND email = ?1
+             LIMIT 1",
+            rusqlite::params![&email],
+            |row| row.get(0),
+        )
+        .ok();
+
+    let user_id = if let Some(user_id) = existing_user_id {
+        user_id
+    } else {
+        let next_id: i64 = transaction
+            .query_row(
+                "SELECT COALESCE(MAX(id), ?1 - 1) + 1
+                 FROM users
+                 WHERE id >= ?1",
+                rusqlite::params![EMAIL_USER_ID_BASE],
+                |row| row.get(0),
+            )
+            .unwrap_or(EMAIL_USER_ID_BASE);
+
+        if transaction
+            .execute(
+                "INSERT INTO users (
+                    id,
+                    created_at,
+                    updated_at,
+                    is_active
+                 )
+                 VALUES (?1, ?2, ?2, 1)",
+                rusqlite::params![next_id, unix_now()],
+            )
+            .is_err()
+        {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({
+                    "ok": false,
+                    "error": "user_create_failed"
+                })),
+            )
+                .into_response();
+        }
+
+        if transaction
+            .execute(
+                "INSERT INTO auth_identities (
+                    user_id,
+                    provider,
+                    provider_subject,
+                    email,
+                    verified_at,
+                    created_at,
+                    updated_at
+                 )
+                 VALUES (
+                    ?1,
+                    'email',
+                    ?2,
+                    ?2,
+                    ?3,
+                    ?3,
+                    ?3
+                 )",
+                rusqlite::params![next_id, &email, unix_now()],
+            )
+            .is_err()
+        {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({
+                    "ok": false,
+                    "error": "identity_create_failed"
+                })),
+            )
+                .into_response();
+        }
+
+        let client_id = format!("user:{next_id}");
+
+        if transaction
+            .execute(
+                "INSERT OR IGNORE INTO profiles (
+                    client_id,
+                    user_id,
+                    updated_at
+                 )
+                 VALUES (?1, ?2, ?3)",
+                rusqlite::params![&client_id, next_id, unix_now(),],
+            )
+            .is_err()
+        {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({
+                    "ok": false,
+                    "error": "profile_create_failed"
+                })),
+            )
+                .into_response();
+        }
+
+        next_id
+    };
+
+    if transaction
+        .execute(
+            "UPDATE email_login_codes
+             SET consumed_at = ?2
+             WHERE id = ?1
+               AND consumed_at = 0",
+            rusqlite::params![code_id, unix_now()],
+        )
+        .ok()
+        != Some(1)
+    {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({
+                "ok": false,
+                "error": "code_already_used"
+            })),
+        )
+            .into_response();
+    }
+
+    if transaction.commit().is_err() {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({
+                "ok": false,
+                "error": "commit_failed"
+            })),
+        )
+            .into_response();
+    }
+
+    let session = create_user_session(&state, user_id);
+
+    let cookie = format!(
+        "resursmap_user={session}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=2592000"
+    );
+
+    let mut response = (
+        StatusCode::OK,
+        Json(json!({
+            "ok": true,
+            "user_id": user_id
+        })),
+    )
+        .into_response();
+
+    if let Ok(value) = HeaderValue::from_str(&cookie) {
+        response.headers_mut().append(header::SET_COOKIE, value);
+    }
+
+    response
 }
 
 fn create_user_session(state: &AppState, user_id: i64) -> String {
