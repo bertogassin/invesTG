@@ -1,5 +1,6 @@
 use super::common::{
-    back_hero, back_link, base_style, bottom_nav, escape_html, icon, section_head, topbar,
+    back_hero, back_link, base_style, bottom_nav, empty_state_card, escape_html, icon,
+    section_head, topbar,
 };
 
 pub fn render_contact_requests(
@@ -9,28 +10,10 @@ pub fn render_contact_requests(
     let pending_count = requests.iter().filter(|r| r.3 == "pending").count();
 
     let cards = if !authenticated {
-        r#"
-<div class="card"
-     style="
-         display:block;
-         padding:20px;
-     ">
-
-    <div class="card-title">
-        Откройте ResursMap через Telegram
-    </div>
-
-    <div class="card-meta"
-         style="
-             margin-top:6px;
-             line-height:1.5;
-         ">
-        После входа здесь будут ваши запросы на связь.
-    </div>
-
-</div>
-"#
-        .to_string()
+        empty_state_card(
+            "Откройте ResursMap через Telegram",
+            "После входа здесь будут ваши запросы на связь.",
+        )
     } else if requests.is_empty() {
         r#"
 <div class="card"
@@ -430,51 +413,15 @@ pub fn render_messages(
     let total_unread: i64 = conversations.iter().map(|c| c.6).sum();
 
     let content = if !authenticated {
-        r#"
-<div class="card"
-     style="
-         display:block;
-         padding:20px;
-     ">
-
-    <div class="card-title">
-        Откройте ResursMap через Telegram
-    </div>
-
-    <div class="card-meta"
-         style="
-             margin-top:7px;
-             line-height:1.5;
-         ">
-        После входа здесь появятся ваши личные сообщения.
-    </div>
-
-</div>
-"#
-        .to_string()
+        empty_state_card(
+            "Откройте ResursMap через Telegram",
+            "После входа здесь появятся ваши личные сообщения.",
+        )
     } else if conversations.is_empty() {
-        r#"
-<div class="card"
-     style="
-         display:block;
-         padding:20px;
-     ">
-
-    <div class="card-title">
-        Диалогов пока нет
-    </div>
-
-    <div class="card-meta"
-         style="
-             margin-top:7px;
-             line-height:1.5;
-         ">
-        После принятия запроса на связь здесь появится внутренний чат.
-    </div>
-
-</div>
-"#
-        .to_string()
+        empty_state_card(
+            "Диалогов пока нет",
+            "После принятия запроса на связь здесь появится внутренний чат.",
+        )
     } else {
         conversations
             .iter()
@@ -752,29 +699,10 @@ pub fn render_chat(
     };
 
     let content = if !authenticated {
-        r#"
-<div class="card"
-     style="
-         display:block;
-         padding:20px;
-     ">
-
-    <div class="card-title">
-        Откройте ResursMap через Telegram
-    </div>
-
-    <div class="card-meta"
-         style="
-             margin-top:7px;
-             line-height:1.5;
-         ">
-        Для доступа к внутренним сообщениям
-        требуется подтверждённая сессия.
-    </div>
-
-</div>
-"#
-        .to_string()
+        empty_state_card(
+            "Откройте ResursMap через Telegram",
+            "Для доступа к внутренним сообщениям требуется подтверждённая сессия.",
+        )
     } else if messages.is_empty()
         && username.is_empty()
         && first_name.is_empty()

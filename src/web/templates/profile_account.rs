@@ -1,6 +1,6 @@
 use super::common::{
-    back_hero, back_link, base_style, bottom_nav, escape_html, icon, section_head, simple_hero,
-    topbar,
+    back_hero, back_link, base_style, bottom_nav, empty_state_card, escape_html, icon,
+    section_head, simple_hero, topbar,
 };
 
 pub fn render_me(
@@ -166,30 +166,10 @@ pub fn render_me(
             telegram_id_html = telegram_id_html,
         )
     } else {
-        r#"
-<div class="card"
-     style="
-         display:block;
-         margin-bottom:20px;
-         padding:20px;
-     ">
-
-    <div class="card-title">
-        Откройте ResursMap через Telegram
-    </div>
-
-    <div class="card-meta"
-         style="
-             margin-top:7px;
-             line-height:1.5;
-         ">
-        После входа здесь появятся ваш профиль,
-        ресурсы, избранное и статистика.
-    </div>
-
-</div>
-"#
-        .to_string()
+        empty_state_card(
+            "Откройте ResursMap через Telegram",
+            "После входа здесь появятся ваш профиль, ресурсы, избранное и статистика.",
+        )
     };
 
     let statistics = if authenticated {
@@ -993,47 +973,15 @@ pub fn render_notifications(
     authenticated: bool,
 ) -> String {
     let cards = if !authenticated {
-        r#"
-        <div class="card"
-             style="display:block;padding:20px;">
-
-            <div class="card-title">
-                Откройте ResursMap через Telegram
-            </div>
-
-            <div class="card-meta"
-                 style="margin-top:7px;line-height:1.5;">
-                Уведомления доступны после подтверждения Telegram.
-            </div>
-
-        </div>
-        "#
-        .to_string()
+        empty_state_card(
+            "Откройте ResursMap через Telegram",
+            "Уведомления доступны после подтверждения Telegram.",
+        )
     } else if notifications.is_empty() {
-        r#"
-        <div class="card"
-             style="display:block;padding:20px;">
-
-            <div style="
-                font-size:30px;
-                margin-bottom:12px;
-            ">
-                🔔
-            </div>
-
-            <div class="card-title">
-                Уведомлений пока нет
-            </div>
-
-            <div class="card-meta"
-                 style="margin-top:7px;line-height:1.5;">
-                Здесь появятся результаты модерации
-                и важные изменения ваших ресурсов.
-            </div>
-
-        </div>
-        "#
-        .to_string()
+        empty_state_card(
+            "🔔 Уведомлений пока нет",
+            "Здесь появятся результаты модерации и важные изменения ваших ресурсов.",
+        )
     } else {
         notifications
             .iter()
@@ -1560,22 +1508,10 @@ pub fn render_public_user_profile(
     let resource_count = resources.len();
 
     let cards = if resources.is_empty() {
-        r#"
-<div class="card"
-     style="display:block;padding:20px;">
-
-    <div class="card-title">
-        Публичных ресурсов пока нет
-    </div>
-
-    <div class="card-meta"
-         style="margin-top:6px;">
-        У этого участника пока нет опубликованных ресурсов.
-    </div>
-
-</div>
-"#
-        .to_string()
+        empty_state_card(
+            "Публичных ресурсов пока нет",
+            "У этого участника пока нет опубликованных ресурсов.",
+        )
     } else {
         resources
             .iter()
@@ -2045,29 +1981,15 @@ pub fn render_favorites(
     authenticated: bool,
 ) -> String {
     let cards = if !authenticated {
-        r#"
-        <div class="card" style="display:block;">
-            <div class="card-content">
-                <div class="card-title">Откройте через Telegram</div>
-                <div class="card-meta" style="margin-top:6px;">
-                    Чтобы видеть избранное, откройте ResursMap через кнопку бота.
-                </div>
-            </div>
-        </div>
-        "#
-        .to_string()
+        empty_state_card(
+            "Откройте через Telegram",
+            "Чтобы видеть избранное, откройте ResursMap через кнопку бота.",
+        )
     } else if resources.is_empty() {
-        r#"
-        <div class="card" style="display:block;">
-            <div class="card-content">
-                <div class="card-title">Избранное пока пустое</div>
-                <div class="card-meta" style="margin-top:6px;">
-                    Откройте любой ресурс и нажмите ♡.
-                </div>
-            </div>
-        </div>
-        "#
-        .to_string()
+        empty_state_card(
+            "Избранное пока пустое",
+            "Откройте любой ресурс и нажмите ♡.",
+        )
     } else {
         resources
             .iter()

@@ -1,5 +1,7 @@
 use super::common::escape_html;
-use super::common::{back_hero, back_link, base_style, bottom_nav, icon, section_head, topbar};
+use super::common::{
+    back_hero, back_link, base_style, bottom_nav, empty_state_card, icon, section_head, topbar,
+};
 
 pub fn render_category(
     ci: usize,
@@ -1067,29 +1069,15 @@ pub fn render_my_resources(
     )>,
 ) -> String {
     let cards = if client_id.is_empty() {
-        r#"
-        <div class="card" style="margin-top:20px;">
-            <div class="card-content">
-                <div class="card-title">Профиль владельца не определён</div>
-                <div class="card-meta">
-                    Откройте ResursMap через Telegram или этот браузер ещё раз.
-                </div>
-            </div>
-        </div>
-        "#
-        .to_string()
+        empty_state_card(
+            "Профиль владельца не определён",
+            "Откройте ResursMap через Telegram или этот браузер ещё раз.",
+        )
     } else if resources.is_empty() {
-        r#"
-        <div class="card" style="margin-top:20px;">
-            <div class="card-content">
-                <div class="card-title">У вас пока нет ресурсов</div>
-                <div class="card-meta">
-                    Добавьте первый ресурс через нужный город и категорию.
-                </div>
-            </div>
-        </div>
-        "#
-        .to_string()
+        empty_state_card(
+            "У вас пока нет ресурсов",
+            "Добавьте первый ресурс через нужный город и категорию.",
+        )
     } else {
         resources
             .iter()
