@@ -54,13 +54,99 @@ pub fn render_continents() -> String {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="manifest" href="/static/manifest.webmanifest">
 <meta name="theme-color" content="rgb(17,17,17)">
-<link rel="apple-touch-icon" href="/static/app-icon.svg">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
 <title>ResursMap</title>
 <style>{style}</style>
 </head>
 
 <body>
+
+<div id="resursmap-splash"
+     style="
+        position:fixed;
+        inset:0;
+        z-index:99999;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        flex-direction:column;
+        background:
+          radial-gradient(circle at 50% 38%,rgba(214,183,122,.13),transparent 38%),
+          linear-gradient(160deg,rgb(17,18,22),rgb(24,24,27));
+        transition:opacity .45s ease,visibility .45s ease;
+     ">
+
+    <img src="/static/icon-512.png"
+         alt="ResursMap"
+         style="
+            width:116px;
+            height:116px;
+            border-radius:28px;
+            box-shadow:0 18px 60px rgba(0,0,0,.35);
+         ">
+
+    <div style="
+        margin-top:20px;
+        font-size:27px;
+        font-weight:900;
+        letter-spacing:.03em;
+        color:rgb(245,241,233);
+    ">
+        ResursMap
+    </div>
+
+    <div style="
+        margin-top:7px;
+        font-size:12px;
+        letter-spacing:.14em;
+        text-transform:uppercase;
+        color:rgb(214,183,122);
+    ">
+        Resource Network
+    </div>
+</div>
+
 <main class="page">
+
+<div id="resursmap-brand-logo"
+     style="
+        display:flex;
+        align-items:center;
+        gap:12px;
+        margin:4px 0 18px 0;
+     ">
+
+    <img src="/static/icon-192.png"
+         alt="ResursMap"
+         style="
+            width:52px;
+            height:52px;
+            border-radius:15px;
+            box-shadow:0 8px 24px rgba(0,0,0,.18);
+         ">
+
+    <div>
+        <div style="
+            font-size:20px;
+            font-weight:900;
+            line-height:1.1;
+        ">
+            ResursMap
+        </div>
+
+        <div style="
+            margin-top:4px;
+            font-size:10px;
+            font-weight:800;
+            letter-spacing:.12em;
+            text-transform:uppercase;
+            color:rgb(184,137,50);
+        ">
+            Resource Network
+        </div>
+    </div>
+</div>
+
 <section class="card"
          style="
              display:block;

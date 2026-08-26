@@ -60,3 +60,18 @@
     button.hidden = false;
   }
 })();
+
+document.addEventListener("DOMContentLoaded", () => {
+  const splash = document.getElementById("resursmap-splash");
+
+  if (!splash) return;
+
+  window.setTimeout(() => {
+    splash.style.opacity = "0";
+    splash.style.visibility = "hidden";
+
+    window.setTimeout(() => {
+      splash.remove();
+    }, 500);
+  }, 900);
+});
