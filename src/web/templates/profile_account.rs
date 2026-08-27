@@ -1,6 +1,6 @@
 use super::common::{
-    back_hero, back_link, base_style, bottom_nav, empty_state_card, escape_html, icon,
-    page_document, page_shell, section_head, simple_hero, topbar,
+    back_hero, back_link, bottom_nav, empty_state_card, escape_html, icon, page_document,
+    page_shell, section_head, simple_hero, topbar,
 };
 
 pub struct RenderMeParams<'a> {
@@ -1598,31 +1598,8 @@ pub fn render_public_user_profile(params: RenderPublicUserProfileParams<'_>) -> 
     let section_head_resources =
         section_head("Ресурсы участника", "Только активные и одобренные", None);
 
-    format!(
-        r#"<!DOCTYPE html>
-<html lang="ru">
-
-<head>
-<meta charset="utf-8">
-<meta name="viewport"
-      content="width=device-width, initial-scale=1">
-
-<title>{display_name} · ResursMap</title>
-
-<style>{style}</style>
-</head>
-
-<body>
-
-<main class="page">
-
-{topbar}
-
-
-{hero}
-
-
-<section class="card"
+    let main_html = format!(
+        r####"<section class="card"
          style="
              display:block;
              padding:20px;
@@ -1684,13 +1661,19 @@ pub fn render_public_user_profile(params: RenderPublicUserProfileParams<'_>) -> 
 
 <section>
     {cards}
-</section>
+</section>"####,
+        profile_icon = icon("user"),
+        display_name = display_name,
+        resource_count = resource_count,
+        contact_html = contact_html,
+        intent_html = intent_html,
+        internal_contact_html = internal_contact_html,
+        section_head_resources = section_head_resources,
+        cards = cards,
+    );
 
-
-</main>
-
-
-{bottom_nav}
+    let body_after = format!(
+        r####"
 
 
 
@@ -1860,28 +1843,28 @@ pub fn render_public_user_profile(params: RenderPublicUserProfileParams<'_>) -> 
         }});
     }}
 }})();
-</script>
-
-</body>
-</html>"#,
-        style = base_style(),
-        topbar = topbar("MEMBER", "user"),
-        hero = back_hero(
-            &back_link("javascript:history.back()", "Назад", "arrow-left",),
-            "user",
-            "Участник ResursMap",
-            &hero_display_name,
-            "Публичный профиль участника сообщества.",
-        ),
-        profile_icon = icon("user"),
-        display_name = display_name,
-        resource_count = resource_count,
-        contact_html = contact_html,
-        intent_html = intent_html,
-        internal_contact_html = internal_contact_html,
+</script>"####,
         public_id_js = public_id_js,
-        cards = cards,
-        bottom_nav = bottom_nav("none"),
+    );
+
+    page_document(
+        &format!("{} · ResursMap", display_name),
+        "",
+        "",
+        &format!(
+            "{topbar}\n\n{hero}\n\n{content}",
+            topbar = topbar("MEMBER", "user"),
+            hero = back_hero(
+                &back_link("javascript:history.back()", "Назад", "arrow-left",),
+                "user",
+                "Участник ResursMap",
+                &hero_display_name,
+                "Публичный профиль участника сообщества.",
+            ),
+            content = main_html,
+        ),
+        &bottom_nav("none"),
+        &body_after,
     )
 }
 
