@@ -1222,6 +1222,8 @@ pub(crate) fn topbar(subtitle: &str, icon_name: &str) -> String {
             <div class="brand-sub">{subtitle}</div>
         </div>
     </a>
+
+    <button class="theme-toggle-btn" type="button" aria-label="Переключить тему">☀️</button>
 </header>
 "#,
         logo = icon(icon_name),
