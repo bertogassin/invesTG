@@ -1,7 +1,7 @@
 use super::common::escape_html;
 use super::common::{
-    back_hero, back_link, base_style, bottom_nav, empty_state_card, icon, page_shell, section_head,
-    topbar,
+    back_hero, back_link, base_style, bottom_nav, empty_state_card, icon, page_document,
+    page_shell, section_head, topbar,
 };
 
 pub fn render_category(
@@ -31,7 +31,7 @@ pub fn render_category(
         resources
             .iter()
             .map(|(id, title, description, contact, address, rating, votes, verified, premium)| {
-                let safe_title = escape_html(title);
+                            let safe_title = escape_html(title);
                 let safe_description = escape_html(description);
                 let safe_contact = escape_html(contact);
                 let safe_address = escape_html(address);
@@ -238,7 +238,6 @@ pub fn render_resource_profile(params: RenderResourceProfileParams<'_>) -> Strin
         _created_at,
         owner_public_id,
     } = params;
-    let safe_title = escape_html(title);
     let safe_description = escape_html(description);
     let safe_contact = escape_html(contact);
     let safe_address = escape_html(address);
@@ -399,27 +398,8 @@ pub fn render_resource_profile(params: RenderResourceProfileParams<'_>) -> Strin
     let safe_contact_href = escape_html(&contact_href);
     let safe_map_href = escape_html(&map_href);
 
-    format!(
-        r##"<!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-
-<title>{title} · ResursMap</title>
-
-<style>{style}</style>
-</head>
-
-<body>
-
-<main class="page">
-
-{topbar}
-
-{hero}
-
-<section>
+    let main_html = format!(
+        r####"<section>
 <button
         id="favorite-button"
         type="button"
@@ -747,11 +727,19 @@ pub fn render_resource_profile(params: RenderResourceProfileParams<'_>) -> Strin
         #{id}
     </div>
 
-</section>
+</section>"####,
+        description = safe_description,
+        owner_profile_html = owner_profile_html,
+        address = safe_address,
+        contact = safe_contact,
+        contact_href = safe_contact_href,
+        map_href = safe_map_href,
+        premium_style = premium_style,
+        id = id,
+    );
 
-</main>
-
-<script>
+    let body_after = format!(
+        r####"<script>
 (function () {{
     const resourceId = {id};
 
@@ -1018,28 +1006,28 @@ pub fn render_resource_profile(params: RenderResourceProfileParams<'_>) -> Strin
         }});
     }});
 }})();
-</script>
-
-</body>
-</html>"##,
-        style = base_style(),
-        topbar = topbar("RESOURCE NETWORK", "map"),
-        hero = back_hero(
-            &back_link("/app", "Вернуться к карте", "arrow-left",),
-            "map-pin",
-            category,
-            title,
-            &hero_description,
-        ),
-        title = safe_title,
-        description = safe_description,
-        owner_profile_html = owner_profile_html,
-        address = safe_address,
-        contact = safe_contact,
-        contact_href = safe_contact_href,
-        map_href = safe_map_href,
-        premium_style = premium_style,
+</script>"####,
         id = id,
+    );
+
+    page_document(
+        &format!("{} · ResursMap", title),
+        "",
+        "",
+        &format!(
+            "{topbar}\n\n{hero}\n\n{content}",
+            topbar = topbar("RESOURCE NETWORK", "map"),
+            hero = back_hero(
+                &back_link("/app", "Вернуться к карте", "arrow-left"),
+                "map-pin",
+                category,
+                title,
+                &hero_description,
+            ),
+            content = main_html,
+        ),
+        "",
+        &body_after,
     )
 }
 
