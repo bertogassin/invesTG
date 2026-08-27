@@ -373,7 +373,7 @@ body::before {
     border: 1px solid var(--line);
     border-radius: 16px;
 
-    background: rgba(0,0,0,.035);
+    background: rgba(214,183,122,.06);
 }
 
 .search input {
@@ -920,7 +920,7 @@ body::before {
 
 .bottom-nav {
     border-top: 1px solid var(--line);
-    background: rgba(8,10,13,.78);
+    background: var(--card);
     box-shadow:
         0 -12px 40px rgba(0,0,0,.25),
         inset 0 1px 0 rgba(0,0,0,.04);
@@ -1193,7 +1193,7 @@ pub(crate) fn bottom_nav(active: &str) -> String {
         <span>Профиль</span>
     </a>
 
-    <a class="{menu_class}" href="/app">
+    <a class="{menu_class}" href="/app/menu">
         {nav_menu}
         <span>Меню</span>
     </a>
@@ -1223,7 +1223,6 @@ pub(crate) fn topbar(subtitle: &str, icon_name: &str) -> String {
         </div>
     </a>
 
-    <button class="theme-toggle-btn" type="button" aria-label="Переключить тему">☀️</button>
 </header>
 "#,
         logo = icon(icon_name),

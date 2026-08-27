@@ -11,6 +11,10 @@ pub async fn home() -> Html<String> {
     Html("<h1>ResursMap</h1><p>Сервер работает.</p>".to_string())
 }
 
+pub async fn app_menu() -> Html<String> {
+    Html(templates::render_menu())
+}
+
 pub async fn app_root() -> Html<String> {
     Html(templates::render_continents())
 }

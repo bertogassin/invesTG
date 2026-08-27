@@ -1,4 +1,4 @@
-// Переключатель темы ResursMap
+// Переключатель темы ResursMap — работает в любом месте
 (function() {
     // Восстановим сохранённую тему
     try {
@@ -8,7 +8,7 @@
         }
     } catch(e) {}
 
-    // Обработчик клика
+    // Делегированный обработчик клика
     document.addEventListener('click', function(event) {
         var btn = event.target.closest('.theme-toggle-btn');
         if (!btn) return;
@@ -21,15 +21,19 @@
             localStorage.setItem('resursmap-theme', isLight ? 'light' : 'dark');
         } catch(e) {}
 
-        btn.textContent = isLight ? '🌙' : '☀️';
+        // Обновим все кнопки темы на странице
+        var allBtns = document.querySelectorAll('.theme-toggle-btn');
+        for (var i = 0; i < allBtns.length; i++) {
+            allBtns[i].textContent = isLight ? '🌙 Тёмная тема' : '☀️ Светлая тема';
+        }
     });
 
-    // Установим начальную иконку
+    // Установим начальный текст на всех кнопках
     document.addEventListener('DOMContentLoaded', function() {
-        var btn = document.querySelector('.theme-toggle-btn');
-        if (btn) {
-            var isLight = document.body.classList.contains('light-theme');
-            btn.textContent = isLight ? '🌙' : '☀️';
+        var allBtns = document.querySelectorAll('.theme-toggle-btn');
+        var isLight = document.body.classList.contains('light-theme');
+        for (var i = 0; i < allBtns.length; i++) {
+            allBtns[i].textContent = isLight ? '🌙 Тёмная тема' : '☀️ Светлая тема';
         }
     });
 })();

@@ -457,6 +457,48 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
     </label>
 
 
+    <div style="
+        margin-top:20px;
+        padding-top:18px;
+        border-top:1px solid var(--line);
+    ">
+        <div style="
+            font-size:11px;
+            font-weight:900;
+            letter-spacing:.08em;
+            text-transform:uppercase;
+            color:var(--muted);
+            margin-bottom:12px;
+        ">
+            Настройки приложения
+        </div>
+
+        <button class="theme-toggle-btn"
+                type="button"
+                style="
+                    width:100%;
+                    min-height:48px;
+                    display:flex;
+                    align-items:center;
+                    justify-content:center;
+                    gap:8px;
+                    padding:0 16px;
+                    border:1px solid rgba(214,183,122,.28);
+                    border-radius:14px;
+                    background:rgba(214,183,122,.06);
+                    color:var(--gold-light);
+                    font-size:14px;
+                    font-weight:700;
+                    cursor:pointer;
+                    transition:
+                        background .2s ease,
+                        border-color .2s ease;
+                ">
+            ☀️ Светлая тема
+        </button>
+    </div>
+
+
     <label style="display:block;">
 
         <div style="

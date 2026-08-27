@@ -1024,3 +1024,54 @@ pub fn render_search(
 // ============================================================
 // CONTACT REQUESTS
 // ============================================================
+
+pub fn render_menu() -> String {
+    let content = format!(
+        r#"<section>
+    {section_head_settings}
+
+    <div class="card" style="display:block;padding:20px;">
+        <div class="card-title" style="margin-bottom:12px;">Тема оформления</div>
+
+        <button class="theme-toggle-btn"
+                type="button"
+                style="
+                    width:100%;
+                    min-height:48px;
+                    display:flex;
+                    align-items:center;
+                    justify-content:center;
+                    gap:8px;
+                    border:1px solid rgba(214,183,122,.28);
+                    border-radius:14px;
+                    background:rgba(214,183,122,.06);
+                    color:var(--gold-light);
+                    font-size:14px;
+                    font-weight:700;
+                    cursor:pointer;
+                ">
+            ☀️ Светлая тема
+        </button>
+    </div>
+
+    <div class="card" style="display:block;padding:20px;margin-top:12px;">
+        <div class="card-title" style="margin-bottom:6px;">Язык</div>
+        <div class="card-meta">Русский (скоро)</div>
+    </div>
+</section>"#,
+        section_head_settings = section_head("Меню", "Настройки приложения", None),
+    );
+
+    page_shell(
+        "Меню · ResursMap",
+        &topbar("MENU", "menu"),
+        &simple_hero(
+            "settings",
+            "ResursMap",
+            "Меню",
+            "Настройки приложения и персонализация.",
+        ),
+        &content,
+        &bottom_nav("menu"),
+    )
+}
