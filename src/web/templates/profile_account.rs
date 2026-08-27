@@ -743,64 +743,10 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
 </a>
 
 
-<a class="card"
-   href="/app/favorites"
-   style="
-       text-decoration:none;
-       color:inherit;
-   ">
-
-    <div class="card-icon">
-        {heart}
-    </div>
-
-    <div class="card-content">
-
-        <div class="card-title">
-            Избранное
-        </div>
-
-        <div class="card-meta">
-            Сохранённые ресурсы
-        </div>
-
-    </div>
-
-    <div class="card-arrow">
-        {arrow2}
-    </div>
-
-</a>
+{favorites_card}
 
 
-<a class="card"
-   href="/app/search"
-   style="
-       text-decoration:none;
-       color:inherit;
-   ">
-
-    <div class="card-icon">
-        {search_icon}
-    </div>
-
-    <div class="card-content">
-
-        <div class="card-title">
-            Найти ресурс
-        </div>
-
-        <div class="card-meta">
-            Глобальный поиск по ResursMap
-        </div>
-
-    </div>
-
-    <div class="card-arrow">
-        {arrow3}
-    </div>
-
-</a>
+{search_card}
 
 
 </div>"####,
@@ -815,11 +761,19 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
         unread_messages_badge = unread_messages_badge,
         notification_arrow = icon("chevron"),
         resource_icon = icon("map-pin"),
-        heart = icon("heart"),
-        search_icon = icon("search"),
+        favorites_card = super::navigation_card(
+            "/app/favorites",
+            "heart",
+            "Избранное",
+            "Сохранённые ресурсы",
+        ),
+        search_card = super::navigation_card(
+            "/app/search",
+            "search",
+            "Найти ресурс",
+            "Глобальный поиск по ResursMap",
+        ),
         arrow1 = icon("chevron"),
-        arrow2 = icon("chevron"),
-        arrow3 = icon("chevron"),
     );
 
     let body_after_html = r####"{bottom_nav}
