@@ -925,6 +925,48 @@ body::before {
 // MAIN APP
 // ============================================================
 
+pub(crate) fn page_shell(
+    title: &str,
+    topbar_html: &str,
+    hero_html: &str,
+    content_html: &str,
+    bottom_nav_html: &str,
+) -> String {
+    format!(
+        r#"<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{title}</title>
+<style>{style}</style>
+</head>
+
+<body>
+
+<main class="page">
+
+{topbar}
+
+{hero}
+
+{content}
+
+</main>
+
+{bottom_nav}
+
+</body>
+</html>"#,
+        title = escape_html(title),
+        style = base_style(),
+        topbar = topbar_html,
+        hero = hero_html,
+        content = content_html,
+        bottom_nav = bottom_nav_html,
+    )
+}
+
 pub(crate) fn bottom_nav(active: &str) -> String {
     let item_class = |name: &str| {
         if active == name {

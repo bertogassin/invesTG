@@ -1,5 +1,5 @@
 use super::common::{
-    base_style, bottom_nav, empty_state_card, escape_html, icon, navigation_card,
+    base_style, bottom_nav, empty_state_card, escape_html, icon, navigation_card, page_shell,
     people_result_card, resource_result_card, search_form_hero, search_hero, section_head,
     simple_hero, topbar,
 };
@@ -1054,24 +1054,8 @@ pub fn render_search(
         )
     };
 
-    format!(
-        r#"<!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Поиск · ResursMap</title>
-<style>{style}</style>
-</head>
-
-<body>
-
-<main class="page">
-
-{topbar}
-
-{hero}
-
+    let content = format!(
+        r#"
 {location_section}
 
 {people_section}
@@ -1081,27 +1065,25 @@ pub fn render_search(
 <section>
     {results}
 </section>
+"#,
+        location_section = location_section,
+        people_section = people_section,
+        result_header = result_header,
+        results = results,
+    );
 
-</main>
-
-{bottom_nav}
-
-</body>
-</html>"#,
-        style = base_style(),
-        topbar = topbar("SEARCH", "search"),
-        hero = search_form_hero(
+    page_shell(
+        "Поиск · ResursMap",
+        &topbar("SEARCH", "search"),
+        &search_form_hero(
             "Поиск",
             "Найти ресурс",
             "Ищите услуги, компании, специалистов и другие ресурсы.",
             q,
             "Например: охранник, бизнес, улица...",
         ),
-        bottom_nav = bottom_nav("search"),
-        location_section = location_section,
-        people_section = people_section,
-        result_header = result_header,
-        results = results,
+        &content,
+        &bottom_nav("search"),
     )
 }
 
