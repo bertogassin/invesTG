@@ -1,5 +1,5 @@
 use super::common::{
-    back_hero, back_link, base_style, bottom_nav, empty_state_card, escape_html, icon,
+    back_hero, back_link, base_style, bottom_nav, empty_state_card, escape_html, icon, page_shell,
     section_head, topbar,
 };
 
@@ -607,58 +607,31 @@ pub fn render_messages(
     let section_head_dialogs =
         section_head("Диалоги", &format!("Непрочитанных: {}", total_unread), None);
 
-    format!(
-        r#"<!DOCTYPE html>
-<html lang="ru">
-
-<head>
-
-<meta charset="utf-8">
-
-<meta name="viewport"
-      content="width=device-width, initial-scale=1">
-
-<title>Сообщения · ResursMap</title>
-
-<style>{style}</style>
-
-</head>
-
-<body>
-
-<main class="page">
-
-{topbar}
-
-
-{hero}
-
-
-{section_head_dialogs}
+    let content_html = format!(
+        r####"{section_head_dialogs}
 
 
 <section>
 
     {content}
 
-</section>
+</section>"####,
+        section_head_dialogs = section_head_dialogs,
+        content = content,
+    );
 
-
-</main>
-
-</body>
-
-</html>"#,
-        style = base_style(),
-        topbar = topbar("MESSAGES", "search"),
-        hero = back_hero(
-            &back_link("/app/me", "Назад", "chevron-left",),
+    page_shell(
+        "Сообщения · ResursMap",
+        &topbar("MESSAGES", "search"),
+        &back_hero(
+            &back_link("/app/me", "Назад", "chevron-left"),
             "message-circle",
             "Внутренняя связь",
             "Сообщения",
             "Ваши личные диалоги внутри ResursMap.",
         ),
-        content = content,
+        &content_html,
+        "",
     )
 }
 
