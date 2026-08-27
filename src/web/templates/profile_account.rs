@@ -1767,35 +1767,13 @@ pub fn render_public_user_profile(params: RenderPublicUserProfileParams<'_>) -> 
 }
 
 pub fn render_public_user_not_found() -> String {
+    let back_to_map = navigation_card("/app", "map", "Вернуться на карту", "");
+
     let content = format!(
         r#"<section>
-    <a class="card"
-       href="/app"
-       style="
-           text-decoration:none;
-           margin-top:20px;
-       ">
-
-        <div class="card-icon">
-            {map}
-        </div>
-
-        <div class="card-content">
-
-            <div class="card-title">
-                Вернуться на карту
-            </div>
-
-        </div>
-
-        <div class="card-arrow">
-            {arrow}
-        </div>
-
-    </a>
+    {back_to_map}
 </section>"#,
-        map = icon("map"),
-        arrow = icon("chevron"),
+        back_to_map = back_to_map,
     );
 
     page_shell(
