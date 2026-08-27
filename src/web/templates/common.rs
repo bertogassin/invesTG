@@ -568,18 +568,23 @@ body::before {
     align-items: center;
     justify-content: center;
 
-    gap: 5px;
+    gap: 6px;
 
-    min-height: 52px;
+    min-height: 56px;
 
     color: #777e88;
     text-decoration: none;
 
     border-radius: 16px;
 
-    font-size: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .02em;
 
-    transition: .2s ease;
+    transition:
+        color .2s ease,
+        background .2s ease,
+        transform .2s ease;
 }
 
 .nav-item:hover,
@@ -588,9 +593,17 @@ body::before {
     background: rgba(214,183,122,.08);
 }
 
+.nav-item:active {
+    transform: scale(.96);
+}
+
 .nav-item .icon {
-    width: 19px;
-    height: 19px;
+    width: 22px;
+    height: 22px;
+}
+
+.nav-item.active .icon {
+    stroke-width: 2.2;
 }
 
 /* -----------------------------------------------------------
