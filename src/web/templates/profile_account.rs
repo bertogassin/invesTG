@@ -153,7 +153,7 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
             align-items:center;
             justify-content:center;
             flex:0 0 auto;
-            background:rgba(214,183,122,.10);
+            background:rgba(214,183,122,.08);
             border:1px solid rgba(214,183,122,.28);
         ">
             {user_icon}
@@ -376,8 +376,8 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
             align-items:center;
             justify-content:center;
             flex:0 0 auto;
-            background:rgba(214,183,122,.10);
-            border:1px solid rgba(214,183,122,.25);
+            background:rgba(214,183,122,.08);
+            border:1px solid rgba(214,183,122,.24);
         ">
             {settings_icon}
         </div>
@@ -388,8 +388,8 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
     <div style="
         padding:12px 14px;
         border-radius:13px;
-        background:rgba(255,255,255,.03);
-        border:1px solid rgba(255,255,255,.07);
+        background:rgba(0,0,0,.03);
+        border:1px solid rgba(0,0,0,.07);
         margin-bottom:16px;
     ">
 
@@ -478,8 +478,8 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
                 resize:vertical;
                 padding:14px;
                 border-radius:14px;
-                border:1px solid rgba(255,255,255,.12);
-                background:rgba(255,255,255,.035);
+                border:1px solid var(--line);
+                background:rgba(0,0,0,.035);
                 color:var(--text);
                 font:inherit;
                 line-height:1.5;
@@ -510,8 +510,8 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
                 box-sizing:border-box;
                 padding:0 13px;
                 border-radius:14px;
-                border:1px solid rgba(255,255,255,.12);
-                background:rgba(255,255,255,.035);
+                border:1px solid var(--line);
+                background:rgba(0,0,0,.035);
                 color:var(--text);
                 font:inherit;
             "
@@ -555,8 +555,8 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
             color:#111;
             background:linear-gradient(
                 135deg,
-                #d6b77a,
-                #b88932
+                var(--gold),
+                var(--gold-light)
             );
         "
      class="ui-button">
@@ -894,13 +894,13 @@ pub fn render_notifications(
 
                         "resource_rejected" => ("!", "#dc2626"),
 
-                        "chat_message" => ("💬", "#d6b77a"),
+                        "chat_message" => ("💬", "var(--gold)"),
 
                         "contact_accepted" => ("✓", "#16a34a"),
 
                         "contact_rejected" => ("×", "#dc2626"),
 
-                        _ => ("🔔", "#b88932"),
+                        _ => ("🔔", "var(--gold-light)"),
                     };
 
                     let unread_badge = if *is_read == 0 {
@@ -908,7 +908,7 @@ pub fn render_notifications(
                             <span style="
                                 font-size:10px;
                                 font-weight:900;
-                                color:#d6b77a;
+                                color:var(--gold);
                                 text-transform:uppercase;
                                 letter-spacing:.06em;
                             ">
@@ -954,8 +954,8 @@ pub fn render_notifications(
                                        color:var(--text);
                                        font-size:13px;
                                        font-weight:800;
-                                       border:1px solid rgba(255,255,255,.10);
-                                       background:rgba(255,255,255,.03);
+                                       border:1px solid var(--line);
+                                       background:rgba(0,0,0,.03);
                                        margin-top:13px;
                                    ">
                                     Открыть ресурс
@@ -995,7 +995,7 @@ pub fn render_notifications(
             font-weight:900;
             color:{accent};
             border:1px solid rgba(214,183,122,.20);
-            background:rgba(255,255,255,.03);
+            background:rgba(0,0,0,.03);
         ">
             {icon_text}
         </div>
@@ -1145,7 +1145,7 @@ pub fn render_public_user_profile(params: RenderPublicUserProfileParams<'_>) -> 
        color:var(--text);
        font-weight:850;
        border:1px solid rgba(214,183,122,.38);
-       background:rgba(214,183,122,.10);
+       background:rgba(214,183,122,.08);
    ">
     Telegram · @{username}
 </a>
@@ -1255,7 +1255,7 @@ pub fn render_public_user_profile(params: RenderPublicUserProfileParams<'_>) -> 
             min-height:48px;
             border-radius:14px;
             border:1px solid rgba(214,183,122,.38);
-            background:rgba(214,183,122,.10);
+            background:rgba(214,183,122,.08);
             color:var(--text);
             font-weight:850;
             cursor:pointer;
@@ -1280,8 +1280,8 @@ pub fn render_public_user_profile(params: RenderPublicUserProfileParams<'_>) -> 
                 resize:vertical;
                 padding:13px;
                 border-radius:14px;
-                border:1px solid rgba(255,255,255,.12);
-                background:rgba(255,255,255,.035);
+                border:1px solid var(--line);
+                background:rgba(0,0,0,.035);
                 color:var(--text);
                 font:inherit;
                 line-height:1.45;
@@ -1315,8 +1315,8 @@ pub fn render_public_user_profile(params: RenderPublicUserProfileParams<'_>) -> 
                 style="
                     min-height:44px;
                     border-radius:12px;
-                    border:1px solid rgba(255,255,255,.12);
-                    background:rgba(255,255,255,.03);
+                    border:1px solid var(--line);
+                    background:rgba(0,0,0,.03);
                     color:var(--text);
                     font-weight:750;
                     cursor:pointer;
@@ -1353,7 +1353,7 @@ pub fn render_public_user_profile(params: RenderPublicUserProfileParams<'_>) -> 
              display:block;
              padding:20px;
              margin-bottom:18px;
-             border:1px solid rgba(214,183,122,.25);
+             border:1px solid rgba(214,183,122,.24);
          ">
 
     <div style="
@@ -1410,7 +1410,7 @@ pub fn render_public_user_profile(params: RenderPublicUserProfileParams<'_>) -> 
                         r#"<span style="
                                 font-size:10px;
                                 font-weight:900;
-                                color:#b88932;
+                                color:var(--gold-light);
                             ">★ PREMIUM</span>"#
                     } else {
                         ""
@@ -1459,7 +1459,7 @@ pub fn render_public_user_profile(params: RenderPublicUserProfileParams<'_>) -> 
             justify-content:center;
             flex:0 0 auto;
             border-radius:18px;
-            background:rgba(214,183,122,.10);
+            background:rgba(214,183,122,.08);
             border:1px solid rgba(214,183,122,.28);
         ">
             {profile_icon}
@@ -1765,7 +1765,7 @@ pub fn render_favorites(
                     premium,
                 )| {
                     let premium_badge = if *premium != 0 {
-                        r#"<span style="font-size:10px;font-weight:800;color:#b88932;">★ PREMIUM</span>"#
+                        r#"<span style="font-size:10px;font-weight:800;color:var(--gold-light);">★ PREMIUM</span>"#
                     } else {
                         ""
                     };

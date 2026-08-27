@@ -55,7 +55,7 @@ pub fn render_category(
                         border-radius:999px;
                         background:rgba(214,183,122,.12);
                         border:1px solid rgba(214,183,122,.45);
-                        color:#b88932;
+                        color:var(--gold-light);
                         font-size:10px;
                         font-weight:800;
                         letter-spacing:.10em;
@@ -65,7 +65,7 @@ pub fn render_category(
                 };
 
                 let card_style = if *premium != 0 {
-                    "margin-bottom:16px;                    border:1px solid rgba(214,183,122,.55);                    background:linear-gradient(145deg,rgba(255,255,255,1),rgba(250,246,238,.98));                    box-shadow:0 10px 32px rgba(214,183,122,.14),0 0 0 1px rgba(214,183,122,.06);                    position:relative;                    overflow:hidden;"
+                    "margin-bottom:16px;                    border:1px solid rgba(214,183,122,.55);                    background:linear-gradient(145deg,var(--card),var(--card-hover));                    box-shadow:0 10px 32px rgba(214,183,122,.14),0 0 0 1px rgba(214,183,122,.06);                    position:relative;                    overflow:hidden;"
                 } else {
                     "margin-bottom:14px;"
                 };
@@ -120,7 +120,7 @@ pub fn render_category(
                     id,
                     card_style,
                     if *premium != 0 {
-                        r#"<div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,#d6b77a,transparent);"></div>"#
+                        r#"<div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--gold),transparent);"></div>"#
                     } else {
                         ""
                     },
@@ -232,7 +232,7 @@ pub fn render_resource_profile(params: RenderResourceProfileParams<'_>) -> Strin
             border-radius:999px;
             background:rgba(214,183,122,.12);
             border:1px solid rgba(214,183,122,.45);
-            color:#b88932;
+            color:var(--gold-light);
             font-size:11px;
             font-weight:800;
             letter-spacing:.08em;
@@ -277,7 +277,7 @@ pub fn render_resource_profile(params: RenderResourceProfileParams<'_>) -> Strin
     );
 
     let premium_style = if premium != 0 {
-        "border:1px solid rgba(214,183,122,.55);background:linear-gradient(145deg,#fff,#faf6ee);box-shadow:0 12px 38px rgba(214,183,122,.14);"
+        "border:1px solid rgba(214,183,122,.55);background:linear-gradient(145deg,var(--card),var(--card-hover));box-shadow:0 12px 38px rgba(214,183,122,.14);"
     } else {
         "border:1px solid rgba(0,0,0,.07);"
     };
@@ -432,7 +432,7 @@ pub fn render_resource_profile(params: RenderResourceProfileParams<'_>) -> Strin
             padding:14px;
             border-radius:16px;
             border:1px solid rgba(217,119,6,.18);
-            background:rgba(255,255,255,.03);
+            background:rgba(0,0,0,.03);
         ">
 
         <div style="
@@ -453,8 +453,8 @@ pub fn render_resource_profile(params: RenderResourceProfileParams<'_>) -> Strin
                 box-sizing:border-box;
                 padding:12px 13px;
                 border-radius:12px;
-                border:1px solid rgba(255,255,255,.12);
-                background:rgba(255,255,255,.04);
+                border:1px solid var(--line);
+                background:rgba(0,0,0,.04);
                 color:var(--text);
                 resize:vertical;
                 font-size:14px;
@@ -490,8 +490,8 @@ pub fn render_resource_profile(params: RenderResourceProfileParams<'_>) -> Strin
                     min-height:40px;
                     padding:0 14px;
                     border-radius:12px;
-                    border:1px solid rgba(255,255,255,.10);
-                    background:rgba(255,255,255,.03);
+                    border:1px solid var(--line);
+                    background:rgba(0,0,0,.03);
                     color:var(--text);
                     font-weight:700;
                     cursor:pointer;
@@ -651,7 +651,7 @@ pub fn render_resource_profile(params: RenderResourceProfileParams<'_>) -> Strin
                font-weight:800;
                color:var(--text);
                border:1px solid rgba(214,183,122,.38);
-               background:rgba(214,183,122,.10);
+               background:rgba(214,183,122,.08);
            ">
             📞 Связаться
         </a>
@@ -673,7 +673,7 @@ pub fn render_resource_profile(params: RenderResourceProfileParams<'_>) -> Strin
                font-weight:800;
                color:var(--text);
                border:1px solid var(--line);
-               background:rgba(255,255,255,.035);
+               background:rgba(0,0,0,.035);
            ">
             📍 На карте
         </a>
@@ -1052,7 +1052,7 @@ pub fn render_my_resources(
                 let safe_rejection_reason = escape_html(rejection_reason);
 
                 let premium_badge = if *premium != 0 {
-                    r#"<span style="font-size:11px;font-weight:800;color:#b88932;">★ PREMIUM</span>"#
+                    r#"<span style="font-size:11px;font-weight:800;color:var(--gold-light);">★ PREMIUM</span>"#
                 } else {
                     ""
                 };
@@ -1239,8 +1239,8 @@ pub fn render_my_resources(
                                             font-size:13px;
                                             font-weight:700;
                                             color:var(--text);
-                                            border:1px solid rgba(255,255,255,.10);
-                                            background:rgba(255,255,255,.03);
+                                            border:1px solid var(--line);
+                                            background:rgba(0,0,0,.03);
                                         "
                                     >
                                         Открыть
@@ -1358,7 +1358,7 @@ pub fn render_edit_resource(
     <button type="submit"
             style="min-height:52px;border:0;border-radius:16px;
                    font-size:16px;font-weight:800;cursor:pointer;
-                   background:linear-gradient(135deg,#d6b77a,#b88932);
+                   background:linear-gradient(135deg,var(--gold),var(--gold-light));
                    color:#111;" class="ui-button">
         Сохранить изменения
     </button>

@@ -160,7 +160,7 @@ body {
         ),
         radial-gradient(
             circle at 85% 15%,
-            rgba(214,183,122,.09),
+            rgba(214,183,122,.08),
             transparent 30%
         ),
         linear-gradient(
@@ -248,7 +248,7 @@ body::before {
     background:
         linear-gradient(
             145deg,
-            rgba(214,183,122,.15),
+            rgba(214,183,122,.12),
             rgba(0,0,0,.025)
         );
 
@@ -286,7 +286,7 @@ body::before {
     background:
         radial-gradient(
             circle at 100% 0%,
-            rgba(214,183,122,.13),
+            rgba(214,183,122,.12),
             transparent 36%
         ),
         radial-gradient(
@@ -294,7 +294,7 @@ body::before {
             rgba(101,184,201,.09),
             transparent 38%
         ),
-        rgba(17,20,25,.78);
+        var(--card);
 
     box-shadow:
         0 30px 80px rgba(0,0,0,.32),
@@ -334,7 +334,7 @@ body::before {
     height: 6px;
     border-radius: 50%;
     background: var(--gold);
-    box-shadow: 0 0 14px rgba(214,183,122,.7);
+    box-shadow: 0 0 14px rgba(214,183,122,.70);
 }
 
 .hero h1 {
@@ -389,7 +389,7 @@ body::before {
 }
 
 .search input::placeholder {
-    color: #666d78;
+    color: var(--muted);
 }
 
 /* -----------------------------------------------------------
@@ -456,7 +456,7 @@ body::before {
     background:
         linear-gradient(
             145deg,
-            rgba(255,255,255,.055),
+            rgba(0,0,0,.055),
             rgba(0,0,0,.018)
         ),
         var(--card);
@@ -501,8 +501,8 @@ body::before {
     background:
         linear-gradient(
             145deg,
-            rgba(214,183,122,.13),
-            rgba(214,183,122,.035)
+            rgba(214,183,122,.12),
+            rgba(214,183,122,.04)
         );
 }
 
@@ -527,7 +527,7 @@ body::before {
 }
 
 .card-arrow {
-    color: #656c76;
+    color: var(--muted);
 }
 
 /* -----------------------------------------------------------
@@ -593,7 +593,7 @@ body::before {
     border: 1px solid var(--line);
     border-radius: 22px;
 
-    background: rgba(13,16,21,.88);
+    background: var(--card);
 
     backdrop-filter: blur(24px);
     -webkit-backdrop-filter: blur(24px);
@@ -613,7 +613,7 @@ body::before {
 
     min-height: 56px;
 
-    color: #777e88;
+    color: var(--muted);
     text-decoration: none;
 
     border-radius: 16px;
@@ -712,7 +712,7 @@ body::before {
             rgba(240,214,156,.28),
             transparent 48%),
         linear-gradient(145deg,
-            rgba(214,183,122,.18),
+            rgba(214,183,122,.16),
             rgba(101,184,201,.08));
     border: 1px solid rgba(214,183,122,.28);
     box-shadow:
@@ -804,7 +804,7 @@ body::before {
 
 .search:focus-within {
     border-color: rgba(214,183,122,.45);
-    background: rgba(255,255,255,.065);
+    background: rgba(0,0,0,.065);
     box-shadow:
         0 0 0 4px rgba(214,183,122,.06),
         0 16px 45px rgba(0,0,0,.25);
@@ -819,7 +819,7 @@ body::before {
     background:
         linear-gradient(
             145deg,
-            rgba(255,255,255,.055),
+            rgba(0,0,0,.055),
             rgba(0,0,0,.018)
         );
     box-shadow:
@@ -851,7 +851,7 @@ body::before {
 
 .card:hover {
     transform: translateY(-4px);
-    border-color: rgba(214,183,122,.25);
+    border-color: rgba(214,183,122,.24);
     background:
         linear-gradient(
             145deg,
@@ -860,8 +860,8 @@ body::before {
         );
     box-shadow:
         0 20px 50px rgba(0,0,0,.30),
-        0 0 35px rgba(214,183,122,.055),
-        inset 0 1px 0 rgba(255,255,255,.07);
+        0 0 35px rgba(214,183,122,.04),
+        inset 0 1px 0 rgba(0,0,0,.07);
 }
 
 .card:hover::before {
@@ -889,12 +889,12 @@ body::before {
 }
 
 .feature {
-    border: 1px solid rgba(255,255,255,.07);
+    border: 1px solid rgba(0,0,0,.07);
     background:
         linear-gradient(
             145deg,
             rgba(0,0,0,.045),
-            rgba(255,255,255,.015)
+            rgba(0,0,0,.015)
         );
     box-shadow:
         0 12px 35px rgba(0,0,0,.16),
@@ -942,7 +942,7 @@ body::before {
 }
 
 .nav-item.active .icon {
-    filter: drop-shadow(0 0 8px rgba(214,183,122,.25));
+    filter: drop-shadow(0 0 8px rgba(214,183,122,.24));
 }
 
 .section-head {
@@ -959,7 +959,7 @@ body::before {
 }
 
 .section-caption {
-    color: rgba(255,255,255,.48);
+    color: rgba(0,0,0,.48);
 }
 
 
@@ -1027,7 +1027,7 @@ body::before {
 .ui-textarea:focus-visible,
 .ui-select:focus-visible,
 .ui-button:focus-visible {
-    outline: 2px solid rgba(214,183,122,.72);
+    outline: 2px solid rgba(214,183,122,.70);
     outline-offset: 2px;
 }
 
@@ -1035,7 +1035,7 @@ body::before {
 .ui-textarea:focus,
 .ui-select:focus {
     border-color: rgba(214,183,122,.45);
-    background: rgba(255,255,255,.065);
+    background: rgba(0,0,0,.065);
     box-shadow: 0 0 0 4px rgba(214,183,122,.06);
     outline: none;
 }

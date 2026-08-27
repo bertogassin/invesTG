@@ -72,7 +72,7 @@ pub fn render_contact_requests(
        justify-content:center;
        padding:0 13px;
        border-radius:12px;
-       border:1px solid rgba(255,255,255,.10);
+       border:1px solid var(--line);
        text-decoration:none;
        color:inherit;
        font-size:12px;
@@ -182,7 +182,7 @@ pub fn render_contact_requests(
        font-size:13px;
        font-weight:850;
        border:1px solid rgba(214,183,122,.38);
-       background:rgba(214,183,122,.10);
+       background:rgba(214,183,122,.08);
    ">
     💬 Открыть чат
 </a>
@@ -250,8 +250,8 @@ pub fn render_contact_requests(
                 margin-top:12px;
                 padding:12px 13px;
                 border-radius:12px;
-                background:rgba(255,255,255,.035);
-                border:1px solid rgba(255,255,255,.07);
+                background:rgba(0,0,0,.035);
+                border:1px solid rgba(0,0,0,.07);
                 font-size:14px;
                 line-height:1.5;
                 overflow-wrap:anywhere;
@@ -664,13 +664,13 @@ pub fn render_chat(
                         let bubble_bg = if mine {
                             "rgba(214,183,122,.14)"
                         } else {
-                            "rgba(255,255,255,.045)"
+                            "rgba(0,0,0,.045)"
                         };
 
                         let border = if mine {
                             "rgba(214,183,122,.30)"
                         } else {
-                            "rgba(255,255,255,.08)"
+                            "rgba(0,0,0,.08)"
                         };
 
                         let status = if mine && *is_read != 0 {
@@ -731,8 +731,8 @@ pub fn render_chat(
         font-size:10px;
         font-weight:750;
         color:var(--muted);
-        background:rgba(255,255,255,.045);
-        border:1px solid rgba(255,255,255,.07);
+        background:rgba(0,0,0,.045);
+        border:1px solid rgba(0,0,0,.07);
     ">
         {}
     </span>
@@ -834,8 +834,8 @@ pub fn render_chat(
           align-items:flex-end;
           padding:10px;
           border-radius:18px;
-          background:rgba(10,12,15,.95);
-          border:1px solid rgba(255,255,255,.08);
+          background:var(--card);
+          border:1px solid rgba(0,0,0,.08);
           backdrop-filter:blur(14px);
       " class="ui-form">
 
@@ -852,8 +852,8 @@ pub fn render_chat(
             resize:vertical;
             box-sizing:border-box;
             border-radius:14px;
-            border:1px solid rgba(255,255,255,.10);
-            background:rgba(255,255,255,.04);
+            border:1px solid var(--line);
+            background:rgba(0,0,0,.04);
             color:var(--text);
             padding:12px 13px;
             font:inherit;
@@ -868,7 +868,7 @@ pub fn render_chat(
                 height:48px;
                 border-radius:14px;
                 border:1px solid rgba(214,183,122,.40);
-                background:rgba(214,183,122,.13);
+                background:rgba(214,183,122,.12);
                 color:var(--text);
                 font-size:20px;
                 font-weight:900;

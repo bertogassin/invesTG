@@ -97,8 +97,8 @@ pub fn render_continents() -> String {
         height:34px;
         margin-bottom:10px;
         border-radius:11px;
-        background:rgba(214,183,122,.10);
-        border:1px solid rgba(214,183,122,.15);
+        background:rgba(214,183,122,.08);
+        border:1px solid rgba(214,183,122,.12);
     }
 
     .rm-install-grid {
@@ -112,8 +112,8 @@ pub fn render_continents() -> String {
         min-height:54px;
         padding:9px 10px;
         border-radius:14px;
-        border:1px solid rgba(255,255,255,.12);
-        background:rgba(255,255,255,.035);
+        border:1px solid var(--line);
+        background:rgba(0,0,0,.035);
         color:var(--text);
         cursor:pointer;
         font:inherit;
@@ -147,7 +147,7 @@ pub fn render_continents() -> String {
     }
 
     .rm-flow-number {
-        color:#d6b77a;
+        color:var(--gold);
         font-size:11px;
         font-weight:900;
         letter-spacing:.08em;
@@ -228,8 +228,8 @@ pub fn render_continents() -> String {
         justify-content:center;
         flex-direction:column;
         background:
-          radial-gradient(circle at 50% 38%,rgba(214,183,122,.13),transparent 38%),
-          linear-gradient(160deg,rgb(17,18,22),rgb(24,24,27));
+          radial-gradient(circle at 50% 38%,rgba(214,183,122,.12),transparent 38%),
+          linear-gradient(160deg,var(--bg),var(--bg-soft));
         transition:opacity .45s ease,visibility .45s ease;
      ">
 
@@ -247,7 +247,7 @@ pub fn render_continents() -> String {
         font-size:27px;
         font-weight:900;
         letter-spacing:.03em;
-        color:rgb(245,241,233);
+        color:var(--text);
     ">
         ResursMap
     </div>
@@ -257,7 +257,7 @@ pub fn render_continents() -> String {
         font-size:12px;
         letter-spacing:.14em;
         text-transform:uppercase;
-        color:rgb(214,183,122);
+        color:var(--gold);
     ">
         Resource Network
     </div>
@@ -296,7 +296,7 @@ pub fn render_continents() -> String {
             font-weight:800;
             letter-spacing:.12em;
             text-transform:uppercase;
-            color:rgb(184,137,50);
+            color:var(--gold-light);
         ">
             Resource Network
         </div>
@@ -924,8 +924,8 @@ pub fn render_search(
                             padding:4px 8px;
                             border-radius:999px;
                             border:1px solid rgba(214,183,122,.38);
-                            background:rgba(214,183,122,.10);
-                            color:#d6b77a;
+                            background:rgba(214,183,122,.08);
+                            color:var(--gold);
                             font-size:10px;
                             font-weight:800;
                         ">★ PREMIUM</span>"#
