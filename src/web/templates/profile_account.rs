@@ -563,184 +563,17 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
     gap:12px;
 ">
 
-<a class="card"
-   href="/app/contact-requests"
-   style="
-       text-decoration:none;
-       color:inherit;
-   ">
-
-    <div class="card-icon">
-        👥
-    </div>
-
-    <div class="card-content">
-
-        <div class="card-title">
-            Запросы на связь
-        </div>
-
-        <div class="card-meta">
-            Входящие запросы от участников ResursMap
-        </div>
-
-    </div>
-
-    <div style="
-        display:flex;
-        align-items:center;
-        gap:10px;
-    ">
-
-        <span style="
-            min-width:28px;
-            height:28px;
-            padding:0 8px;
-            border-radius:999px;
-            display:flex;
-            align-items:center;
-            justify-content:center;
-            box-sizing:border-box;
-            font-size:12px;
-            font-weight:900;
-            background:rgba(214,183,122,.12);
-            border:1px solid rgba(214,183,122,.30);
-        ">
-            {pending_contact_requests_count}
-        </span>
-
-        <div class="card-arrow">
-            {notification_arrow}
-        </div>
-
-    </div>
-
-</a>
+{contact_requests_card}
 
 
 
-<a class="card"
-   href="/app/messages"
-   style="
-       text-decoration:none;
-       color:inherit;
-   ">
-
-    <div class="card-icon">
-        💬
-    </div>
-
-    <div class="card-content">
-
-        <div class="card-title">
-            Сообщения
-        </div>
-
-        <div class="card-meta">
-            Личные диалоги внутри ResursMap
-        </div>
-
-    </div>
-
-    <div style="
-        display:flex;
-        align-items:center;
-        gap:10px;
-    ">
-        {unread_messages_badge}
-
-        <div class="card-arrow">
-            ›
-        </div>
-    </div>
-
-</a>
+{messages_card}
 
 
-<a class="card"
-   href="/app/notifications"
-   style="
-       text-decoration:none;
-       color:inherit;
-   ">
-
-    <div class="card-icon">
-        🔔
-    </div>
-
-    <div class="card-content">
-
-        <div class="card-title">
-            Уведомления
-        </div>
-
-        <div class="card-meta">
-            Модерация и изменения ваших ресурсов
-        </div>
-
-    </div>
-
-    <div style="
-        display:flex;
-        align-items:center;
-        gap:10px;
-    ">
-
-        <span style="
-            min-width:28px;
-            height:28px;
-            padding:0 8px;
-            border-radius:999px;
-            display:flex;
-            align-items:center;
-            justify-content:center;
-            box-sizing:border-box;
-            font-size:12px;
-            font-weight:900;
-            background:rgba(214,183,122,.12);
-            border:1px solid rgba(214,183,122,.30);
-        ">
-            {unread_notifications_count}
-        </span>
-
-        <div class="card-arrow">
-            {notification_arrow}
-        </div>
-
-    </div>
-
-</a>
+{notifications_card}
 
 
-<a id="my-resources-link"
-   class="card"
-   href="/app/my-resources"
-   style="
-       text-decoration:none;
-       color:inherit;
-   ">
-
-    <div class="card-icon">
-        {resource_icon}
-    </div>
-
-    <div class="card-content">
-
-        <div class="card-title">
-            Мои ресурсы
-        </div>
-
-        <div class="card-meta">
-            Публикации, статусы и редактирование
-        </div>
-
-    </div>
-
-    <div class="card-arrow">
-        {arrow1}
-    </div>
-
-</a>
+{my_resources_card}
 
 
 {favorites_card}
@@ -756,11 +589,101 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
         intent_status_text = intent_status_text,
         safe_intent_text = safe_intent_text,
         contact_checked = contact_checked,
-        unread_notifications_count = unread_notifications_count,
-        pending_contact_requests_count = pending_contact_requests_count,
-        unread_messages_badge = unread_messages_badge,
-        notification_arrow = icon("chevron"),
-        resource_icon = icon("map-pin"),
+        contact_requests_card =
+            super::extended_navigation_card(super::ExtendedNavigationCardParams {
+                id: None,
+                href: "/app/contact-requests",
+                icon_html: "👥",
+                title: "Запросы на связь",
+                meta: "Входящие запросы от участников ResursMap",
+                trailing_html: Some(&format!(
+                    r#"<div style="
+    display:flex;
+    align-items:center;
+    gap:10px;
+">
+    <span style="
+        min-width:28px;
+        height:28px;
+        padding:0 8px;
+        border-radius:999px;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        box-sizing:border-box;
+        font-size:12px;
+        font-weight:900;
+        background:rgba(214,183,122,.12);
+        border:1px solid rgba(214,183,122,.30);
+    ">{}</span>
+
+    <div class="card-arrow">{}</div>
+</div>"#,
+                    pending_contact_requests_count,
+                    icon("chevron"),
+                ),),
+            },),
+        messages_card = super::extended_navigation_card(super::ExtendedNavigationCardParams {
+            id: None,
+            href: "/app/messages",
+            icon_html: "💬",
+            title: "Сообщения",
+            meta: "Личные диалоги внутри ResursMap",
+            trailing_html: Some(&format!(
+                r#"<div style="
+    display:flex;
+    align-items:center;
+    gap:10px;
+">
+    {}
+
+    <div class="card-arrow">{}</div>
+</div>"#,
+                unread_messages_badge,
+                icon("chevron"),
+            ),),
+        },),
+        notifications_card = super::extended_navigation_card(super::ExtendedNavigationCardParams {
+            id: None,
+            href: "/app/notifications",
+            icon_html: "🔔",
+            title: "Уведомления",
+            meta: "Модерация и изменения ваших ресурсов",
+            trailing_html: Some(&format!(
+                r#"<div style="
+    display:flex;
+    align-items:center;
+    gap:10px;
+">
+    <span style="
+        min-width:28px;
+        height:28px;
+        padding:0 8px;
+        border-radius:999px;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        box-sizing:border-box;
+        font-size:12px;
+        font-weight:900;
+        background:rgba(214,183,122,.12);
+        border:1px solid rgba(214,183,122,.30);
+    ">{}</span>
+
+    <div class="card-arrow">{}</div>
+</div>"#,
+                unread_notifications_count,
+                icon("chevron"),
+            ),),
+        },),
+        my_resources_card = super::extended_navigation_card(super::ExtendedNavigationCardParams {
+            id: Some("my-resources-link"),
+            href: "/app/my-resources",
+            icon_html: icon("map-pin"),
+            title: "Мои ресурсы",
+            meta: "Публикации, статусы и редактирование",
+            trailing_html: None,
+        },),
         favorites_card = super::navigation_card(
             "/app/favorites",
             "heart",
@@ -773,7 +696,6 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
             "Найти ресурс",
             "Глобальный поиск по ResursMap",
         ),
-        arrow1 = icon("chevron"),
     );
 
     let body_after_html = r####"{bottom_nav}

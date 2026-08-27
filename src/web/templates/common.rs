@@ -1069,12 +1069,39 @@ pub(crate) fn back_link(href: &str, label: &str, icon_name: &str) -> String {
     )
 }
 
-pub(crate) fn navigation_card(href: &str, icon_name: &str, title: &str, meta: &str) -> String {
+pub(crate) struct ExtendedNavigationCardParams<'a> {
+    pub id: Option<&'a str>,
+    pub href: &'a str,
+    pub icon_html: &'a str,
+    pub title: &'a str,
+    pub meta: &'a str,
+    pub trailing_html: Option<&'a str>,
+}
+
+pub(crate) fn extended_navigation_card(params: ExtendedNavigationCardParams<'_>) -> String {
+    let ExtendedNavigationCardParams {
+        id,
+        href,
+        icon_html,
+        title,
+        meta,
+        trailing_html,
+    } = params;
+
+    let id_html = id
+        .filter(|value| !value.is_empty())
+        .map(|value| format!(r#" id="{}""#, escape_html(value),))
+        .unwrap_or_default();
+
+    let trailing = trailing_html
+        .map(str::to_string)
+        .unwrap_or_else(|| format!(r#"<div class="card-arrow">{}</div>"#, icon("chevron"),));
+
     format!(
         r#"
-<a class="card" href="{href}">
+<a{id_html} class="card" href="{href}">
     <div class="card-icon">
-        {icon}
+        {icon_html}
     </div>
 
     <div class="card-content">
@@ -1082,15 +1109,27 @@ pub(crate) fn navigation_card(href: &str, icon_name: &str, title: &str, meta: &s
         <div class="card-meta">{meta}</div>
     </div>
 
-    <div class="card-arrow">{arrow}</div>
+    {trailing}
 </a>
 "#,
+        id_html = id_html,
         href = escape_html(href),
-        icon = icon(icon_name),
+        icon_html = icon_html,
         title = escape_html(title),
         meta = escape_html(meta),
-        arrow = icon("chevron"),
+        trailing = trailing,
     )
+}
+
+pub(crate) fn navigation_card(href: &str, icon_name: &str, title: &str, meta: &str) -> String {
+    extended_navigation_card(ExtendedNavigationCardParams {
+        id: None,
+        href,
+        icon_html: icon(icon_name),
+        title,
+        meta,
+        trailing_html: None,
+    })
 }
 
 pub(crate) fn people_result_card(
