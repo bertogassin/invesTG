@@ -889,74 +889,155 @@ pub(super) fn is_admin_session(state: &AppState, headers: &HeaderMap) -> bool {
 }
 
 pub async fn app_auth_page() -> Html<String> {
-    let head_extra = r#"<script src="https://telegram.org/js/telegram-web-app.js"></script>"#;
-
     let main_html = r####"
-<div style="max-width:520px;margin:0 auto;padding:18px;">
-    <section class="card" style="display:block;padding:22px;margin-bottom:16px;">
-        <div style="font-size:12px;font-weight:800;letter-spacing:.12em;color:var(--muted);">
+<div style="
+    width:min(100%,520px);
+    margin:0 auto;
+    padding:18px;
+">
+    <section class="card"
+             style="
+                 display:block;
+                 padding:26px 22px;
+                 border-color:rgba(214,183,122,.24);
+                 background:
+                     radial-gradient(
+                         circle at 85% 5%,
+                         rgba(214,183,122,.12),
+                         transparent 34%
+                     ),
+                     linear-gradient(
+                         145deg,
+                         rgba(255,255,255,.055),
+                         rgba(255,255,255,.018)
+                     );
+                 box-shadow:
+                     0 24px 70px rgba(0,0,0,.30),
+                     inset 0 1px 0 rgba(255,255,255,.065);
+             ">
+        <div style="
+            display:flex;
+            align-items:center;
+            gap:9px;
+            margin-bottom:14px;
+            color:var(--gold-light);
+            font-size:12px;
+            font-weight:800;
+            letter-spacing:.14em;
+        ">
+            <span aria-hidden="true"
+                  style="
+                      width:7px;
+                      height:7px;
+                      border-radius:50%;
+                      background:var(--gold);
+                      box-shadow:0 0 16px rgba(214,183,122,.65);
+                  ">
+            </span>
             RESURSMAP
         </div>
 
-        <h1 style="margin:8px 0 6px;font-size:28px;">
+        <h1 style="
+            margin:0 0 10px;
+            color:var(--text);
+            font-size:clamp(30px,8vw,42px);
+            line-height:1.04;
+            letter-spacing:-.035em;
+        ">
             Вход в аккаунт
         </h1>
 
-        <p style="margin:0;color:var(--muted);line-height:1.55;">
-            Войдите через Telegram Mini App или получите одноразовый код по email.
-        </p>
-    </section>
-
-    <section class="card" style="display:block;padding:20px;margin-bottom:16px;">
-        <div style="font-weight:850;margin-bottom:6px;">
-            Telegram
-        </div>
-
-        <p id="telegram-status"
-           style="margin:0;color:var(--muted);line-height:1.5;">
-            Проверяем доступность Telegram…
-        </p>
-    </section>
-
-    <section class="card" style="display:block;padding:20px;">
-        <div style="font-weight:850;margin-bottom:6px;">
-            Вход по email
-        </div>
-
-        <p style="margin:0 0 16px;color:var(--muted);line-height:1.5;">
-            Пароль не нужен. Мы отправим шестизначный код, действующий 10 минут.
+        <p style="
+            margin:0 0 24px;
+            color:var(--muted);
+            font-size:16px;
+            line-height:1.58;
+        ">
+            Введите email — мы отправим шестизначный код.
+            Пароль не нужен.
         </p>
 
         <label for="email-input"
-               style="display:block;margin-bottom:7px;font-weight:700;">
+               style="
+                   display:block;
+                   margin-bottom:8px;
+                   color:var(--text);
+                   font-size:14px;
+                   font-weight:750;
+               ">
             Email
         </label>
 
         <input id="email-input"
+               class="ui-input"
                name="email"
                type="email"
                autocomplete="email"
                inputmode="email"
                maxlength="254"
                placeholder="name@example.com"
-               style="width:100%;box-sizing:border-box;margin-bottom:12px;">
+               style="
+                   width:100%;
+                   min-height:52px;
+                   padding:0 15px;
+                   border:1px solid rgba(255,255,255,.13);
+                   border-radius:14px;
+                   color:var(--text);
+                   background:rgba(6,8,11,.72);
+                   box-shadow:
+                       inset 0 1px 0 rgba(255,255,255,.025),
+                       0 8px 24px rgba(0,0,0,.16);
+                   font-size:16px;
+                   caret-color:var(--gold-light);
+               ">
 
         <button id="email-request-button"
                 type="button"
                 class="ui-button"
-                style="width:100%;min-height:48px;">
+                style="
+                    width:100%;
+                    min-height:52px;
+                    margin-top:12px;
+                    padding:0 18px;
+                    border:1px solid rgba(240,214,156,.42);
+                    border-radius:14px;
+                    color:#17130c;
+                    background:
+                        linear-gradient(
+                            135deg,
+                            var(--gold-light),
+                            var(--gold)
+                        );
+                    box-shadow:
+                        0 14px 34px rgba(214,183,122,.18),
+                        inset 0 1px 0 rgba(255,255,255,.32);
+                    font-size:16px;
+                    font-weight:850;
+                    cursor:pointer;
+                ">
             Получить код
         </button>
 
         <div id="code-section"
              hidden
-             style="margin-top:18px;">
+             style="
+                 margin-top:22px;
+                 padding-top:21px;
+                 border-top:1px solid rgba(255,255,255,.08);
+             ">
             <label for="code-input"
-                   style="display:block;margin-bottom:7px;font-weight:700;">
+                   style="
+                       display:block;
+                       margin-bottom:8px;
+                       color:var(--text);
+                       font-size:14px;
+                       font-weight:750;
+                   ">
                 Код из письма
             </label>
 
             <input id="code-input"
+                   class="ui-input"
                    name="code"
                    type="text"
                    inputmode="numeric"
@@ -965,27 +1046,89 @@ pub async fn app_auth_page() -> Html<String> {
                    minlength="6"
                    maxlength="6"
                    placeholder="000000"
-                   style="width:100%;box-sizing:border-box;margin-bottom:12px;letter-spacing:.22em;font-size:22px;text-align:center;">
+                   style="
+                       width:100%;
+                       min-height:56px;
+                       padding:0 15px;
+                       border:1px solid rgba(255,255,255,.13);
+                       border-radius:14px;
+                       color:var(--text);
+                       background:rgba(6,8,11,.72);
+                       box-shadow:
+                           inset 0 1px 0 rgba(255,255,255,.025),
+                           0 8px 24px rgba(0,0,0,.16);
+                       font-size:22px;
+                       font-weight:750;
+                       letter-spacing:.24em;
+                       text-align:center;
+                       caret-color:var(--gold-light);
+                   ">
 
             <button id="email-verify-button"
                     type="button"
                     class="ui-button"
-                    style="width:100%;min-height:48px;">
+                    style="
+                        width:100%;
+                        min-height:52px;
+                        margin-top:12px;
+                        padding:0 18px;
+                        border:1px solid rgba(240,214,156,.42);
+                        border-radius:14px;
+                        color:#17130c;
+                        background:
+                            linear-gradient(
+                                135deg,
+                                var(--gold-light),
+                                var(--gold)
+                            );
+                        box-shadow:
+                            0 14px 34px rgba(214,183,122,.18),
+                            inset 0 1px 0 rgba(255,255,255,.32);
+                        font-size:16px;
+                        font-weight:850;
+                        cursor:pointer;
+                    ">
                 Подтвердить и войти
             </button>
         </div>
 
         <p id="email-status"
+           class="ui-status"
            role="status"
            aria-live="polite"
-           style="min-height:22px;margin:14px 0 0;color:var(--muted);line-height:1.45;">
+           style="
+               min-height:22px;
+               margin:15px 0 0;
+               color:var(--muted);
+               font-size:14px;
+               line-height:1.5;
+           ">
+        </p>
+
+        <p style="
+            margin:18px 0 0;
+            color:rgba(255,255,255,.40);
+            font-size:12px;
+            line-height:1.5;
+            text-align:center;
+        ">
+            Код действует 10 минут
         </p>
     </section>
 
-    <div style="margin-top:16px;text-align:center;">
+    <div style="
+        margin-top:18px;
+        text-align:center;
+    ">
         <a href="/app"
-           style="color:var(--muted);text-decoration:none;">
-            Вернуться на карту
+           style="
+               display:inline-block;
+               padding:10px 14px;
+               color:var(--muted);
+               text-decoration:none;
+               font-size:14px;
+           ">
+            ← Вернуться на карту
         </a>
     </div>
 </div>
@@ -994,9 +1137,6 @@ pub async fn app_auth_page() -> Html<String> {
     let body_after = r####"
 <script>
 (function () {
-    const telegramStatus =
-        document.getElementById("telegram-status");
-
     const emailInput =
         document.getElementById("email-input");
 
@@ -1018,7 +1158,7 @@ pub async fn app_auth_page() -> Html<String> {
     function setEmailStatus(message, isError) {
         emailStatus.textContent = message;
         emailStatus.style.color =
-            isError ? "#b91c1c" : "var(--muted)";
+            isError ? "#ef6b72" : "var(--muted)";
     }
 
     function emailErrorMessage(error) {
@@ -1045,6 +1185,17 @@ pub async fn app_auth_page() -> Html<String> {
         return messages[error] || "Не удалось выполнить запрос.";
     }
 
+    async function readJson(response) {
+        try {
+            return await response.json();
+        } catch (_) {
+            return {
+                ok: false,
+                error: "invalid_response"
+            };
+        }
+    }
+
     async function requestEmailCode() {
         const email = emailInput.value.trim();
 
@@ -1069,7 +1220,7 @@ pub async fn app_auth_page() -> Html<String> {
                 }
             );
 
-            const data = await response.json();
+            const data = await readJson(response);
 
             if (!response.ok || !data.ok) {
                 setEmailStatus(
@@ -1099,6 +1250,12 @@ pub async fn app_auth_page() -> Html<String> {
         const email = emailInput.value.trim();
         const code = codeInput.value.trim();
 
+        if (!email) {
+            setEmailStatus("Введите email.", true);
+            emailInput.focus();
+            return;
+        }
+
         if (!/^[0-9]{6}$/.test(code)) {
             setEmailStatus(
                 "Введите шестизначный код.",
@@ -1123,7 +1280,7 @@ pub async fn app_auth_page() -> Html<String> {
                 }
             );
 
-            const data = await response.json();
+            const data = await readJson(response);
 
             if (!response.ok || !data.ok) {
                 setEmailStatus(
@@ -1172,53 +1329,14 @@ pub async fn app_auth_page() -> Html<String> {
         }
     });
 
-    (async function authenticateTelegram() {
-        try {
-            const tg =
-                window.Telegram && window.Telegram.WebApp
-                    ? window.Telegram.WebApp
-                    : null;
-
-            if (!tg || !tg.initData) {
-                telegramStatus.textContent =
-                    "Откройте Mini App через Telegram или используйте email.";
-                return;
-            }
-
-            tg.ready();
-
-            const response = await fetch("/app/auth", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    init_data: tg.initData
-                })
-            });
-
-            const data = await response.json();
-
-            if (!response.ok || !data.ok) {
-                telegramStatus.textContent =
-                    "Не удалось подтвердить Telegram.";
-                return;
-            }
-
-            telegramStatus.textContent = "✓ Telegram подтверждён";
-            window.location.replace("/app/me");
-        } catch (_) {
-            telegramStatus.textContent =
-                "Ошибка подключения Telegram. Используйте email.";
-        }
-    })();
+    emailInput.focus();
 })();
 </script>
 "####;
 
     Html(crate::web::templates::page_document(
         "Вход · ResursMap",
-        head_extra,
+        "",
         "",
         main_html,
         "",
