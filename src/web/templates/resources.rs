@@ -1,7 +1,7 @@
 use super::common::escape_html;
 use super::common::{
-    back_hero, back_link, bottom_nav, empty_state_card, icon, page_document, page_shell,
-    section_head, topbar,
+    back_hero, back_link, bottom_nav, empty_state_card, icon, navigation_card, page_document,
+    page_shell, section_head, topbar,
 };
 
 pub fn render_category(
@@ -143,6 +143,12 @@ pub fn render_category(
 
     let section_head_resources = section_head("Ресурсы", &format!("Найдено: {}", count), None);
     let section_head_city = section_head("Ваш город", "Все направления и категории", Some(34));
+    let city_navigation_card = navigation_card(
+        &city_url,
+        "map",
+        "Открыть карту города",
+        "Вернуться ко всем категориям",
+    );
 
     let content = format!(
         r####"{section_head_resources}
@@ -153,35 +159,10 @@ pub fn render_category(
 
 {section_head_city}
 
-<a class="card"
-   href="{city_url}"
-   style="text-decoration:none;">
-
-    <div class="card-icon">
-        {city_icon}
-    </div>
-
-    <div class="card-content">
-
-        <div class="card-title">
-            Открыть карту города
-        </div>
-
-        <div class="card-meta">
-            Вернуться ко всем категориям
-        </div>
-
-    </div>
-
-    <div class="card-arrow">
-        ›
-    </div>
-
-</a>"####,
+{city_navigation_card}"####,
         section_head_resources = section_head_resources,
         section_head_city = section_head_city,
-        city_icon = icon("map"),
-        city_url = city_url,
+        city_navigation_card = city_navigation_card,
         cards = cards,
     );
 
