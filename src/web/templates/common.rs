@@ -1338,6 +1338,80 @@ pub(crate) fn resource_result_card(params: ResourceResultCardParams<'_>) -> Stri
     )
 }
 
+pub(crate) struct ProfileResourceCardParams<'a> {
+    pub href: &'a str,
+    pub icon_name: &'a str,
+    pub title: &'a str,
+    pub category: &'a str,
+    pub description: &'a str,
+    pub address: Option<&'a str>,
+    pub rating: f64,
+    pub votes: i64,
+    pub premium_badge_html: &'a str,
+    pub verified_badge_html: &'a str,
+}
+
+pub(crate) fn profile_resource_card(params: ProfileResourceCardParams<'_>) -> String {
+    let ProfileResourceCardParams {
+        href,
+        icon_name,
+        title,
+        category,
+        description,
+        address,
+        rating,
+        votes,
+        premium_badge_html,
+        verified_badge_html,
+    } = params;
+
+    let address_html = match address {
+        Some(addr) if !addr.is_empty() => format!(
+            r#"<div class="card-meta" style="margin-top:8px;overflow-wrap:anywhere;">
+            📍 {addr}
+        </div>
+"#,
+            addr = escape_html(addr),
+        ),
+        _ => String::new(),
+    };
+
+    format!(
+        r#"<a href="{href}" class="card" style="text-decoration:none;color:inherit;margin-bottom:14px;align-items:flex-start;">
+    <div class="card-icon">{resource_icon}</div>
+
+    <div class="card-content" style="min-width:0;">
+        <div class="card-title">{title}</div>
+
+        <div class="card-meta" style="margin-top:4px;">{category}</div>
+
+        <div class="card-meta" style="margin-top:8px;line-height:1.45;overflow-wrap:anywhere;">{description}</div>
+
+        {address_html}
+        <div class="card-meta" style="margin-top:8px;">⭐ {rating:.1} · {votes} голосов</div>
+
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:9px;">
+            {premium_badge}
+            {verified_badge}
+        </div>
+    </div>
+
+    <div class="card-arrow">{arrow}</div>
+</a>"#,
+        href = escape_html(href),
+        resource_icon = icon(icon_name),
+        title = escape_html(title),
+        category = escape_html(category),
+        description = escape_html(description),
+        address_html = address_html,
+        rating = rating,
+        votes = votes,
+        premium_badge = premium_badge_html,
+        verified_badge = verified_badge_html,
+        arrow = icon("chevron"),
+    )
+}
+
 pub(crate) fn status_page(
     title: &str,
     eyebrow: &str,

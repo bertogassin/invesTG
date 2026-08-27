@@ -1,6 +1,6 @@
 use super::common::{
     back_hero, back_link, bottom_nav, empty_state_card, escape_html, icon, navigation_card,
-    page_document, page_shell, section_head, simple_hero, topbar,
+    page_document, page_shell, profile_resource_card, section_head, simple_hero, topbar,
 };
 
 pub struct RenderMeParams<'a> {
@@ -1416,77 +1416,18 @@ pub fn render_public_user_profile(params: RenderPublicUserProfileParams<'_>) -> 
                         ""
                     };
 
-                    format!(
-                        r#"
-<a href="/app/resource/{id}"
-   class="card"
-   style="
-       text-decoration:none;
-       color:inherit;
-       margin-bottom:14px;
-       align-items:flex-start;
-   ">
-
-    <div class="card-icon">
-        {resource_icon}
-    </div>
-
-    <div class="card-content"
-         style="min-width:0;">
-
-        <div class="card-title">
-            {title}
-        </div>
-
-        <div class="card-meta"
-             style="margin-top:4px;">
-            {category}
-        </div>
-
-        <div class="card-meta"
-             style="
-                 margin-top:8px;
-                 line-height:1.45;
-                 overflow-wrap:anywhere;
-             ">
-            {description}
-        </div>
-
-        <div class="card-meta"
-             style="margin-top:8px;">
-            ⭐ {rating:.1} · {votes} голосов
-        </div>
-
-        <div style="
-            display:flex;
-            align-items:center;
-            gap:8px;
-            flex-wrap:wrap;
-            margin-top:9px;
-        ">
-            {premium_badge}
-            {verified_badge}
-        </div>
-
-    </div>
-
-    <div class="card-arrow">
-        {arrow}
-    </div>
-
-</a>
-"#,
-                        id = id,
-                        resource_icon = icon("map-pin"),
-                        title = title,
-                        category = category,
-                        description = description,
-                        rating = rating,
-                        votes = votes,
-                        premium_badge = premium_badge,
-                        verified_badge = verified_badge,
-                        arrow = icon("chevron"),
-                    )
+                    profile_resource_card(super::common::ProfileResourceCardParams {
+                        href: &format!("/app/resource/{}", id),
+                        icon_name: "map-pin",
+                        title: &title,
+                        category: &category,
+                        description: &description,
+                        address: None,
+                        rating: *rating,
+                        votes: *votes,
+                        premium_badge_html: premium_badge,
+                        verified_badge_html: verified_badge,
+                    })
                 },
             )
             .collect::<Vec<_>>()
@@ -1835,75 +1776,18 @@ pub fn render_favorites(
                         ""
                     };
 
-                    format!(
-                        r#"
-<a href="/app/resource/{id}"
-   class="card"
-   style="
-       text-decoration:none;
-       color:inherit;
-       margin-bottom:14px;
-       align-items:flex-start;
-   ">
-
-    <div class="card-icon">{resource_icon}</div>
-
-    <div class="card-content" style="min-width:0;">
-
-        <div class="card-title">{title}</div>
-
-        <div class="card-meta" style="margin-top:4px;">
-            {category}
-        </div>
-
-        <div class="card-meta"
-             style="
-                 margin-top:8px;
-                 line-height:1.45;
-                 overflow-wrap:anywhere;
-             ">
-            {description}
-        </div>
-
-        <div class="card-meta"
-             style="
-                 margin-top:8px;
-                 overflow-wrap:anywhere;
-             ">
-            📍 {address}
-        </div>
-
-        <div class="card-meta" style="margin-top:7px;">
-            ⭐ {rating:.1} · {votes} голосов
-        </div>
-
-        <div style="
-            display:flex;
-            gap:8px;
-            flex-wrap:wrap;
-            margin-top:9px;
-        ">
-            {premium_badge}
-            {verified_badge}
-        </div>
-
-    </div>
-
-    <div class="card-arrow">{arrow}</div>
-</a>
-"#,
-                        id = id,
-                        resource_icon = icon("heart"),
-                        title = title,
-                        category = category,
-                        description = description,
-                        address = address,
-                        rating = rating,
-                        votes = votes,
-                        premium_badge = premium_badge,
-                        verified_badge = verified_badge,
-                        arrow = icon("chevron"),
-                    )
+                    profile_resource_card(super::common::ProfileResourceCardParams {
+                        href: &format!("/app/resource/{}", id),
+                        icon_name: "heart",
+                        title,
+                        category,
+                        description,
+                        address: Some(address.as_str()),
+                        rating: *rating,
+                        votes: *votes,
+                        premium_badge_html: premium_badge,
+                        verified_badge_html: verified_badge,
+                    })
                 },
             )
             .collect::<Vec<_>>()
