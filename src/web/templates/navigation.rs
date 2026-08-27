@@ -1,7 +1,7 @@
 use super::common::{
-    base_style, bottom_nav, empty_state_card, escape_html, icon, navigation_card, page_document,
-    page_shell, people_result_card, resource_result_card, search_form_hero, search_hero,
-    section_head, simple_hero, topbar,
+    bottom_nav, empty_state_card, escape_html, icon, navigation_card, page_document, page_shell,
+    people_result_card, resource_result_card, search_form_hero, search_hero, section_head,
+    simple_hero, topbar,
 };
 use std::collections::BTreeMap;
 
