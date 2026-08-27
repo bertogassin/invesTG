@@ -1,7 +1,7 @@
 use super::common::escape_html;
 use super::common::{
-    back_hero, back_link, base_style, bottom_nav, empty_state_card, icon, page_document,
-    page_shell, section_head, topbar,
+    back_hero, back_link, bottom_nav, empty_state_card, icon, page_document, page_shell,
+    section_head, topbar,
 };
 
 pub fn render_category(
@@ -1416,28 +1416,8 @@ pub fn render_edit_resource(
 pub fn render_add_resource(ci: usize, si: usize, zi: usize, category: &str) -> String {
     let back_url = format!("/app/{}/{}/{}", ci, si, zi);
 
-    format!(
-        r#"<!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-
-<title>Добавить ресурс · ResursMap</title>
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
-
-<style>{}</style>
-</head>
-
-<body>
-
-<main class="page">
-
-{}
-
-{hero}
-
-<form method="post"
+    let content = format!(
+        r####"<form method="post"
       action="/app/{}/{}/{}/cat/{}/add"
       style="display:flex;flex-direction:column;gap:16px;" class="ui-form">
 
@@ -1508,47 +1488,52 @@ pub fn render_add_resource(ci: usize, si: usize, zi: usize, category: &str) -> S
         ➕ Добавить ресурс
     </button>
 
-</form>
+</form>"####,
+        ci, si, zi, category,
+    );
 
-</main>
-
-<script>
-(function() {{
-    const initDataField = document.getElementById("telegram-init-data");
-
-    // Передаём Telegram initData как безопасный fallback,
-    // если пользовательская session cookie ещё не создана.
-    try {{
-        const tg =
-            window.Telegram && window.Telegram.WebApp
-                ? window.Telegram.WebApp
-                : null;
-
-        if (tg) {{
-            tg.ready();
-
-            if (initDataField && tg.initData) {{
-                initDataField.value = tg.initData;
-            }}
-        }}
-    }} catch (_) {{}}
-}})();
-</script>
-
-</body>
-</html>"#,
-        base_style(),
-        topbar("ADD RESOURCE", "globe"),
-        ci,
-        si,
-        zi,
-        category,
+    let main_html = format!(
+        "{topbar}\n\n{hero}\n\n{content}",
+        topbar = topbar("ADD RESOURCE", "globe"),
         hero = back_hero(
-            &back_link(&back_url, "Вернуться", "chevron",),
+            &back_link(&back_url, "Вернуться", "chevron"),
             "plus",
             "Добавление ресурса",
             "Добавить ресурс",
             &format!("Категория: {}", category),
         ),
+        content = content,
+    );
+
+    let body_after = r####"<script>
+(function() {
+    const initDataField = document.getElementById("telegram-init-data");
+
+    // Передаём Telegram initData как безопасный fallback,
+    // если пользовательская session cookie ещё не создана.
+    try {
+        const tg =
+            window.Telegram && window.Telegram.WebApp
+                ? window.Telegram.WebApp
+                : null;
+
+        if (tg) {
+            tg.ready();
+
+            if (initDataField && tg.initData) {
+                initDataField.value = tg.initData;
+            }
+        }
+    } catch (_) {}
+})();
+</script>"####;
+
+    page_document(
+        "Добавить ресурс · ResursMap",
+        r####"<script src="https://telegram.org/js/telegram-web-app.js"></script>"####,
+        "",
+        &main_html,
+        "",
+        body_after,
     )
 }
