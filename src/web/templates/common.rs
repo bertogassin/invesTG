@@ -82,6 +82,34 @@ pub(crate) fn base_style() -> &'static str {
     --radius: 22px;
 }
 
+/* Светлая тема - активируется добавлением класса light-theme к body */
+body.light-theme {
+    --bg: #f7f5f0;
+    --bg-soft: #efebe2;
+    --card: rgba(255, 255, 255, .82);
+    --card-hover: rgba(255, 255, 255, .95);
+    --line: rgba(0,0,0,.08);
+
+    --text: #1a1d21;
+    --muted: #5c636e;
+
+    --gold: #b88932;
+    --gold-light: #8f6b1e;
+
+    --sea: #3d8b9c;
+    --sea-light: #2d6e7d;
+}
+
+body.light-theme::before {
+    background:
+        linear-gradient(
+            120deg,
+            transparent 0%,
+            rgba(0,0,0,.015) 50%,
+            transparent 100%
+        );
+}
+
 * {
     box-sizing: border-box;
 }
@@ -337,7 +365,8 @@ body::before {
     gap: 12px;
 
     margin-top: 24px;
-    padding: 15px 17px;
+    padding: 16px 18px;
+    border-radius: 16px;
 
     color: var(--muted);
 
@@ -456,8 +485,8 @@ body::before {
 }
 
 .card-icon {
-    width: 48px;
-    height: 48px;
+    width: 52px;
+    height: 52px;
 
     display: grid;
     place-items: center;
@@ -483,15 +512,18 @@ body::before {
 }
 
 .card-title {
-    font-size: 15px;
-    font-weight: 650;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: -.01em;
+    line-height: 1.3;
 }
 
 .card-meta {
     margin-top: 5px;
 
     color: var(--muted);
-    font-size: 12px;
+    font-size: 13px;
+    line-height: 1.5;
 }
 
 .card-arrow {
@@ -928,6 +960,16 @@ body::before {
 .ui-textarea,
 .ui-select {
     font-family: inherit;
+    padding: 13px 16px;
+    border: 1px solid rgba(255,255,255,.10);
+    border-radius: 13px;
+    background: rgba(255,255,255,.045);
+    color: var(--text);
+    font-size: 15px;
+    transition:
+        border-color .25s ease,
+        background .25s ease,
+        box-shadow .25s ease;
     box-sizing: border-box;
     max-width: 100%;
 }
@@ -953,6 +995,15 @@ body::before {
 .ui-button:focus-visible {
     outline: 2px solid rgba(214,183,122,.72);
     outline-offset: 2px;
+}
+
+.ui-input:focus,
+.ui-textarea:focus,
+.ui-select:focus {
+    border-color: rgba(214,183,122,.45);
+    background: rgba(255,255,255,.065);
+    box-shadow: 0 0 0 4px rgba(214,183,122,.06);
+    outline: none;
 }
 
 .ui-badge {
@@ -1044,6 +1095,8 @@ pub(crate) fn page_document(
 {bottom_nav}
 
 {body_after}
+
+<script src="/static/theme-toggle.js" defer></script>
 
 </body>
 </html>"#,
