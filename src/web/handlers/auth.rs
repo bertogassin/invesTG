@@ -780,6 +780,36 @@ pub(super) fn verify_user_session(state: &AppState, headers: &HeaderMap) -> Opti
     (is_active == 1).then_some(user_id)
 }
 
+#[derive(Debug, Clone)]
+pub(super) struct AuthenticatedUser {
+    pub user_id: i64,
+    pub client_id: String,
+}
+
+pub(super) fn verify_authenticated_user(
+    state: &AppState,
+    headers: &HeaderMap,
+) -> Option<AuthenticatedUser> {
+    let user_id = verify_user_session(state, headers)?;
+    let db = crate::db::pool::get_connection(&state.db_pool).ok()?;
+
+    let client_id: String = db
+        .query_row(
+            "SELECT client_id
+             FROM profiles
+             WHERE user_id = ?1",
+            rusqlite::params![user_id],
+            |row| row.get(0),
+        )
+        .ok()?;
+
+    if client_id.is_empty() {
+        return None;
+    }
+
+    Some(AuthenticatedUser { user_id, client_id })
+}
+
 pub(super) fn create_admin_session(state: &AppState, user_id: i64) -> String {
     type HmacSha256 = Hmac<Sha256>;
 

@@ -1,4 +1,4 @@
-use super::auth::{verify_telegram_init_data, verify_user_session};
+use super::auth::{verify_authenticated_user, verify_telegram_init_data, verify_user_session};
 use super::common::{
     csrf_rejected_response, input_text_is_valid, rate_limit_retry_after, request_is_cross_site,
 };
@@ -245,32 +245,28 @@ pub async fn add_resource(
 
     let category_url = urlencoding::encode(category);
 
-    let owner_client_id = if let Some(user_id) = verify_user_session(&state, &headers) {
-        format!("tg:{}", user_id)
-    } else if !init_data.is_empty() {
-        match verify_telegram_init_data(init_data, &state.bot_token) {
-            Some(user_id) => format!("tg:{}", user_id),
-            None => String::new(),
-        }
-    } else {
-        String::new()
-    };
+    let (owner_user_id, owner_client_id) =
+        if let Some(user) = verify_authenticated_user(&state, &headers) {
+            (user.user_id, user.client_id)
+        } else if !init_data.is_empty() {
+            match verify_telegram_init_data(init_data, &state.bot_token) {
+                Some(user_id) => (user_id, format!("tg:{}", user_id)),
+                None => (0, String::new()),
+            }
+        } else {
+            (0, String::new())
+        };
 
-    if owner_client_id.is_empty() {
+    if owner_user_id <= 0 || owner_client_id.is_empty() {
         return Html(templates::status_page(
-            "Требуется Telegram · ResursMap",
+            "Требуется вход · ResursMap",
             "⚠ Авторизация",
             "Не удалось подтвердить пользователя",
-            "Откройте ResursMap через Telegram и попробуйте добавить ресурс снова.",
-            &templates::navigation_card("/app", "map", "Вернуться на карту", ""),
+            "Войдите в аккаунт и попробуйте добавить ресурс снова.",
+            &templates::navigation_card("/app/auth", "user", "Войти в аккаунт", ""),
         ))
         .into_response();
     }
-
-    let owner_user_id = owner_client_id
-        .strip_prefix("tg:")
-        .and_then(|value| value.parse::<i64>().ok())
-        .unwrap_or(0);
 
     if owner_user_id <= 0 {
         return (
@@ -361,8 +357,8 @@ pub async fn add_resource(
 }
 
 pub async fn my_resources(State(state): State<AppState>, headers: HeaderMap) -> Html<String> {
-    let client_id = match verify_user_session(&state, &headers) {
-        Some(user_id) => format!("tg:{}", user_id),
+    let client_id = match verify_authenticated_user(&state, &headers) {
+        Some(user) => user.client_id,
         None => String::new(),
     };
 
@@ -428,8 +424,8 @@ pub async fn edit_resource_page(
     Path(id): Path<i64>,
     headers: HeaderMap,
 ) -> Html<String> {
-    let client_id = match verify_user_session(&state, &headers) {
-        Some(user_id) => format!("tg:{}", user_id),
+    let client_id = match verify_authenticated_user(&state, &headers) {
+        Some(user) => user.client_id,
         None => String::new(),
     };
 
@@ -516,26 +512,22 @@ pub async fn edit_resource(
             .into_response();
     }
 
-    let owner_client_id = match verify_user_session(&state, &headers) {
-        Some(user_id) => format!("tg:{}", user_id),
-        None => String::new(),
+    let owner = match verify_authenticated_user(&state, &headers) {
+        Some(user) => user,
+        None => {
+            return Html(templates::status_page(
+                "Нет доступа · ResursMap",
+                "⚠ Доступ",
+                "Не удалось подтвердить владельца",
+                "Войдите в аккаунт и попробуйте снова.",
+                &templates::navigation_card("/app/auth", "user", "Войти в аккаунт", ""),
+            ))
+            .into_response();
+        }
     };
 
-    if owner_client_id.is_empty() {
-        return Html(templates::status_page(
-            "Нет доступа · ResursMap",
-            "⚠ Доступ",
-            "Не удалось подтвердить владельца",
-            "Откройте ResursMap через Telegram и попробуйте снова.",
-            "",
-        ))
-        .into_response();
-    }
-
-    let owner_user_id = owner_client_id
-        .strip_prefix("tg:")
-        .and_then(|value| value.parse::<i64>().ok())
-        .unwrap_or(0);
+    let owner_user_id = owner.user_id;
+    let owner_client_id = owner.client_id;
 
     if owner_user_id <= 0 {
         return (
@@ -769,8 +761,8 @@ pub async fn api_resource_vote(
         return csrf_rejected_response();
     }
 
-    let user_id = match verify_user_session(&state, &headers) {
-        Some(id) => id,
+    let user = match verify_authenticated_user(&state, &headers) {
+        Some(user) => user,
         None => {
             return (
                 StatusCode::UNAUTHORIZED,
@@ -782,6 +774,9 @@ pub async fn api_resource_vote(
                 .into_response();
         }
     };
+
+    let user_id = user.user_id;
+    let client_id = user.client_id;
 
     let score = payload.get("score").and_then(|v| v.as_i64()).unwrap_or(0);
 
@@ -795,8 +790,6 @@ pub async fn api_resource_vote(
         )
             .into_response();
     }
-
-    let client_id = format!("tg:{}", user_id);
 
     let allowed: bool = {
         let db = match crate::db::pool::get_connection(&state.db_pool) {
