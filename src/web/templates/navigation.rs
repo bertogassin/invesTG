@@ -611,45 +611,29 @@ pub fn render_country(ci: usize, si: usize) -> String {
             let section_head_cities =
                 section_head("Города", &format!("{} городов", cities.len()), None);
 
-            return format!(
-                r#"<!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{country} · ResursMap</title>
-<style>{}</style>
-</head>
-
-<body>
-
-<main class="page">
-
-{}
-
-{}
-
+            let content = format!(
+                r#"
 {section_head_cities}
 
 <div class="grid">
     {cards}
 </div>
+"#,
+                section_head_cities = section_head_cities,
+                cards = cards,
+            );
 
-</main>
-
-{bottom_nav}
-
-</body>
-</html>"#,
-                base_style(),
-                topbar("RESOURCE NETWORK", "globe"),
-                simple_hero(
+            return page_shell(
+                &format!("{} · ResursMap", country),
+                &topbar("RESOURCE NETWORK", "globe"),
+                &simple_hero(
                     "map-pin",
                     cname,
                     country,
                     "Выберите город и откройте его карту ресурсов.",
                 ),
-                bottom_nav = bottom_nav("map"),
+                &content,
+                &bottom_nav("map"),
             );
         }
     }
