@@ -87,7 +87,7 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
     } else if !safe_username.is_empty() {
         format!("@{}", safe_username)
     } else if authenticated {
-        "Пользователь Telegram".to_string()
+        "Пользователь ResursMap".to_string()
     } else {
         "Гость".to_string()
     };
@@ -106,7 +106,7 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
             margin-top:5px;
             color:var(--muted);
             font-size:13px;
-        ">Telegram аккаунт</div>"#
+        ">Аккаунт ResursMap</div>"#
             .to_string()
     } else {
         String::new()
@@ -120,7 +120,7 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
                 color:var(--muted);
                 letter-spacing:.04em;
             ">
-                TELEGRAM ID · {}
+                USER ID · {}
             </div>"#,
             user_id
         )

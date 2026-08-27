@@ -1,4 +1,4 @@
-use super::auth::verify_user_session;
+use super::auth::{verify_authenticated_user, verify_user_session};
 use super::common::{
     csrf_rejected_response, input_text_is_valid, rate_limit_retry_after, request_is_cross_site,
     unix_now,
@@ -13,9 +13,11 @@ use axum::{
 };
 use serde_json::json;
 
+type PublicProfileRow = (i64, String, String, String, String, i64, String, i64);
+
 pub async fn app_me(State(state): State<AppState>, headers: HeaderMap) -> Html<String> {
-    let user_id = match verify_user_session(&state, &headers) {
-        Some(id) => id,
+    let user = match verify_authenticated_user(&state, &headers) {
+        Some(user) => user,
 
         None => {
             return Html(templates::render_me(templates::RenderMeParams {
@@ -39,7 +41,8 @@ pub async fn app_me(State(state): State<AppState>, headers: HeaderMap) -> Html<S
         }
     };
 
-    let client_id = format!("tg:{}", user_id);
+    let user_id = user.user_id;
+    let client_id = user.client_id;
 
     let db = match crate::db::pool::get_connection(&state.db_pool) {
         Ok(db) => db,
@@ -219,18 +222,22 @@ pub async fn public_user_profile(
         }
     };
 
-    let profile: Option<(String, String, String, String, i64, String, i64)> = db
+    let profile: Option<PublicProfileRow> = db
         .query_row(
             "SELECT
-                client_id,
-                username,
-                first_name,
-                last_name,
-                open_contact,
-                intent_text,
-                intent_until
-             FROM profiles
-             WHERE public_id = ?1
+                p.user_id,
+                p.client_id,
+                p.username,
+                p.first_name,
+                p.last_name,
+                p.open_contact,
+                p.intent_text,
+                p.intent_until
+             FROM profiles AS p
+             JOIN users AS u
+               ON u.id = p.user_id
+              AND u.is_active = 1
+             WHERE p.public_id = ?1
              LIMIT 1",
             rusqlite::params![public_id],
             |row| {
@@ -242,28 +249,30 @@ pub async fn public_user_profile(
                     row.get(4)?,
                     row.get(5)?,
                     row.get(6)?,
+                    row.get(7)?,
                 ))
             },
         )
         .ok();
 
-    let (client_id, username, first_name, last_name, open_contact, intent_text, intent_until) =
-        match profile {
-            Some(profile) => profile,
+    let (
+        profile_user_id,
+        client_id,
+        username,
+        first_name,
+        last_name,
+        open_contact,
+        intent_text,
+        intent_until,
+    ) = match profile {
+        Some(profile) => profile,
 
-            None => {
-                drop(db);
+        None => {
+            drop(db);
 
-                return Html(templates::render_public_user_not_found());
-            }
-        };
-
-    // Старые web:-профили публичными не делаем.
-    if !client_id.starts_with("tg:") {
-        drop(db);
-
-        return Html(templates::render_public_user_not_found());
-    }
+            return Html(templates::render_public_user_not_found());
+        }
+    };
 
     let resources: Vec<crate::web::view_models::PublicProfileResourceRow> = db
         .prepare(
@@ -311,10 +320,6 @@ pub async fn public_user_profile(
     // уже существует conversation, передаём ID владельца
     // в шаблон, чтобы вместо повторного запроса показать чат.
     let chat_user_id: Option<i64> = viewer_user_id.and_then(|viewer_id| {
-        let profile_user_id = client_id
-            .strip_prefix("tg:")
-            .and_then(|value| value.parse::<i64>().ok())?;
-
         if viewer_id <= 0 || profile_user_id <= 0 || viewer_id == profile_user_id {
             return None;
         }
@@ -364,8 +369,8 @@ pub async fn public_user_profile(
 }
 
 pub async fn api_profile_get(State(state): State<AppState>, headers: HeaderMap) -> Response {
-    let user_id = match verify_user_session(&state, &headers) {
-        Some(id) => id,
+    let user = match verify_authenticated_user(&state, &headers) {
+        Some(user) => user,
 
         None => {
             return (
@@ -379,7 +384,7 @@ pub async fn api_profile_get(State(state): State<AppState>, headers: HeaderMap) 
         }
     };
 
-    let client_id = format!("tg:{}", user_id);
+    let client_id = user.client_id;
 
     let db = match crate::db::pool::get_connection(&state.db_pool) {
         Ok(db) => db,
@@ -452,8 +457,8 @@ pub async fn api_profile_set(
         return csrf_rejected_response();
     }
 
-    let user_id = match verify_user_session(&state, &headers) {
-        Some(id) => id,
+    let user = match verify_authenticated_user(&state, &headers) {
+        Some(user) => user,
 
         None => {
             return (
@@ -467,7 +472,8 @@ pub async fn api_profile_set(
         }
     };
 
-    let client_id = format!("tg:{}", user_id);
+    let user_id = user.user_id;
+    let client_id = user.client_id;
 
     let open_contact = payload
         .get("open_contact")
@@ -544,6 +550,7 @@ pub async fn api_profile_set(
     let result = db.execute(
         "INSERT INTO profiles (
             client_id,
+            user_id,
             open_contact,
             intent_text,
             intent_until,
@@ -554,17 +561,20 @@ pub async fn api_profile_set(
             ?2,
             ?3,
             ?4,
+            ?5,
             strftime('%s','now')
          )
 
          ON CONFLICT(client_id)
          DO UPDATE SET
+            user_id = excluded.user_id,
             open_contact = excluded.open_contact,
             intent_text = excluded.intent_text,
             intent_until = excluded.intent_until,
             updated_at = strftime('%s','now')",
         rusqlite::params![
             &client_id,
+            user_id,
             if open_contact { 1 } else { 0 },
             intent_text,
             intent_until,
