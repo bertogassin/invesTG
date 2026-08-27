@@ -86,6 +86,26 @@ pub(crate) fn base_style() -> &'static str {
     box-sizing: border-box;
 }
 
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
 html {
     background: var(--bg);
     color-scheme: dark;
@@ -585,6 +605,8 @@ body::before {
 .topbar {
     position: relative;
     z-index: 5;
+
+    animation: fadeIn .4s ease both;
 }
 
 .brand {
@@ -618,6 +640,8 @@ body::before {
     box-shadow:
         0 24px 70px rgba(0,0,0,.28),
         inset 0 1px 0 rgba(255,255,255,.05);
+
+    animation: fadeInUp .5s ease both;
 }
 
 .hero::before {
@@ -672,6 +696,8 @@ body::before {
     position: relative;
     overflow: hidden;
     border: 1px solid rgba(255,255,255,.075);
+
+    animation: fadeInUp .45s ease both;
     background:
         linear-gradient(
             145deg,
