@@ -15,29 +15,10 @@ pub fn render_contact_requests(
             "После входа здесь будут ваши запросы на связь.",
         )
     } else if requests.is_empty() {
-        r#"
-<div class="card"
-     style="
-         display:block;
-         padding:20px;
-     ">
-
-    <div class="card-title">
-        Входящих запросов пока нет
-    </div>
-
-    <div class="card-meta"
-         style="
-             margin-top:6px;
-             line-height:1.5;
-         ">
-        Когда кто-то захочет связаться через ResursMap,
-        запрос появится здесь.
-    </div>
-
-</div>
-"#
-        .to_string()
+        empty_state_card(
+            "Входящих запросов пока нет",
+            "Когда кто-то захочет связаться через ResursMap, запрос появится здесь.",
+        )
     } else {
         requests
             .iter()
@@ -648,29 +629,10 @@ pub fn render_chat(
         && first_name.is_empty()
         && last_name.is_empty()
     {
-        r#"
-<div class="card"
-     style="
-         display:block;
-         padding:20px;
-     ">
-
-    <div class="card-title">
-        Чат недоступен
-    </div>
-
-    <div class="card-meta"
-         style="
-             margin-top:7px;
-             line-height:1.5;
-         ">
-        Между этими пользователями ещё нет
-        подтверждённого контакта.
-    </div>
-
-</div>
-"#
-        .to_string()
+        empty_state_card(
+            "Чат недоступен",
+            "Между этими пользователями ещё нет подтверждённого контакта.",
+        )
     } else {
         let message_cards = if messages.is_empty() {
             r#"
