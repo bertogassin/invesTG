@@ -16,29 +16,23 @@ use serde_json::json;
 use std::collections::BTreeMap;
 
 pub async fn admin_login_page() -> Html<String> {
-    Html(
-        r#"<!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Admin Login · ResursMap</title>
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
-</head>
+    let head_extra = r####"<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+body {
+    margin: 0;
+    padding: 28px;
+    background: #0b0e12;
+    color: #f5f5f5;
+    font-family: system-ui;
+}
+</style>"####;
 
-<body style="
-    font-family:system-ui;
-    background:#0b0e12;
-    color:#f5f5f5;
-    padding:28px;
-">
-
-<div style="max-width:520px;margin:auto;">
+    let main_html = r####"<div style="max-width:520px;margin:auto;">
     <h1>ResursMap Admin</h1>
     <p id="status">Проверяем Telegram…</p>
-</div>
+</div>"####;
 
-<script>
+    let body_after = r####"<script>
 (async function () {
     const status = document.getElementById("status");
 
@@ -79,12 +73,16 @@ pub async fn admin_login_page() -> Html<String> {
         status.textContent = "Ошибка авторизации.";
     }
 })();
-</script>
+</script>"####;
 
-</body>
-</html>"#
-            .to_string(),
-    )
+    Html(templates::page_document(
+        "Admin Login · ResursMap",
+        head_extra,
+        "",
+        main_html,
+        "",
+        body_after,
+    ))
 }
 
 pub async fn admin_login(
