@@ -1,6 +1,7 @@
 use super::common::escape_html;
 use super::common::{
-    back_hero, back_link, base_style, bottom_nav, empty_state_card, icon, section_head, topbar,
+    back_hero, back_link, base_style, bottom_nav, empty_state_card, icon, page_shell, section_head,
+    topbar,
 };
 
 pub fn render_category(
@@ -11,7 +12,6 @@ pub fn render_category(
     resources: Vec<crate::web::view_models::CategoryResourceRow>,
 ) -> String {
     let city_url = format!("/app/{}/{}/{}", ci, si, zi);
-    let safe_category = escape_html(category);
     let category_url = urlencoding::encode(category);
 
     let cards = if resources.is_empty() {
@@ -144,27 +144,8 @@ pub fn render_category(
     let section_head_resources = section_head("Ресурсы", &format!("Найдено: {}", count), None);
     let section_head_city = section_head("Ваш город", "Все направления и категории", Some(34));
 
-    format!(
-        r#"<!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-
-<title>{category} · ResursMap</title>
-
-<style>{style}</style>
-</head>
-
-<body>
-
-<main class="page">
-
-{topbar}
-
-{hero}
-
-{section_head_resources}
+    let content = format!(
+        r####"{section_head_resources}
 
 <div>
     {cards}
@@ -196,28 +177,26 @@ pub fn render_category(
         ›
     </div>
 
-</a>
+</a>"####,
+        section_head_resources = section_head_resources,
+        section_head_city = section_head_city,
+        city_icon = icon("map"),
+        city_url = city_url,
+        cards = cards,
+    );
 
-</main>
-
-{bottom_nav}
-
-</body>
-</html>"#,
-        style = base_style(),
-        topbar = topbar("RESOURCE NETWORK", "globe"),
-        hero = back_hero(
-            &back_link(&city_url, "Вернуться к городу", "chevron",),
+    page_shell(
+        &format!("{} · ResursMap", category),
+        &topbar("RESOURCE NETWORK", "globe"),
+        &back_hero(
+            &back_link(&city_url, "Вернуться к городу", "chevron"),
             "map",
             "Категория",
             category,
             "Ресурсы города в выбранной категории.",
         ),
-        city_icon = icon("map"),
-        bottom_nav = bottom_nav("map"),
-        category = safe_category,
-        city_url = city_url,
-        cards = cards,
+        &content,
+        &bottom_nav("map"),
     )
 }
 
@@ -1321,40 +1300,25 @@ pub fn render_my_resources(
             .join("")
     };
 
-    format!(
-        r#"<!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Мои ресурсы · ResursMap</title>
-<style>{style}</style>
-</head>
-
-<body>
-<main class="page">
-
-{topbar}
-
-{hero}
-
-<section>
+    let content = format!(
+        r#"<section>
     {cards}
-</section>
+</section>"#,
+        cards = cards,
+    );
 
-</main>
-</body>
-</html>"#,
-        style = base_style(),
-        topbar = topbar("MY RESOURCES", "map"),
-        hero = back_hero(
-            &back_link("/app/me", "Профиль", "arrow-left",),
+    page_shell(
+        "Мои ресурсы · ResursMap",
+        &topbar("MY RESOURCES", "map"),
+        &back_hero(
+            &back_link("/app/me", "Профиль", "arrow-left"),
             "user",
             "Управление",
             "Мои ресурсы",
             "Ваши объявления, компании, услуги и другие ресурсы.",
         ),
-        cards = cards,
+        &content,
+        "",
     )
 }
 
@@ -1374,25 +1338,8 @@ pub fn render_edit_resource(
     let safe_description = escape_html(description);
     let safe_contact = escape_html(contact);
     let safe_address = escape_html(address);
-    format!(
-        r##"<!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Редактировать ресурс · ResursMap</title>
-<style>{style}</style>
-</head>
-
-<body>
-
-<main class="page">
-
-{topbar}
-
-{hero}
-
-<form method="post"
+    let content = format!(
+        r####"<form method="post"
       action="/app/resource/{id}/edit"
       style="display:flex;flex-direction:column;gap:16px;" class="ui-form">
 
@@ -1451,15 +1398,18 @@ pub fn render_edit_resource(
         После сохранения ресурс автоматически вернётся на повторную модерацию.
     </div>
 
-</form>
+</form>"####,
+        id = id,
+        title = safe_title,
+        description = safe_description,
+        contact = safe_contact,
+        address = safe_address,
+    );
 
-</main>
-
-</body>
-</html>"##,
-        style = base_style(),
-        topbar = topbar("EDIT RESOURCE", "map"),
-        hero = back_hero(
+    page_shell(
+        "Редактировать ресурс · ResursMap",
+        &topbar("EDIT RESOURCE", "map"),
+        &back_hero(
             &back_link(
                 &format!("/app/resource/{}", id),
                 "Назад к ресурсу",
@@ -1470,11 +1420,8 @@ pub fn render_edit_resource(
             "Редактировать ресурс",
             &format!("Категория: {}", category),
         ),
-        id = id,
-        title = safe_title,
-        description = safe_description,
-        contact = safe_contact,
-        address = safe_address,
+        &content,
+        "",
     )
 }
 
