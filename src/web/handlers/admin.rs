@@ -1500,23 +1500,33 @@ pub async fn admin_bulk_resources(
     let filter_url = urlencoding::encode(filter);
     let q_url = urlencoding::encode(q);
 
-    Html(format!(
-        r#"<!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Готово · ResursMap</title>
-<meta http-equiv="refresh" content="1;url=/app/admin/resources?filter={filter_url}&amp;q={q_url}">
-</head>
-<body style="font-family:system-ui;padding:30px;">
-<h2>Изменено ресурсов: {changed}</h2>
-<p>Возвращаемся в модерацию…</p>
-</body>
-</html>"#,
+    let head_extra = format!(
+        r#"<meta http-equiv="refresh"
+content="1;url=/app/admin/resources?filter={filter_url}&amp;q={q_url}">"#,
         filter_url = filter_url,
         q_url = q_url,
+    );
+
+    let main_html = format!(
+        r#"<section class="card" style="display:block;padding:20px;">
+    <div class="card-title">
+        Изменено ресурсов: {changed}
+    </div>
+
+    <div class="card-meta" style="margin-top:8px;">
+        Возвращаемся в модерацию…
+    </div>
+</section>"#,
         changed = changed,
+    );
+
+    Html(templates::page_document(
+        "Готово · ResursMap",
+        &head_extra,
+        "",
+        &main_html,
+        "",
+        "",
     ))
     .into_response()
 }
