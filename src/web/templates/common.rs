@@ -375,6 +375,15 @@ body::before {
     margin: 34px 4px 14px;
 }
 
+.section-head {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(255,255,255,.06);
+}
+
 .section-title {
     margin: 0;
 
@@ -650,11 +659,41 @@ body::before {
     position: relative;
     overflow: hidden;
     border: 1px solid rgba(255,255,255,.08);
+    border-radius: 28px;
+    padding: 36px 28px;
     box-shadow:
         0 24px 70px rgba(0,0,0,.28),
         inset 0 1px 0 rgba(255,255,255,.05);
 
     animation: fadeInUp .5s ease both;
+}
+
+.hero h1 {
+    font-size: 42px;
+    font-weight: 800;
+    letter-spacing: -.02em;
+    line-height: 1.1;
+    margin: 0 0 12px 0;
+}
+
+.hero p {
+    font-size: 16px;
+    line-height: 1.6;
+    color: var(--muted);
+    margin: 0 0 24px 0;
+    max-width: 560px;
+}
+
+.hero .eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 16px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--gold-light);
 }
 
 .hero::before {
@@ -838,6 +877,15 @@ body::before {
 
 .nav-item.active .icon {
     filter: drop-shadow(0 0 8px rgba(214,183,122,.25));
+}
+
+.section-head {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(255,255,255,.06);
 }
 
 .section-title {
