@@ -314,34 +314,8 @@ pub fn render_contact_requests(
             .join("")
     };
 
-    format!(
-        r#"<!DOCTYPE html>
-<html lang="ru">
-
-<head>
-
-<meta charset="utf-8">
-
-<meta name="viewport"
-      content="width=device-width, initial-scale=1">
-
-<title>Запросы · ResursMap</title>
-
-<style>{style}</style>
-
-</head>
-
-<body>
-
-<main class="page">
-
-{topbar}
-
-
-{hero}
-
-
-<div class="card"
+    let content_html = format!(
+        r####"<div class="card"
      style="
          display:flex;
          margin-bottom:20px;
@@ -375,30 +349,23 @@ pub fn render_contact_requests(
 
     {cards}
 
-</section>
+</section>"####,
+        pending_count = pending_count,
+        cards = cards,
+    );
 
-
-</main>
-
-
-{bottom_nav}
-
-
-</body>
-
-</html>"#,
-        style = base_style(),
-        topbar = topbar("CONTACT REQUESTS", "user"),
-        hero = back_hero(
-            &back_link("/app/me", "Профиль", "arrow-left",),
+    page_shell(
+        "Запросы · ResursMap",
+        &topbar("CONTACT REQUESTS", "user"),
+        &back_hero(
+            &back_link("/app/me", "Профиль", "arrow-left"),
             "user",
             "Связи",
             "Запросы на связь",
             "Здесь вы решаете, кто сможет начать общение с вами внутри ResursMap.",
         ),
-        pending_count = pending_count,
-        cards = cards,
-        bottom_nav = bottom_nav("profile"),
+        &content_html,
+        &bottom_nav("profile"),
     )
 }
 
