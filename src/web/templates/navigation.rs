@@ -174,6 +174,38 @@ pub fn render_continents() -> String {
         }
     }
 
+    @media (max-width: 620px) {
+        .rm-quick-grid {
+            grid-template-columns:1fr;
+            gap:8px;
+        }
+
+        .rm-quick-card {
+            padding:14px;
+        }
+
+        .rm-home-label {
+            font-size:10px;
+            letter-spacing:.06em;
+        }
+    }
+
+    @media (max-width: 620px) {
+        .rm-quick-grid {
+            grid-template-columns:1fr;
+            gap:8px;
+        }
+
+        .rm-quick-card {
+            padding:14px;
+        }
+
+        .rm-home-label {
+            font-size:10px;
+            letter-spacing:.06em;
+        }
+    }
+
     @media (max-width: 420px) {
         .rm-install-grid {
             gap:8px;
