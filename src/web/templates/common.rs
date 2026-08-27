@@ -1132,6 +1132,27 @@ pub(crate) fn navigation_card(href: &str, icon_name: &str, title: &str, meta: &s
     })
 }
 
+pub(crate) fn quick_navigation_card(
+    href: &str,
+    icon_char: &str,
+    title: &str,
+    meta: &str,
+) -> String {
+    format!(
+        r#"<a href="{href}" class="card rm-quick-card">
+    <div class="rm-quick-icon">{icon_char}</div>
+    <div class="card-title">{title}</div>
+    <div class="card-meta" style="margin-top:5px;">
+        {meta}
+    </div>
+</a>"#,
+        href = escape_html(href),
+        icon_char = escape_html(icon_char),
+        title = escape_html(title),
+        meta = escape_html(meta),
+    )
+}
+
 pub(crate) fn people_result_card(
     href: &str,
     display_name_html: &str,
