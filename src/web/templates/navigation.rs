@@ -293,12 +293,14 @@ pub fn render_continents() -> String {
 
     <div class="rm-install-grid">
 
-        <button id="resursmap-install-android"
-                type="button"
-                class="rm-install-button rm-install-android">
+        <a id="resursmap-install-android"
+           href="/static/downloads/ResursMap.apk"
+           download="ResursMap.apk"
+           class="rm-install-button rm-install-android"
+           style="display:block;text-decoration:none;">
             <span>Android</span>
-            <strong>↓ Установить</strong>
-        </button>
+            <strong>↓ Скачать APK</strong>
+        </a>
 
         <button id="resursmap-install-ios"
                 type="button"

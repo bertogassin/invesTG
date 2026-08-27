@@ -32,20 +32,6 @@
       deferredPrompt = event;
     });
 
-    if (androidButton) {
-      androidButton.addEventListener("click", async () => {
-        if (isStandalone) return;
-
-        if (deferredPrompt) {
-          deferredPrompt.prompt();
-          await deferredPrompt.userChoice;
-          deferredPrompt = null;
-          return;
-        }
-
-        alert("Установка недоступна в этом браузере.");
-      });
-    }
 
     if (iosButton) {
       iosButton.addEventListener("click", () => {
