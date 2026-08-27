@@ -1,5 +1,5 @@
 use super::common::{
-    back_hero, back_link, base_style, bottom_nav, empty_state_card, escape_html, icon, page_shell,
+    back_hero, back_link, bottom_nav, empty_state_card, escape_html, icon, page_shell,
     section_head, topbar,
 };
 
@@ -923,27 +923,8 @@ pub fn render_chat(
         )
     };
 
-    format!(
-        r#"<!DOCTYPE html>
-<html lang="ru">
-
-<head>
-<meta charset="utf-8">
-<meta name="viewport"
-      content="width=device-width, initial-scale=1">
-
-<title>Чат · ResursMap</title>
-
-<style>{style}</style>
-</head>
-
-<body>
-
-<main class="page">
-
-{topbar}
-
-<section class="hero"
+    let content_html = format!(
+        r####"<section class="hero"
          style="
              padding-bottom:14px;
          ">
@@ -990,24 +971,20 @@ pub fn render_chat(
 
 </section>
 
-{content}
-
-</main>
-
-
-
-
-
-
-</body>
-</html>"#,
-        style = base_style(),
-        topbar = topbar("CHAT", "search"),
+{content}"####,
         back_link = back_link("/app/messages", "Назад", "chevron"),
         user_icon = icon("user"),
         display_name = display_name,
         subtitle = subtitle,
         content = content,
+    );
+
+    page_shell(
+        "Чат · ResursMap",
+        &topbar("CHAT", "search"),
+        "",
+        &content_html,
+        "",
     )
 }
 
