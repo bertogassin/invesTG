@@ -543,45 +543,29 @@ pub fn render_continent(ci: usize) -> String {
         let section_head_countries =
             section_head("Страны", &format!("{} доступных", countries.len()), None);
 
-        return format!(
-            r#"<!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{name} · ResursMap</title>
-<style>{}</style>
-</head>
-
-<body>
-
-<main class="page">
-
-{}
-
-{}
-
+        let content = format!(
+            r#"
 {section_head_countries}
 
 <div class="grid">
     {cards}
 </div>
+"#,
+            section_head_countries = section_head_countries,
+            cards = cards,
+        );
 
-</main>
-
-{bottom_nav}
-
-</body>
-</html>"#,
-            base_style(),
-            topbar("RESOURCE NETWORK", "globe"),
-            simple_hero(
+        return page_shell(
+            &format!("{} · ResursMap", name),
+            &topbar("RESOURCE NETWORK", "globe"),
+            &simple_hero(
                 "map",
                 "Регион",
                 name,
                 "Выберите страну, чтобы открыть доступные города и ресурсы.",
             ),
-            bottom_nav = bottom_nav("map"),
+            &content,
+            &bottom_nav("map"),
         );
     }
 
