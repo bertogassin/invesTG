@@ -46,7 +46,7 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
     let safe_last_name = escape_html(last_name);
     let safe_intent_text = escape_html(intent_text);
 
-    let unread_messages_badge = if unread_messages_count > 0 {
+    let _unread_messages_badge = if unread_messages_count > 0 {
         format!(
             r#"<span style="
                     min-width:28px;
@@ -631,22 +631,7 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
 
 
 
-{messages_card}
-
-
-{notifications_card}
-
-
-{my_resources_card}
-
-
-{favorites_card}
-
-
-{search_card}
-
-
-</div>"####,
+{notifications_card}</div>"####,
         account_header = account_header,
         statistics = statistics,
         settings_icon = icon("user"),
@@ -687,26 +672,6 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
                     icon("chevron"),
                 ),),
             },),
-        messages_card = super::extended_navigation_card(super::ExtendedNavigationCardParams {
-            id: None,
-            href: "/app/messages",
-            icon_html: "💬",
-            title: "Сообщения",
-            meta: "Личные диалоги внутри ResursMap",
-            trailing_html: Some(&format!(
-                r#"<div style="
-    display:flex;
-    align-items:center;
-    gap:10px;
-">
-    {}
-
-    <div class="card-arrow">{}</div>
-</div>"#,
-                unread_messages_badge,
-                icon("chevron"),
-            ),),
-        },),
         notifications_card = super::extended_navigation_card(super::ExtendedNavigationCardParams {
             id: None,
             href: "/app/notifications",
@@ -740,26 +705,6 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
                 icon("chevron"),
             ),),
         },),
-        my_resources_card = super::extended_navigation_card(super::ExtendedNavigationCardParams {
-            id: Some("my-resources-link"),
-            href: "/app/my-resources",
-            icon_html: icon("map-pin"),
-            title: "Мои ресурсы",
-            meta: "Публикации, статусы и редактирование",
-            trailing_html: None,
-        },),
-        favorites_card = super::navigation_card(
-            "/app/favorites",
-            "heart",
-            "Избранное",
-            "Сохранённые ресурсы",
-        ),
-        search_card = super::navigation_card(
-            "/app/search",
-            "search",
-            "Найти ресурс",
-            "Глобальный поиск по ResursMap",
-        ),
     );
 
     let body_after_html = r####"{bottom_nav}

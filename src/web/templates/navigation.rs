@@ -358,23 +358,23 @@ pub fn render_continents() -> String {
 {section_head_features}
 
 <div class="feature-grid">
-    <div class="feature">
-        {map_icon}
-        <strong>Ресурсы</strong>
-        <span>Находите полезные места и услуги.</span>
-    </div>
+    <a href="/app/search" class="feature" style="text-decoration:none;color:inherit;">
+        {search_icon}
+        <strong>Поиск</strong>
+        <span>Находите людей, ресурсы и услуги.</span>
+    </a>
 
-    <div class="feature">
-        {heart_icon}
-        <strong>Сообщество</strong>
-        <span>Люди и возможности вашего города.</span>
-    </div>
-
-    <div class="feature">
+    <a href="/app/me" class="feature" style="text-decoration:none;color:inherit;">
         {user_icon}
         <strong>Профиль</strong>
         <span>Ваши данные, голоса и активность.</span>
-    </div>
+    </a>
+
+    <a href="/app/menu" class="feature" style="text-decoration:none;color:inherit;">
+        {menu_icon}
+        <strong>Меню</strong>
+        <span>Настройки приложения и персонализация.</span>
+    </a>
 </div>
 
 
@@ -493,9 +493,9 @@ pub fn render_continents() -> String {
             "Найти город, услугу или ресурс...",
         ),
         cards = cards,
-        map_icon = icon("map"),
-        heart_icon = icon("heart"),
+        search_icon = icon("search"),
         user_icon = icon("user"),
+        menu_icon = icon("menu"),
         quick_search = quick_search,
         quick_profile = quick_profile,
         quick_my_resources = quick_my_resources,
