@@ -1278,6 +1278,29 @@ pub(crate) fn resource_result_card(params: ResourceResultCardParams<'_>) -> Stri
     )
 }
 
+pub(crate) fn status_page(
+    title: &str,
+    eyebrow: &str,
+    heading: &str,
+    description: &str,
+    action_html: &str,
+) -> String {
+    let content = format!(
+        r#"<section class="hero">
+    <div class="eyebrow">{eyebrow}</div>
+    <h1>{heading}</h1>
+    <p>{description}</p>
+    {action}
+</section>"#,
+        eyebrow = escape_html(eyebrow),
+        heading = escape_html(heading),
+        description = escape_html(description),
+        action = action_html,
+    );
+
+    page_document(title, "", "", &content, "", "")
+}
+
 pub(crate) fn empty_state_card(title: &str, description_html: &str) -> String {
     format!(
         r#"

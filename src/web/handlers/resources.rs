@@ -150,35 +150,22 @@ pub async fn resource_profile(State(state): State<AppState>, Path(id): Path<i64>
             },
         )),
 
-        None => Html(format!(
-            r#"<!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ресурс не найден · ResursMap</title>
-<style>{}</style>
-</head>
-<body>
-<main class="page">
-<section class="hero">
-    <div class="eyebrow">⚠ ResursMap</div>
-    <h1>Ресурс не найден</h1>
-    <p>Этот ресурс больше недоступен или был удалён.</p>
-    <a class="card" href="/app" style="text-decoration:none;margin-top:24px;">
-        <div class="card-icon">{}</div>
-        <div class="card-content">
-            <div class="card-title">Вернуться на карту</div>
-            <div class="card-meta">Открыть ResursMap</div>
-        </div>
-        <div class="card-arrow">›</div>
-    </a>
-</section>
-</main>
-</body>
-</html>"#,
-            templates::base_style(),
-            templates::icon("map"),
+        None => Html(templates::status_page(
+            "Ресурс не найден · ResursMap",
+            "⚠ ResursMap",
+            "Ресурс не найден",
+            "Этот ресурс больше недоступен или был удалён.",
+            &format!(
+                r#"<a class="card" href="/app" style="text-decoration:none;margin-top:24px;">
+    <div class="card-icon">{}</div>
+    <div class="card-content">
+        <div class="card-title">Вернуться на карту</div>
+        <div class="card-meta">Открыть ResursMap</div>
+    </div>
+    <div class="card-arrow">›</div>
+</a>"#,
+                templates::icon("map"),
+            ),
         )),
     }
 }
@@ -280,32 +267,17 @@ pub async fn add_resource(
     };
 
     if owner_client_id.is_empty() {
-        return Html(format!(
-            r#"<!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Требуется Telegram · ResursMap</title>
-<style>{}</style>
-</head>
-<body>
-<main class="page">
-<section class="hero">
-<div class="eyebrow">⚠ Авторизация</div>
-<h1>Не удалось подтвердить пользователя</h1>
-<p>Откройте ResursMap через Telegram и попробуйте добавить ресурс снова.</p>
-<a class="card" href="/app" style="text-decoration:none;margin-top:20px;">
-<div class="card-content">
-<div class="card-title">Вернуться на карту</div>
-</div>
-<div class="card-arrow">›</div>
-</a>
-</section>
-</main>
-</body>
-</html>"#,
-            templates::base_style(),
+        return Html(templates::status_page(
+            "Требуется Telegram · ResursMap",
+            "⚠ Авторизация",
+            "Не удалось подтвердить пользователя",
+            "Откройте ResursMap через Telegram и попробуйте добавить ресурс снова.",
+            r#"<a class="card" href="/app" style="text-decoration:none;margin-top:20px;">
+    <div class="card-content">
+        <div class="card-title">Вернуться на карту</div>
+    </div>
+    <div class="card-arrow">›</div>
+</a>"#,
         ))
         .into_response();
     }
@@ -376,69 +348,39 @@ pub async fn add_resource(
     drop(db);
 
     match result {
-        Ok(_) => Html(format!(
-            r#"<!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ресурс добавлен · ResursMap</title>
-<style>{}</style>
-</head>
-<body>
-<main class="page">
-    <section class="hero">
-        <div class="eyebrow">✓ Готово</div>
-        <h1>Ресурс добавлен</h1>
-        <p>Спасибо! Ресурс появился в категории и ожидает проверки.</p>
-
-        <a class="card"
-           href="/app/{}/{}/{}/cat/{}"
-           style="text-decoration:none;margin-top:24px;">
-            <div class="card-icon">{}</div>
-            <div class="card-content">
-                <div class="card-title">Вернуться к ресурсам</div>
-                <div class="card-meta">Открыть категорию</div>
-            </div>
-            <div class="card-arrow">›</div>
-        </a>
-    </section>
-</main>
-</body>
-</html>"#,
-            templates::base_style(),
-            ci,
-            si,
-            zi,
-            category_url,
-            templates::icon("map"),
+        Ok(_) => Html(templates::status_page(
+            "Ресурс добавлен · ResursMap",
+            "✓ Готово",
+            "Ресурс добавлен",
+            "Спасибо! Ресурс появился в категории и ожидает проверки.",
+            &format!(
+                r#"<a class="card"
+   href="/app/{}/{}/{}/cat/{}"
+   style="text-decoration:none;margin-top:24px;">
+    <div class="card-icon">{}</div>
+    <div class="card-content">
+        <div class="card-title">Вернуться к ресурсам</div>
+        <div class="card-meta">Открыть категорию</div>
+    </div>
+    <div class="card-arrow">›</div>
+</a>"#,
+                ci,
+                si,
+                zi,
+                category_url,
+                templates::icon("map"),
+            ),
         ))
         .into_response(),
-        Err(_) => Html(format!(
-            r#"<!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ошибка · ResursMap</title>
-<style>{}</style>
-</head>
-<body>
-<main class="page">
-    <section class="hero">
-        <div class="eyebrow">⚠ Ошибка</div>
-        <h1>Не удалось добавить ресурс</h1>
-        <p>Попробуйте ещё раз.</p>
-        <a href="/app/{}/{}/{}/cat/{}">Назад</a>
-    </section>
-</main>
-</body>
-</html>"#,
-            templates::base_style(),
-            ci,
-            si,
-            zi,
-            category_url,
+        Err(_) => Html(templates::status_page(
+            "Ошибка · ResursMap",
+            "⚠ Ошибка",
+            "Не удалось добавить ресурс",
+            "Попробуйте ещё раз.",
+            &format!(
+                r#"<a href="/app/{}/{}/{}/cat/{}">Назад</a>"#,
+                ci, si, zi, category_url,
+            ),
         ))
         .into_response(),
     }
@@ -559,32 +501,17 @@ pub async fn edit_resource_page(
             ))
         }
 
-        _ => Html(format!(
-            r#"<!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Нет доступа · ResursMap</title>
-<style>{}</style>
-</head>
-<body>
-<main class="page">
-<section class="hero">
-<div class="eyebrow">⚠ Доступ</div>
-<h1>Редактирование недоступно</h1>
-<p>Этот ресурс не принадлежит текущему пользователю.</p>
-<a class="card" href="/app/me" style="text-decoration:none;margin-top:20px;">
-<div class="card-content">
-<div class="card-title">Вернуться в профиль</div>
-</div>
-<div class="card-arrow">›</div>
-</a>
-</section>
-</main>
-</body>
-</html>"#,
-            templates::base_style(),
+        _ => Html(templates::status_page(
+            "Нет доступа · ResursMap",
+            "⚠ Доступ",
+            "Редактирование недоступно",
+            "Этот ресурс не принадлежит текущему пользователю.",
+            r#"<a class="card" href="/app/me" style="text-decoration:none;margin-top:20px;">
+    <div class="card-content">
+        <div class="card-title">Вернуться в профиль</div>
+    </div>
+    <div class="card-arrow">›</div>
+</a>"#,
         )),
     }
 }
@@ -626,26 +553,12 @@ pub async fn edit_resource(
     };
 
     if owner_client_id.is_empty() {
-        return Html(format!(
-            r#"<!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Нет доступа · ResursMap</title>
-<style>{}</style>
-</head>
-<body>
-<main class="page">
-<section class="hero">
-<div class="eyebrow">⚠ Доступ</div>
-<h1>Не удалось подтвердить владельца</h1>
-<p>Откройте ResursMap через Telegram и попробуйте снова.</p>
-</section>
-</main>
-</body>
-</html>"#,
-            templates::base_style(),
+        return Html(templates::status_page(
+            "Нет доступа · ResursMap",
+            "⚠ Доступ",
+            "Не удалось подтвердить владельца",
+            "Откройте ResursMap через Telegram и попробуйте снова.",
+            "",
         ))
         .into_response();
     }
@@ -709,55 +622,26 @@ pub async fn edit_resource(
     drop(db);
 
     if changed == 1 {
-        Html(format!(
-            r#"<!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Изменения сохранены · ResursMap</title>
-<style>{}</style>
-</head>
-<body>
-<main class="page">
-<section class="hero">
-<div class="eyebrow">✓ Готово</div>
-<h1>Изменения сохранены</h1>
-<p>После изменения ресурс снова ожидает проверки.</p>
-<a class="card" href="/app/my-resources" style="text-decoration:none;margin-top:20px;">
-<div class="card-content">
-<div class="card-title">Вернуться в мои ресурсы</div>
-</div>
-<div class="card-arrow">›</div>
-</a>
-</section>
-</main>
-</body>
-</html>"#,
-            templates::base_style(),
+        Html(templates::status_page(
+            "Изменения сохранены · ResursMap",
+            "✓ Готово",
+            "Изменения сохранены",
+            "После изменения ресурс снова ожидает проверки.",
+            r#"<a class="card" href="/app/my-resources" style="text-decoration:none;margin-top:20px;">
+    <div class="card-content">
+        <div class="card-title">Вернуться в мои ресурсы</div>
+    </div>
+    <div class="card-arrow">›</div>
+</a>"#,
         ))
         .into_response()
     } else {
-        Html(format!(
-            r#"<!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Нет доступа · ResursMap</title>
-<style>{}</style>
-</head>
-<body>
-<main class="page">
-<section class="hero">
-<div class="eyebrow">⚠ Ошибка</div>
-<h1>Не удалось сохранить</h1>
-<p>Проверьте владельца ресурса.</p>
-</section>
-</main>
-</body>
-</html>"#,
-            templates::base_style(),
+        Html(templates::status_page(
+            "Нет доступа · ResursMap",
+            "⚠ Ошибка",
+            "Не удалось сохранить",
+            "Проверьте владельца ресурса.",
+            "",
         ))
         .into_response()
     }
