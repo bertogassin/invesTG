@@ -1,5 +1,5 @@
 use super::common::{
-    back_hero, back_link, base_style, bottom_nav, empty_state_card, escape_html, icon,
+    back_hero, back_link, base_style, bottom_nav, empty_state_card, escape_html, icon, page_shell,
     section_head, simple_hero, topbar,
 };
 
@@ -1172,59 +1172,25 @@ pub fn render_notifications(
             .join("")
     };
 
-    format!(
-        r#"<!DOCTYPE html>
-<html lang="ru">
-
-<head>
-
-<meta charset="utf-8">
-
-<meta name="viewport"
-      content="width=device-width, initial-scale=1">
-
-<title>Уведомления · ResursMap</title>
-
-<style>{style}</style>
-
-</head>
-
-
-<body>
-
-<main class="page">
-
-
-{topbar}
-
-
-{hero}
-
-
-<section>
+    let content = format!(
+        r#"<section>
     {cards}
-</section>
+</section>"#,
+        cards = cards,
+    );
 
-
-</main>
-
-
-{bottom_nav}
-
-
-</body>
-</html>"#,
-        style = base_style(),
-        topbar = topbar("NOTIFICATIONS", "user"),
-        hero = back_hero(
-            &back_link("/app/me", "Профиль", "arrow-left",),
+    page_shell(
+        "Уведомления · ResursMap",
+        &topbar("NOTIFICATIONS", "user"),
+        &back_hero(
+            &back_link("/app/me", "Профиль", "arrow-left"),
             "user",
             "Уведомления",
             "Центр уведомлений",
             "Статусы модерации и важные изменения ваших ресурсов.",
         ),
-        cards = cards,
-        bottom_nav = bottom_nav("profile"),
+        &content,
+        &bottom_nav("profile"),
     )
 }
 
@@ -1940,27 +1906,8 @@ pub fn render_public_user_profile(params: RenderPublicUserProfileParams<'_>) -> 
 }
 
 pub fn render_public_user_not_found() -> String {
-    format!(
-        r#"<!DOCTYPE html>
-<html lang="ru">
-
-<head>
-<meta charset="utf-8">
-<meta name="viewport"
-      content="width=device-width, initial-scale=1">
-
-<title>Профиль не найден · ResursMap</title>
-
-<style>{style}</style>
-</head>
-
-<body>
-
-<main class="page">
-
-{hero}
-
-<section>
+    let content = format!(
+        r#"<section>
     <a class="card"
        href="/app"
        style="
@@ -1985,21 +1932,22 @@ pub fn render_public_user_not_found() -> String {
         </div>
 
     </a>
-</section>
+</section>"#,
+        map = icon("map"),
+        arrow = icon("chevron"),
+    );
 
-</main>
-
-</body>
-</html>"#,
-        style = base_style(),
-        hero = simple_hero(
+    page_shell(
+        "Профиль не найден · ResursMap",
+        "",
+        &simple_hero(
             "alert-triangle",
             "ResursMap",
             "Профиль не найден",
             "Пользователь недоступен или публичный профиль ещё не создан.",
         ),
-        map = icon("map"),
-        arrow = icon("chevron"),
+        &content,
+        "",
     )
 }
 
@@ -2123,44 +2071,24 @@ pub fn render_favorites(
             .join("")
     };
 
-    format!(
-        r#"<!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Избранное · ResursMap</title>
-<style>{style}</style>
-</head>
-
-<body>
-
-<main class="page">
-
-{topbar}
-
-{hero}
-
-<section>
+    let content = format!(
+        r#"<section>
     {cards}
-</section>
+</section>"#,
+        cards = cards,
+    );
 
-</main>
-
-{bottom_nav}
-
-</body>
-</html>"#,
-        style = base_style(),
-        topbar = topbar("FAVORITES", "heart"),
-        hero = back_hero(
-            &back_link("/app/me", "Профиль", "arrow-left",),
+    page_shell(
+        "Избранное · ResursMap",
+        &topbar("FAVORITES", "heart"),
+        &back_hero(
+            &back_link("/app/me", "Профиль", "arrow-left"),
             "heart",
             "Избранное",
             "Сохранённые ресурсы",
             "Всё, что вы отметили сердцем.",
         ),
-        cards = cards,
-        bottom_nav = bottom_nav("profile"),
+        &content,
+        &bottom_nav("profile"),
     )
 }
