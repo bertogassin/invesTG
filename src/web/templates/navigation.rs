@@ -669,75 +669,65 @@ pub fn render_city(ci: usize, si: usize, zi: usize) -> String {
             if let Some(city) = cities.get(zi) {
                 let section_head_sections = section_head("Разделы", "Выберите направление", None);
 
-                return format!(
-                    r#"<!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{city} · ResursMap</title>
-<style>{}</style>
-</head>
-
-<body>
-
-<main class="page">
-
-{}
-
-{}
-
+                let content = format!(
+                    r#"
 {section_head_sections}
 
 <div class="grid">
 
     <a class="card" href="/app/{ci}/{si}/{zi}/cat/work">
-        <div class="card-icon">{}</div>
+        <div class="card-icon">{work_icon}</div>
         <div class="card-content">
             <div class="card-title">Работа</div>
             <div class="card-meta">Вакансии и предложения</div>
         </div>
-        <div class="card-arrow">{}</div>
+        <div class="card-arrow">{chevron1}</div>
     </a>
 
     <a class="card" href="/app/{ci}/{si}/{zi}/cat/business">
-        <div class="card-icon">{}</div>
+        <div class="card-icon">{business_icon}</div>
         <div class="card-content">
             <div class="card-title">Бизнес</div>
             <div class="card-meta">Компании и услуги</div>
         </div>
-        <div class="card-arrow">{}</div>
+        <div class="card-arrow">{chevron2}</div>
     </a>
 
     <a class="card" href="/app/{ci}/{si}/{zi}/cat/services">
-        <div class="card-icon">{}</div>
+        <div class="card-icon">{services_icon}</div>
         <div class="card-content">
             <div class="card-title">Услуги</div>
             <div class="card-meta">Помощь и специалисты</div>
         </div>
-        <div class="card-arrow">{}</div>
+        <div class="card-arrow">{chevron3}</div>
     </a>
 
     <a class="card" href="/app/{ci}/{si}/{zi}/cat/community">
-        <div class="card-icon">{}</div>
+        <div class="card-icon">{community_icon}</div>
         <div class="card-content">
             <div class="card-title">Сообщество</div>
             <div class="card-meta">Люди и контакты</div>
         </div>
-        <div class="card-arrow">{}</div>
+        <div class="card-arrow">{chevron4}</div>
     </a>
 
 </div>
+"#,
+                    section_head_sections = section_head_sections,
+                    work_icon = icon("briefcase"),
+                    chevron1 = icon("chevron"),
+                    business_icon = icon("building"),
+                    chevron2 = icon("chevron"),
+                    services_icon = icon("map"),
+                    chevron3 = icon("chevron"),
+                    community_icon = icon("user"),
+                    chevron4 = icon("chevron"),
+                );
 
-</main>
-
-{bottom_nav}
-
-</body>
-</html>"#,
-                    base_style(),
-                    topbar("RESOURCE NETWORK", "globe"),
-                    simple_hero(
+                return page_shell(
+                    &format!("{} · ResursMap", city),
+                    &topbar("RESOURCE NETWORK", "globe"),
+                    &simple_hero(
                         "map-pin",
                         country,
                         city,
@@ -747,15 +737,8 @@ pub fn render_city(ci: usize, si: usize, zi: usize) -> String {
                             escape_html(country),
                         ),
                     ),
-                    icon("briefcase"),
-                    icon("chevron"),
-                    icon("building"),
-                    icon("chevron"),
-                    icon("map"),
-                    icon("chevron"),
-                    icon("user"),
-                    icon("chevron"),
-                    bottom_nav = bottom_nav("map"),
+                    &content,
+                    &bottom_nav("map"),
                 );
             }
         }
