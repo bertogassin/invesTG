@@ -438,20 +438,8 @@ pub async fn admin_reports(State(state): State<AppState>, headers: HeaderMap) ->
         .to_string();
     }
 
-    Html(format!(
-        r#"<!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Жалобы · ResursMap</title>
-<style>{style}</style>
-</head>
-
-<body>
-
-<main class="page">
-
+    let main_html = format!(
+        r#"
 <header class="topbar">
     <a class="brand" href="/app">
         <div class="brand-mark">{logo}</div>
@@ -537,18 +525,22 @@ pub async fn admin_reports(State(state): State<AppState>, headers: HeaderMap) ->
 <section>
     {cards}
 </section>
-
-</main>
-
-</body>
-</html>"#,
-        style = templates::base_style(),
+"#,
         logo = templates::icon("map"),
         shield = templates::icon("user"),
         pending_count = pending_count,
         closed_count = closed_count,
         cards = cards,
         key_query = key_query,
+    );
+
+    Html(templates::page_document(
+        "Жалобы · ResursMap",
+        "",
+        "",
+        &main_html,
+        "",
+        "",
     ))
 }
 
