@@ -155,17 +155,7 @@ pub async fn resource_profile(State(state): State<AppState>, Path(id): Path<i64>
             "⚠ ResursMap",
             "Ресурс не найден",
             "Этот ресурс больше недоступен или был удалён.",
-            &format!(
-                r#"<a class="card" href="/app" style="text-decoration:none;margin-top:24px;">
-    <div class="card-icon">{}</div>
-    <div class="card-content">
-        <div class="card-title">Вернуться на карту</div>
-        <div class="card-meta">Открыть ResursMap</div>
-    </div>
-    <div class="card-arrow">›</div>
-</a>"#,
-                templates::icon("map"),
-            ),
+            &templates::navigation_card("/app", "map", "Вернуться на карту", "Открыть ResursMap"),
         )),
     }
 }
@@ -272,12 +262,7 @@ pub async fn add_resource(
             "⚠ Авторизация",
             "Не удалось подтвердить пользователя",
             "Откройте ResursMap через Telegram и попробуйте добавить ресурс снова.",
-            r#"<a class="card" href="/app" style="text-decoration:none;margin-top:20px;">
-    <div class="card-content">
-        <div class="card-title">Вернуться на карту</div>
-    </div>
-    <div class="card-arrow">›</div>
-</a>"#,
+            &templates::navigation_card("/app", "map", "Вернуться на карту", ""),
         ))
         .into_response();
     }
@@ -353,22 +338,11 @@ pub async fn add_resource(
             "✓ Готово",
             "Ресурс добавлен",
             "Спасибо! Ресурс появился в категории и ожидает проверки.",
-            &format!(
-                r#"<a class="card"
-   href="/app/{}/{}/{}/cat/{}"
-   style="text-decoration:none;margin-top:24px;">
-    <div class="card-icon">{}</div>
-    <div class="card-content">
-        <div class="card-title">Вернуться к ресурсам</div>
-        <div class="card-meta">Открыть категорию</div>
-    </div>
-    <div class="card-arrow">›</div>
-</a>"#,
-                ci,
-                si,
-                zi,
-                category_url,
-                templates::icon("map"),
+            &templates::navigation_card(
+                &format!("/app/{}/{}/{}/cat/{}", ci, si, zi, category_url),
+                "map",
+                "Вернуться к ресурсам",
+                "Открыть категорию",
             ),
         ))
         .into_response(),
@@ -506,12 +480,7 @@ pub async fn edit_resource_page(
             "⚠ Доступ",
             "Редактирование недоступно",
             "Этот ресурс не принадлежит текущему пользователю.",
-            r#"<a class="card" href="/app/me" style="text-decoration:none;margin-top:20px;">
-    <div class="card-content">
-        <div class="card-title">Вернуться в профиль</div>
-    </div>
-    <div class="card-arrow">›</div>
-</a>"#,
+            &templates::navigation_card("/app/me", "user", "Вернуться в профиль", ""),
         )),
     }
 }
@@ -627,12 +596,7 @@ pub async fn edit_resource(
             "✓ Готово",
             "Изменения сохранены",
             "После изменения ресурс снова ожидает проверки.",
-            r#"<a class="card" href="/app/my-resources" style="text-decoration:none;margin-top:20px;">
-    <div class="card-content">
-        <div class="card-title">Вернуться в мои ресурсы</div>
-    </div>
-    <div class="card-arrow">›</div>
-</a>"#,
+            &templates::navigation_card("/app/my-resources", "map", "Вернуться в мои ресурсы", ""),
         ))
         .into_response()
     } else {
