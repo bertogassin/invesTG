@@ -663,6 +663,40 @@ body::before {
     animation: fadeIn .4s ease both;
 }
 
+.theme-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+
+    min-width: 40px;
+    min-height: 40px;
+
+    padding: 0 10px;
+
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 12px;
+
+    background: rgba(255,255,255,.04);
+
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 600;
+
+    cursor: pointer;
+
+    transition:
+        color .2s ease,
+        background .2s ease,
+        border-color .2s ease;
+}
+
+.theme-toggle-btn:hover {
+    color: var(--gold-light);
+    border-color: rgba(214,183,122,.24);
+    background: rgba(214,183,122,.06);
+}
+
 .brand {
     transition: transform .25s ease, opacity .25s ease;
 }
@@ -1578,10 +1612,10 @@ pub(crate) fn status_page(
 pub(crate) fn empty_state_card(title: &str, description_html: &str) -> String {
     format!(
         r#"
-<div class="card" style="display:block;margin-top:18px;">
+<div class="card" style="display:block;margin-top:18px;padding:28px 24px;text-align:center;">
     <div class="card-content">
-        <div class="card-title">{title}</div>
-        <div class="card-meta" style="margin-top:5px;">
+        <div class="card-title" style="font-size:17px;margin-bottom:8px;">{title}</div>
+        <div class="card-meta" style="margin-top:5px;line-height:1.6;">
             {description}
         </div>
     </div>
