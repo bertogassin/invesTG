@@ -1,6 +1,6 @@
 use super::common::{
-    back_hero, back_link, bottom_nav, empty_state_card, escape_html, icon, page_document,
-    page_shell, section_head, simple_hero, topbar,
+    back_hero, back_link, bottom_nav, empty_state_card, escape_html, icon, navigation_card,
+    page_document, page_shell, section_head, simple_hero, topbar,
 };
 
 pub struct RenderMeParams<'a> {
@@ -186,10 +186,32 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
             telegram_id_html = telegram_id_html,
         )
     } else {
-        empty_state_card(
-            "Войдите в аккаунт ResursMap",
-            "После входа здесь появятся ваш профиль, ресурсы, избранное и статистика.",
+        format!(
+            "{}{}",
+            empty_state_card(
+                "Войдите в аккаунт ResursMap",
+                "После входа здесь появятся ваш профиль, ресурсы, избранное и статистика.",
+            ),
+            navigation_card("/app/auth", "user", "Войти в аккаунт", "Telegram или email",),
         )
+    };
+
+    let account_header = if authenticated {
+        format!(
+            r#"{account_header}
+<form method="post"
+      action="/app/logout"
+      style="margin-top:12px;">
+    <button type="submit"
+            class="ui-button"
+            style="width:100%;min-height:44px;">
+        Выйти из аккаунта
+    </button>
+</form>"#,
+            account_header = account_header,
+        )
+    } else {
+        account_header
     };
 
     let statistics = if authenticated {

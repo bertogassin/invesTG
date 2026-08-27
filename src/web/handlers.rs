@@ -30,4 +30,4 @@ pub use health::*;
 mod common;
 
 mod auth;
-pub use auth::{app_auth, app_auth_page, email_auth_request, email_auth_verify};
+pub use auth::{app_auth, app_auth_page, app_logout, email_auth_request, email_auth_verify};

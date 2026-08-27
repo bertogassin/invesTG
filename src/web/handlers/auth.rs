@@ -891,69 +891,355 @@ pub(super) fn is_admin_session(state: &AppState, headers: &HeaderMap) -> bool {
 pub async fn app_auth_page() -> Html<String> {
     let head_extra = r#"<script src="https://telegram.org/js/telegram-web-app.js"></script>"#;
 
-    let main_html = r#"
-<div style="max-width:520px;margin:auto;">
-    <h2>RESURSMAP</h2>
-    <p id="status">Подключаем Telegram…</p>
+    let main_html = r####"
+<div style="max-width:520px;margin:0 auto;padding:18px;">
+    <section class="card" style="display:block;padding:22px;margin-bottom:16px;">
+        <div style="font-size:12px;font-weight:800;letter-spacing:.12em;color:var(--muted);">
+            RESURSMAP
+        </div>
+
+        <h1 style="margin:8px 0 6px;font-size:28px;">
+            Вход в аккаунт
+        </h1>
+
+        <p style="margin:0;color:var(--muted);line-height:1.55;">
+            Войдите через Telegram Mini App или получите одноразовый код по email.
+        </p>
+    </section>
+
+    <section class="card" style="display:block;padding:20px;margin-bottom:16px;">
+        <div style="font-weight:850;margin-bottom:6px;">
+            Telegram
+        </div>
+
+        <p id="telegram-status"
+           style="margin:0;color:var(--muted);line-height:1.5;">
+            Проверяем доступность Telegram…
+        </p>
+    </section>
+
+    <section class="card" style="display:block;padding:20px;">
+        <div style="font-weight:850;margin-bottom:6px;">
+            Вход по email
+        </div>
+
+        <p style="margin:0 0 16px;color:var(--muted);line-height:1.5;">
+            Пароль не нужен. Мы отправим шестизначный код, действующий 10 минут.
+        </p>
+
+        <label for="email-input"
+               style="display:block;margin-bottom:7px;font-weight:700;">
+            Email
+        </label>
+
+        <input id="email-input"
+               name="email"
+               type="email"
+               autocomplete="email"
+               inputmode="email"
+               maxlength="254"
+               placeholder="name@example.com"
+               style="width:100%;box-sizing:border-box;margin-bottom:12px;">
+
+        <button id="email-request-button"
+                type="button"
+                class="ui-button"
+                style="width:100%;min-height:48px;">
+            Получить код
+        </button>
+
+        <div id="code-section"
+             hidden
+             style="margin-top:18px;">
+            <label for="code-input"
+                   style="display:block;margin-bottom:7px;font-weight:700;">
+                Код из письма
+            </label>
+
+            <input id="code-input"
+                   name="code"
+                   type="text"
+                   inputmode="numeric"
+                   autocomplete="one-time-code"
+                   pattern="[0-9]{6}"
+                   minlength="6"
+                   maxlength="6"
+                   placeholder="000000"
+                   style="width:100%;box-sizing:border-box;margin-bottom:12px;letter-spacing:.22em;font-size:22px;text-align:center;">
+
+            <button id="email-verify-button"
+                    type="button"
+                    class="ui-button"
+                    style="width:100%;min-height:48px;">
+                Подтвердить и войти
+            </button>
+        </div>
+
+        <p id="email-status"
+           role="status"
+           aria-live="polite"
+           style="min-height:22px;margin:14px 0 0;color:var(--muted);line-height:1.45;">
+        </p>
+    </section>
+
+    <div style="margin-top:16px;text-align:center;">
+        <a href="/app"
+           style="color:var(--muted);text-decoration:none;">
+            Вернуться на карту
+        </a>
+    </div>
 </div>
-"#;
+"####;
 
-    let body_after = r#"
+    let body_after = r####"
 <script>
-(async function () {
-    const status = document.getElementById("status");
+(function () {
+    const telegramStatus =
+        document.getElementById("telegram-status");
 
-    try {
-        const tg =
-            window.Telegram && window.Telegram.WebApp
-                ? window.Telegram.WebApp
-                : null;
+    const emailInput =
+        document.getElementById("email-input");
 
-        if (!tg || !tg.initData) {
-            status.textContent =
-                "Telegram-сессия недоступна.";
-            return;
-        }
+    const codeInput =
+        document.getElementById("code-input");
 
-        tg.ready();
+    const codeSection =
+        document.getElementById("code-section");
 
-        const response = await fetch("/app/auth", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                init_data: tg.initData
-            })
-        });
+    const requestButton =
+        document.getElementById("email-request-button");
 
-        const data = await response.json();
+    const verifyButton =
+        document.getElementById("email-verify-button");
 
-        if (!data.ok) {
-            status.textContent =
-                "Не удалось подтвердить Telegram.";
-            return;
-        }
+    const emailStatus =
+        document.getElementById("email-status");
 
-        status.textContent = "✓ Готово";
-
-        window.location.replace("/app");
-    } catch (_) {
-        status.textContent =
-            "Ошибка подключения Telegram.";
+    function setEmailStatus(message, isError) {
+        emailStatus.textContent = message;
+        emailStatus.style.color =
+            isError ? "#b91c1c" : "var(--muted)";
     }
+
+    function emailErrorMessage(error) {
+        const messages = {
+            invalid_email: "Проверьте правильность email.",
+            rate_limited: "Слишком много попыток. Попробуйте позже.",
+            mail_unavailable: "Отправка писем временно недоступна.",
+            database_unavailable: "Сервис временно недоступен.",
+            code_store_failed: "Не удалось сохранить код.",
+            invalid_code: "Введите шестизначный код.",
+            code_not_found: "Сначала запросите новый код.",
+            code_used: "Этот код уже использован.",
+            code_already_used: "Этот код уже использован.",
+            code_expired: "Срок действия кода истёк.",
+            wrong_code: "Код введён неверно.",
+            too_many_attempts: "Слишком много неверных попыток.",
+            user_create_failed: "Не удалось создать аккаунт.",
+            identity_create_failed: "Не удалось создать способ входа.",
+            profile_create_failed: "Не удалось создать профиль.",
+            transaction_failed: "Не удалось начать операцию.",
+            commit_failed: "Не удалось завершить вход."
+        };
+
+        return messages[error] || "Не удалось выполнить запрос.";
+    }
+
+    async function requestEmailCode() {
+        const email = emailInput.value.trim();
+
+        if (!email) {
+            setEmailStatus("Введите email.", true);
+            emailInput.focus();
+            return;
+        }
+
+        requestButton.disabled = true;
+        setEmailStatus("Отправляем код…", false);
+
+        try {
+            const response = await fetch(
+                "/app/auth/email/request",
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({ email })
+                }
+            );
+
+            const data = await response.json();
+
+            if (!response.ok || !data.ok) {
+                setEmailStatus(
+                    emailErrorMessage(data.error),
+                    true
+                );
+                return;
+            }
+
+            codeSection.hidden = false;
+            setEmailStatus(
+                "Код отправлен. Проверьте входящие и папку «Спам».",
+                false
+            );
+            codeInput.focus();
+        } catch (_) {
+            setEmailStatus(
+                "Ошибка соединения. Попробуйте ещё раз.",
+                true
+            );
+        } finally {
+            requestButton.disabled = false;
+        }
+    }
+
+    async function verifyEmailCode() {
+        const email = emailInput.value.trim();
+        const code = codeInput.value.trim();
+
+        if (!/^[0-9]{6}$/.test(code)) {
+            setEmailStatus(
+                "Введите шестизначный код.",
+                true
+            );
+            codeInput.focus();
+            return;
+        }
+
+        verifyButton.disabled = true;
+        setEmailStatus("Проверяем код…", false);
+
+        try {
+            const response = await fetch(
+                "/app/auth/email/verify",
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({ email, code })
+                }
+            );
+
+            const data = await response.json();
+
+            if (!response.ok || !data.ok) {
+                setEmailStatus(
+                    emailErrorMessage(data.error),
+                    true
+                );
+                return;
+            }
+
+            setEmailStatus("✓ Вход выполнен", false);
+            window.location.replace("/app/me");
+        } catch (_) {
+            setEmailStatus(
+                "Ошибка соединения. Попробуйте ещё раз.",
+                true
+            );
+        } finally {
+            verifyButton.disabled = false;
+        }
+    }
+
+    requestButton.addEventListener(
+        "click",
+        requestEmailCode
+    );
+
+    verifyButton.addEventListener(
+        "click",
+        verifyEmailCode
+    );
+
+    codeInput.addEventListener("input", function () {
+        codeInput.value =
+            codeInput.value.replace(/[^0-9]/g, "").slice(0, 6);
+    });
+
+    codeInput.addEventListener("keydown", function (event) {
+        if (event.key === "Enter") {
+            verifyEmailCode();
+        }
+    });
+
+    emailInput.addEventListener("keydown", function (event) {
+        if (event.key === "Enter") {
+            requestEmailCode();
+        }
+    });
+
+    (async function authenticateTelegram() {
+        try {
+            const tg =
+                window.Telegram && window.Telegram.WebApp
+                    ? window.Telegram.WebApp
+                    : null;
+
+            if (!tg || !tg.initData) {
+                telegramStatus.textContent =
+                    "Откройте Mini App через Telegram или используйте email.";
+                return;
+            }
+
+            tg.ready();
+
+            const response = await fetch("/app/auth", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    init_data: tg.initData
+                })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok || !data.ok) {
+                telegramStatus.textContent =
+                    "Не удалось подтвердить Telegram.";
+                return;
+            }
+
+            telegramStatus.textContent = "✓ Telegram подтверждён";
+            window.location.replace("/app/me");
+        } catch (_) {
+            telegramStatus.textContent =
+                "Ошибка подключения Telegram. Используйте email.";
+        }
+    })();
 })();
 </script>
-"#;
+"####;
 
     Html(crate::web::templates::page_document(
-        "ResursMap",
+        "Вход · ResursMap",
         head_extra,
         "",
         main_html,
         "",
         body_after,
     ))
+}
+
+pub async fn app_logout(headers: HeaderMap) -> Response {
+    if request_is_cross_site(&headers) {
+        return csrf_rejected_response();
+    }
+
+    let mut response = (StatusCode::SEE_OTHER, [(header::LOCATION, "/app")]).into_response();
+
+    let cookie = "resursmap_user=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0";
+
+    if let Ok(value) = HeaderValue::from_str(cookie) {
+        response.headers_mut().append(header::SET_COOKIE, value);
+    }
+
+    response
 }
 
 pub async fn app_auth(

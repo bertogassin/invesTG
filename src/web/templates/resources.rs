@@ -772,7 +772,7 @@ pub fn render_resource_profile(params: RenderResourceProfileParams<'_>) -> Strin
                 if (response.status === 401) {{
                     if (favoriteStatus) {{
                         favoriteStatus.textContent =
-                            "Откройте ResursMap через Telegram.";
+                            "Войдите в аккаунт ResursMap.";
                     }}
 
                     favoriteButton.disabled = false;
@@ -882,7 +882,7 @@ pub fn render_resource_profile(params: RenderResourceProfileParams<'_>) -> Strin
                 if (response.status === 401) {{
                     if (reportStatus) {{
                         reportStatus.textContent =
-                            "Откройте ResursMap через Telegram.";
+                            "Войдите в аккаунт ResursMap.";
                     }}
 
                     reportSubmit.disabled = false;
@@ -966,7 +966,7 @@ pub fn render_resource_profile(params: RenderResourceProfileParams<'_>) -> Strin
 
                 if (response.status === 401) {{
                     status.textContent =
-                        "Откройте ResursMap через Telegram, чтобы поставить оценку.";
+                        "Войдите в аккаунт ResursMap, чтобы поставить оценку.";
                     return;
                 }}
 
@@ -1023,7 +1023,7 @@ pub fn render_my_resources(
     let cards = if client_id.is_empty() {
         empty_state_card(
             "Профиль владельца не определён",
-            "Откройте ResursMap через Telegram или этот браузер ещё раз.",
+            "Войдите в аккаунт ResursMap ещё раз.",
         )
     } else if resources.is_empty() {
         empty_state_card(
