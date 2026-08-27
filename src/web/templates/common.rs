@@ -925,12 +925,13 @@ body::before {
 // MAIN APP
 // ============================================================
 
-pub(crate) fn page_shell(
+pub(crate) fn page_document(
     title: &str,
-    topbar_html: &str,
-    hero_html: &str,
-    content_html: &str,
+    head_extra_html: &str,
+    body_before_main_html: &str,
+    main_html: &str,
     bottom_nav_html: &str,
+    body_after_html: &str,
 ) -> String {
     format!(
         r#"<!DOCTYPE html>
@@ -940,31 +941,54 @@ pub(crate) fn page_shell(
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{title}</title>
 <style>{style}</style>
+{head_extra}
 </head>
 
 <body>
 
+{body_before_main}
+
 <main class="page">
 
-{topbar}
-
-{hero}
-
-{content}
+{main}
 
 </main>
 
 {bottom_nav}
 
+{body_after}
+
 </body>
 </html>"#,
         title = escape_html(title),
         style = base_style(),
+        head_extra = head_extra_html,
+        body_before_main = body_before_main_html,
+        main = main_html,
+        bottom_nav = bottom_nav_html,
+        body_after = body_after_html,
+    )
+}
+
+pub(crate) fn page_shell(
+    title: &str,
+    topbar_html: &str,
+    hero_html: &str,
+    content_html: &str,
+    bottom_nav_html: &str,
+) -> String {
+    let main_html = format!(
+        r#"{topbar}
+
+{hero}
+
+{content}"#,
         topbar = topbar_html,
         hero = hero_html,
         content = content_html,
-        bottom_nav = bottom_nav_html,
-    )
+    );
+
+    page_document(title, "", "", &main_html, bottom_nav_html, "")
 }
 
 pub(crate) fn bottom_nav(active: &str) -> String {
