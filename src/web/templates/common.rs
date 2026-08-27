@@ -68,7 +68,7 @@ pub(crate) fn base_style() -> &'static str {
     --bg-soft: #0e1116;
     --card: rgba(22, 25, 31, .78);
     --card-hover: rgba(29, 33, 40, .92);
-    --line: rgba(255,255,255,.08);
+    --line: var(--line);
 
     --text: #f3f0e9;
     --muted: #9298a3;
@@ -165,9 +165,9 @@ body {
         ),
         linear-gradient(
             145deg,
-            #080a0d 0%,
-            #0b0e12 45%,
-            #080a0d 100%
+            var(--bg) 0%,
+            var(--bg-soft) 45%,
+            var(--bg) 100%
         );
 }
 
@@ -181,7 +181,7 @@ body::before {
         linear-gradient(
             120deg,
             transparent 0%,
-            rgba(255,255,255,.018) 50%,
+            rgba(0,0,0,.018) 50%,
             transparent 100%
         );
 
@@ -249,12 +249,12 @@ body::before {
         linear-gradient(
             145deg,
             rgba(214,183,122,.15),
-            rgba(255,255,255,.025)
+            rgba(0,0,0,.025)
         );
 
     box-shadow:
         0 10px 35px rgba(0,0,0,.28),
-        inset 0 1px 0 rgba(255,255,255,.08);
+        inset 0 1px 0 var(--line);
 }
 
 .brand-name {
@@ -298,7 +298,7 @@ body::before {
 
     box-shadow:
         0 30px 80px rgba(0,0,0,.32),
-        inset 0 1px 0 rgba(255,255,255,.06);
+        inset 0 1px 0 rgba(0,0,0,.06);
 }
 
 .hero::after {
@@ -373,7 +373,7 @@ body::before {
     border: 1px solid var(--line);
     border-radius: 16px;
 
-    background: rgba(255,255,255,.035);
+    background: rgba(0,0,0,.035);
 }
 
 .search input {
@@ -410,7 +410,7 @@ body::before {
     justify-content: space-between;
     margin-bottom: 16px;
     padding-bottom: 12px;
-    border-bottom: 1px solid rgba(255,255,255,.06);
+    border-bottom: 1px solid rgba(0,0,0,.06);
 }
 
 .section-title {
@@ -457,13 +457,13 @@ body::before {
         linear-gradient(
             145deg,
             rgba(255,255,255,.055),
-            rgba(255,255,255,.018)
+            rgba(0,0,0,.018)
         ),
         var(--card);
 
     box-shadow:
         0 16px 40px rgba(0,0,0,.18),
-        inset 0 1px 0 rgba(255,255,255,.035);
+        inset 0 1px 0 rgba(0,0,0,.035);
 
     transition:
         transform .2s ease,
@@ -547,7 +547,7 @@ body::before {
     border: 1px solid var(--line);
     border-radius: 20px;
 
-    background: rgba(255,255,255,.025);
+    background: rgba(0,0,0,.025);
 }
 
 .feature .icon {
@@ -590,7 +590,7 @@ body::before {
 
     padding: 8px;
 
-    border: 1px solid rgba(255,255,255,.09);
+    border: 1px solid var(--line);
     border-radius: 22px;
 
     background: rgba(13,16,21,.88);
@@ -600,7 +600,7 @@ body::before {
 
     box-shadow:
         0 20px 60px rgba(0,0,0,.5),
-        inset 0 1px 0 rgba(255,255,255,.06);
+        inset 0 1px 0 rgba(0,0,0,.06);
 }
 
 .nav-item {
@@ -674,10 +674,10 @@ body::before {
 
     padding: 0 10px;
 
-    border: 1px solid rgba(255,255,255,.08);
+    border: 1px solid var(--line);
     border-radius: 12px;
 
-    background: rgba(255,255,255,.04);
+    background: rgba(0,0,0,.04);
 
     color: var(--muted);
     font-size: 13px;
@@ -717,19 +717,19 @@ body::before {
     border: 1px solid rgba(214,183,122,.28);
     box-shadow:
         0 8px 30px rgba(0,0,0,.35),
-        inset 0 1px 0 rgba(255,255,255,.10);
+        inset 0 1px 0 var(--line);
     backdrop-filter: blur(18px);
 }
 
 .hero {
     position: relative;
     overflow: hidden;
-    border: 1px solid rgba(255,255,255,.08);
+    border: 1px solid var(--line);
     border-radius: 28px;
     padding: 36px 28px;
     box-shadow:
         0 24px 70px rgba(0,0,0,.28),
-        inset 0 1px 0 rgba(255,255,255,.05);
+        inset 0 1px 0 rgba(0,0,0,.05);
 
     animation: fadeInUp .5s ease both;
 }
@@ -791,10 +791,10 @@ body::before {
 .search {
     position: relative;
     z-index: 2;
-    border: 1px solid rgba(255,255,255,.10);
-    background: rgba(255,255,255,.045);
+    border: 1px solid var(--line);
+    background: rgba(0,0,0,.045);
     box-shadow:
-        inset 0 1px 0 rgba(255,255,255,.05),
+        inset 0 1px 0 rgba(0,0,0,.05),
         0 12px 35px rgba(0,0,0,.18);
     transition:
         border-color .25s ease,
@@ -813,18 +813,18 @@ body::before {
 .card {
     position: relative;
     overflow: hidden;
-    border: 1px solid rgba(255,255,255,.075);
+    border: 1px solid var(--line);
 
     animation: fadeInUp .45s ease both;
     background:
         linear-gradient(
             145deg,
             rgba(255,255,255,.055),
-            rgba(255,255,255,.018)
+            rgba(0,0,0,.018)
         );
     box-shadow:
         0 12px 35px rgba(0,0,0,.18),
-        inset 0 1px 0 rgba(255,255,255,.045);
+        inset 0 1px 0 rgba(0,0,0,.045);
     backdrop-filter: blur(14px);
     transition:
         transform .25s ease,
@@ -841,7 +841,7 @@ body::before {
         linear-gradient(
             120deg,
             transparent 20%,
-            rgba(255,255,255,.035) 50%,
+            rgba(0,0,0,.035) 50%,
             transparent 80%
         );
     transform: translateX(-100%);
@@ -855,8 +855,8 @@ body::before {
     background:
         linear-gradient(
             145deg,
-            rgba(255,255,255,.075),
-            rgba(255,255,255,.025)
+            var(--line),
+            rgba(0,0,0,.025)
         );
     box-shadow:
         0 20px 50px rgba(0,0,0,.30),
@@ -893,12 +893,12 @@ body::before {
     background:
         linear-gradient(
             145deg,
-            rgba(255,255,255,.045),
+            rgba(0,0,0,.045),
             rgba(255,255,255,.015)
         );
     box-shadow:
         0 12px 35px rgba(0,0,0,.16),
-        inset 0 1px 0 rgba(255,255,255,.04);
+        inset 0 1px 0 rgba(0,0,0,.04);
     backdrop-filter: blur(12px);
     transition:
         transform .25s ease,
@@ -919,11 +919,11 @@ body::before {
 }
 
 .bottom-nav {
-    border-top: 1px solid rgba(255,255,255,.08);
+    border-top: 1px solid var(--line);
     background: rgba(8,10,13,.78);
     box-shadow:
         0 -12px 40px rgba(0,0,0,.25),
-        inset 0 1px 0 rgba(255,255,255,.04);
+        inset 0 1px 0 rgba(0,0,0,.04);
     backdrop-filter: blur(22px);
 }
 
@@ -951,7 +951,7 @@ body::before {
     justify-content: space-between;
     margin-bottom: 16px;
     padding-bottom: 12px;
-    border-bottom: 1px solid rgba(255,255,255,.06);
+    border-bottom: 1px solid rgba(0,0,0,.06);
 }
 
 .section-title {
@@ -995,9 +995,9 @@ body::before {
 .ui-select {
     font-family: inherit;
     padding: 13px 16px;
-    border: 1px solid rgba(255,255,255,.10);
+    border: 1px solid var(--line);
     border-radius: 13px;
-    background: rgba(255,255,255,.045);
+    background: rgba(0,0,0,.045);
     color: var(--text);
     font-size: 15px;
     transition:
