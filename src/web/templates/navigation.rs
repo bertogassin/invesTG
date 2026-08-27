@@ -633,53 +633,41 @@ pub fn render_city(ci: usize, si: usize, zi: usize) -> String {
 
 <div class="grid">
 
-    <a class="card" href="/app/{ci}/{si}/{zi}/cat/work">
-        <div class="card-icon">{work_icon}</div>
-        <div class="card-content">
-            <div class="card-title">Работа</div>
-            <div class="card-meta">Вакансии и предложения</div>
-        </div>
-        <div class="card-arrow">{chevron1}</div>
-    </a>
+    {work_card}
 
-    <a class="card" href="/app/{ci}/{si}/{zi}/cat/business">
-        <div class="card-icon">{business_icon}</div>
-        <div class="card-content">
-            <div class="card-title">Бизнес</div>
-            <div class="card-meta">Компании и услуги</div>
-        </div>
-        <div class="card-arrow">{chevron2}</div>
-    </a>
+    {business_card}
 
-    <a class="card" href="/app/{ci}/{si}/{zi}/cat/services">
-        <div class="card-icon">{services_icon}</div>
-        <div class="card-content">
-            <div class="card-title">Услуги</div>
-            <div class="card-meta">Помощь и специалисты</div>
-        </div>
-        <div class="card-arrow">{chevron3}</div>
-    </a>
+    {services_card}
 
-    <a class="card" href="/app/{ci}/{si}/{zi}/cat/community">
-        <div class="card-icon">{community_icon}</div>
-        <div class="card-content">
-            <div class="card-title">Сообщество</div>
-            <div class="card-meta">Люди и контакты</div>
-        </div>
-        <div class="card-arrow">{chevron4}</div>
-    </a>
+    {community_card}
 
 </div>
 "#,
                     section_head_sections = section_head_sections,
-                    work_icon = icon("briefcase"),
-                    chevron1 = icon("chevron"),
-                    business_icon = icon("building"),
-                    chevron2 = icon("chevron"),
-                    services_icon = icon("map"),
-                    chevron3 = icon("chevron"),
-                    community_icon = icon("user"),
-                    chevron4 = icon("chevron"),
+                    work_card = navigation_card(
+                        &format!("/app/{}/{}/{}/cat/work", ci, si, zi),
+                        "briefcase",
+                        "Работа",
+                        "Вакансии и предложения",
+                    ),
+                    business_card = navigation_card(
+                        &format!("/app/{}/{}/{}/cat/business", ci, si, zi),
+                        "building",
+                        "Бизнес",
+                        "Компании и услуги",
+                    ),
+                    services_card = navigation_card(
+                        &format!("/app/{}/{}/{}/cat/services", ci, si, zi),
+                        "map",
+                        "Услуги",
+                        "Помощь и специалисты",
+                    ),
+                    community_card = navigation_card(
+                        &format!("/app/{}/{}/{}/cat/community", ci, si, zi),
+                        "user",
+                        "Сообщество",
+                        "Люди и контакты",
+                    ),
                 );
 
                 return page_shell(
