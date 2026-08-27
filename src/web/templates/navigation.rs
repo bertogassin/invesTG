@@ -1,7 +1,7 @@
 use super::common::{
-    base_style, bottom_nav, empty_state_card, escape_html, icon, navigation_card, page_shell,
-    people_result_card, resource_result_card, search_form_hero, search_hero, section_head,
-    simple_hero, topbar,
+    base_style, bottom_nav, empty_state_card, escape_html, icon, navigation_card, page_document,
+    page_shell, people_result_card, resource_result_card, search_form_hero, search_hero,
+    section_head, simple_hero, topbar,
 };
 use std::collections::BTreeMap;
 
@@ -46,46 +46,40 @@ pub fn render_continents() -> String {
     let section_head_countries = section_head("Страны", "Выберите страну для продолжения", None);
     let section_head_features = section_head("Возможности", "Всё необходимое в одном месте", None);
 
-    format!(
-        r#"<!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="manifest" href="/static/manifest.webmanifest">
+    let head_extra = r####"<link rel="manifest" href="/static/manifest.webmanifest">
 <meta name="theme-color" content="rgb(17,17,17)">
 <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
-<title>ResursMap</title>
-<style>{style}</style>
+
+
 
 <style id="resursmap-home-layout-v1">
-    .rm-home-section {{
+    .rm-home-section {
         margin-top:18px;
-    }}
+    }
 
-    .rm-home-label {{
+    .rm-home-label {
         margin-bottom:10px;
         font-size:11px;
         font-weight:900;
         letter-spacing:.08em;
         text-transform:uppercase;
         color:var(--muted);
-    }}
+    }
 
-    .rm-quick-grid {{
+    .rm-quick-grid {
         display:grid;
         grid-template-columns:repeat(2,minmax(0,1fr));
         gap:10px;
-    }}
+    }
 
-    .rm-quick-card {{
+    .rm-quick-card {
         display:block;
         padding:15px;
         text-decoration:none;
         min-width:0;
-    }}
+    }
 
-    .rm-quick-icon {{
+    .rm-quick-icon {
         display:flex;
         align-items:center;
         justify-content:center;
@@ -95,16 +89,16 @@ pub fn render_continents() -> String {
         border-radius:11px;
         background:rgba(214,183,122,.10);
         border:1px solid rgba(214,183,122,.15);
-    }}
+    }
 
-    .rm-install-grid {{
+    .rm-install-grid {
         display:grid;
         grid-template-columns:1fr 1fr;
         gap:10px;
         margin-top:14px;
-    }}
+    }
 
-    .rm-install-button {{
+    .rm-install-button {
         min-height:54px;
         padding:9px 10px;
         border-radius:14px;
@@ -114,79 +108,75 @@ pub fn render_continents() -> String {
         cursor:pointer;
         font:inherit;
         text-align:left;
-    }}
+    }
 
-    .rm-install-button strong {{
+    .rm-install-button strong {
         display:block;
         font-size:14px;
         line-height:1.15;
-    }}
+    }
 
-    .rm-install-button span {{
+    .rm-install-button span {
         display:block;
         margin-bottom:3px;
         font-size:10px;
         color:var(--muted);
-    }}
+    }
 
-    .rm-install-android {{
+    .rm-install-android {
         border-color:rgba(74,222,128,.28);
-    }}
+    }
 
-    .rm-flow {{
+    .rm-flow {
         display:grid;
         gap:10px;
-    }}
+    }
 
-    .rm-flow-item {{
+    .rm-flow-item {
         padding:16px;
-    }}
+    }
 
-    .rm-flow-number {{
+    .rm-flow-number {
         color:#d6b77a;
         font-size:11px;
         font-weight:900;
         letter-spacing:.08em;
-    }}
+    }
 
-    @media (min-width: 860px) {{
-        main.page {{
+    @media (min-width: 860px) {
+        main.page {
             max-width:1180px;
-        }}
+        }
 
-        .rm-desktop-two {{
+        .rm-desktop-two {
             display:grid;
             grid-template-columns:minmax(0,1.45fr) minmax(300px,.75fr);
             gap:14px;
             align-items:start;
-        }}
+        }
 
-        .rm-quick-grid {{
+        .rm-quick-grid {
             grid-template-columns:repeat(3,minmax(0,1fr));
-        }}
+        }
 
-        .rm-flow {{
+        .rm-flow {
             grid-template-columns:repeat(3,minmax(0,1fr));
-        }}
-    }}
+        }
+    }
 
-    @media (max-width: 420px) {{
-        .rm-install-grid {{
+    @media (max-width: 420px) {
+        .rm-install-grid {
             gap:8px;
-        }}
+        }
 
-        .rm-install-button {{
+        .rm-install-button {
             min-height:50px;
             padding:8px;
-        }}
-    }}
-</style>
+        }
+    }
+</style>"####;
 
-</head>
-
-<body>
-
-<div id="resursmap-splash"
+    let body_before_main = r####"<div id="resursmap-splash"
      style="
         position:fixed;
         inset:0;
@@ -229,11 +219,10 @@ pub fn render_continents() -> String {
     ">
         Resource Network
     </div>
-</div>
+</div>"####;
 
-<main class="page">
-
-<div id="resursmap-brand-logo"
+    let main_html = format!(
+        r####"<div id="resursmap-brand-logo"
      style="
         display:flex;
         align-items:center;
@@ -496,16 +485,7 @@ pub fn render_continents() -> String {
 
     </div>
 
-</section>
-
-</main>
-
-{bottom_nav}
-
-<script src="/static/pwa-install.js" defer></script>
-</body>
-</html>"#,
-        style = base_style(),
+</section>"####,
         topbar = topbar("RESOURCE NETWORK", "globe"),
         hero = search_hero(
             "ResursMap",
@@ -517,7 +497,17 @@ pub fn render_continents() -> String {
         map_icon = icon("map"),
         heart_icon = icon("heart"),
         user_icon = icon("user"),
-        bottom_nav = bottom_nav("map"),
+    );
+
+    let body_after = r####"<script src="/static/pwa-install.js" defer></script>"####;
+
+    page_document(
+        "ResursMap",
+        head_extra,
+        body_before_main,
+        &main_html,
+        &bottom_nav("map"),
+        body_after,
     )
 }
 
