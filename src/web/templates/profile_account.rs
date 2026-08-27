@@ -1,6 +1,6 @@
 use super::common::{
-    back_hero, back_link, base_style, bottom_nav, empty_state_card, escape_html, icon, page_shell,
-    section_head, simple_hero, topbar,
+    back_hero, back_link, base_style, bottom_nav, empty_state_card, escape_html, icon,
+    page_document, page_shell, section_head, simple_hero, topbar,
 };
 
 pub struct RenderMeParams<'a> {
@@ -308,33 +308,8 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
 
     let section_head_account = section_head("Ваш ResursMap", "Управление аккаунтом", None);
 
-    format!(
-        r#"<!DOCTYPE html>
-<html lang="ru">
-
-<head>
-<meta charset="utf-8">
-<meta name="viewport"
-      content="width=device-width, initial-scale=1">
-
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
-
-<title>Профиль · ResursMap</title>
-
-<style>{style}</style>
-</head>
-
-<body>
-
-<main class="page">
-
-{topbar}
-
-
-{simple_hero}
-
-
-{account_header}
+    let content_html = format!(
+        r####"{account_header}
 
 
 {statistics}
@@ -828,13 +803,26 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
 </a>
 
 
-</div>
+</div>"####,
+        account_header = account_header,
+        statistics = statistics,
+        settings_icon = icon("user"),
+        intent_status_text = intent_status_text,
+        safe_intent_text = safe_intent_text,
+        contact_checked = contact_checked,
+        unread_notifications_count = unread_notifications_count,
+        pending_contact_requests_count = pending_contact_requests_count,
+        unread_messages_badge = unread_messages_badge,
+        notification_arrow = icon("chevron"),
+        resource_icon = icon("map-pin"),
+        heart = icon("heart"),
+        search_icon = icon("search"),
+        arrow1 = icon("chevron"),
+        arrow2 = icon("chevron"),
+        arrow3 = icon("chevron"),
+    );
 
-
-</main>
-
-
-{bottom_nav}
+    let body_after_html = r####"{bottom_nav}
 
 
 <script>
@@ -951,36 +939,28 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
 
 
 }})();
-</script>
+</script>"####
+        .to_string();
 
-
-</body>
-</html>"#,
-        style = base_style(),
+    let main_html = format!(
+        "{topbar}\n\n{hero}\n\n{content}",
         topbar = topbar("PROFILE", "user"),
-        simple_hero = simple_hero(
+        hero = simple_hero(
             "user",
             "Личный кабинет",
             "Мой профиль",
             "Ваши ресурсы, сохранённые места и активность в ResursMap.",
         ),
-        account_header = account_header,
-        statistics = statistics,
-        settings_icon = icon("user"),
-        intent_status_text = intent_status_text,
-        safe_intent_text = safe_intent_text,
-        contact_checked = contact_checked,
-        unread_notifications_count = unread_notifications_count,
-        pending_contact_requests_count = pending_contact_requests_count,
-        unread_messages_badge = unread_messages_badge,
-        notification_arrow = icon("chevron"),
-        resource_icon = icon("map-pin"),
-        heart = icon("heart"),
-        search_icon = icon("search"),
-        arrow1 = icon("chevron"),
-        arrow2 = icon("chevron"),
-        arrow3 = icon("chevron"),
-        bottom_nav = bottom_nav("profile"),
+        content = content_html,
+    );
+
+    page_document(
+        "Профиль · ResursMap",
+        r####"<script src="https://telegram.org/js/telegram-web-app.js"></script>"####,
+        "",
+        &main_html,
+        &bottom_nav("profile"),
+        &body_after_html,
     )
 }
 
