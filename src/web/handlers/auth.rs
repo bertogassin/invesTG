@@ -847,29 +847,16 @@ pub(super) fn is_admin_session(state: &AppState, headers: &HeaderMap) -> bool {
 }
 
 pub async fn app_auth_page() -> Html<String> {
-    Html(
-        r#"<!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ResursMap</title>
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
-</head>
+    let head_extra = r#"<script src="https://telegram.org/js/telegram-web-app.js"></script>"#;
 
-<body style="
-    margin:0;
-    padding:28px;
-    background:#080a0d;
-    color:#f5f5f5;
-    font-family:system-ui;
-">
-
+    let main_html = r#"
 <div style="max-width:520px;margin:auto;">
     <h2>RESURSMAP</h2>
     <p id="status">Подключаем Telegram…</p>
 </div>
+"#;
 
+    let body_after = r#"
 <script>
 (async function () {
     const status = document.getElementById("status");
@@ -915,11 +902,16 @@ pub async fn app_auth_page() -> Html<String> {
     }
 })();
 </script>
+"#;
 
-</body>
-</html>"#
-            .to_string(),
-    )
+    Html(crate::web::templates::page_document(
+        "ResursMap",
+        head_extra,
+        "",
+        main_html,
+        "",
+        body_after,
+    ))
 }
 
 pub async fn app_auth(
