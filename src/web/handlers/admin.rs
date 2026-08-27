@@ -1145,21 +1145,8 @@ pub async fn admin_resources(
     let safe_q = templates::escape_html(q);
     let safe_filter = templates::escape_html(filter);
 
-    Html(format!(
-        r#"<!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Moderation · ResursMap</title>
-<style>{style}</style>
-</head>
-
-<body>
-
-<main class="page">
-
-<header class="topbar">
+    let main_html = format!(
+        r####"<header class="topbar">
     <a class="brand" href="/app">
         <div class="brand-mark">{logo}</div>
         <div>
@@ -1388,26 +1375,29 @@ pub async fn admin_resources(
 
 <section>
 {cards}
-</section>
-
-</main>
-
-</body>
-</html>"#,
-        style = templates::base_style(),
+</section>"####,
         logo = templates::icon("map"),
         shield = templates::icon("user"),
-        pending = pending,
+        filter = safe_filter,
+        q = safe_q,
+        key_query = key_query,
         pending_reports_count = pending_reports_count,
+        key_join = key_join,
+        pending = pending,
         verified_count = verified_count,
         rejected_count = rejected_count,
         premium_count = premium_count,
-        cards = cards,
-        key_query = key_query,
-        key_join = key_join,
-        filter = safe_filter,
-        q = safe_q,
         result_count = result_count,
+        cards = cards,
+    );
+
+    Html(templates::page_document(
+        "Moderation · ResursMap",
+        "",
+        "",
+        &main_html,
+        "",
+        "",
     ))
 }
 

@@ -1,8 +1,8 @@
 mod common;
 pub use common::escape_html;
+pub(crate) use common::icon;
 pub(crate) use common::page_document;
 pub(crate) use common::status_page;
-pub(crate) use common::{base_style, icon};
 
 mod resources;
 pub use resources::*;
