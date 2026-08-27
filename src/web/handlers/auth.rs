@@ -761,11 +761,23 @@ pub(super) fn verify_user_session(state: &AppState, headers: &HeaderMap) -> Opti
 
     mac.update(payload.as_bytes());
 
-    if mac.verify_slice(&signature).is_ok() {
-        Some(user_id)
-    } else {
-        None
+    if mac.verify_slice(&signature).is_err() {
+        return None;
     }
+
+    let db = crate::db::pool::get_connection(&state.db_pool).ok()?;
+
+    let is_active: i64 = db
+        .query_row(
+            "SELECT is_active
+             FROM users
+             WHERE id = ?1",
+            rusqlite::params![user_id],
+            |row| row.get(0),
+        )
+        .ok()?;
+
+    (is_active == 1).then_some(user_id)
 }
 
 pub(super) fn create_admin_session(state: &AppState, user_id: i64) -> String {
