@@ -65,14 +65,11 @@ pub async fn messages_page(State(state): State<AppState>, headers: HeaderMap) ->
              FROM conversations c
 
              LEFT JOIN profiles p
-               ON p.client_id = (
-                    'tg:' ||
-                    CASE
-                        WHEN c.user1_id = ?1
-                        THEN c.user2_id
-                        ELSE c.user1_id
-                    END
-               )
+               ON p.user_id = CASE
+                    WHEN c.user1_id = ?1
+                    THEN c.user2_id
+                    ELSE c.user1_id
+               END
 
              WHERE c.user1_id = ?1
                 OR c.user2_id = ?1
@@ -186,9 +183,9 @@ pub async fn chat_page(
                 COALESCE(first_name, ''),
                 COALESCE(last_name, '')
              FROM profiles
-             WHERE client_id = ?1
+             WHERE user_id = ?1
              LIMIT 1",
-            rusqlite::params![format!("tg:{}", other_user_id)],
+            rusqlite::params![other_user_id],
             |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
         )
         .ok();
@@ -260,7 +257,7 @@ pub async fn send_chat_message(
         Some(id) => id,
 
         None => {
-            return (StatusCode::UNAUTHORIZED, "Требуется вход через Telegram").into_response();
+            return (StatusCode::UNAUTHORIZED, "Требуется вход в аккаунт").into_response();
         }
     };
 

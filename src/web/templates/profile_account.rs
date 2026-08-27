@@ -187,7 +187,7 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
         )
     } else {
         empty_state_card(
-            "Откройте ResursMap через Telegram",
+            "Войдите в аккаунт ResursMap",
             "После входа здесь появятся ваш профиль, ресурсы, избранное и статистика.",
         )
     };
@@ -773,7 +773,7 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
                     ) {{
                         if (status) {{
                             status.textContent =
-                                "Откройте ResursMap через Telegram.";
+                                "Войдите в аккаунт ResursMap.";
                         }}
 
                         saveButton.disabled = false;
@@ -850,8 +850,8 @@ pub fn render_notifications(
 ) -> String {
     let cards = if !authenticated {
         empty_state_card(
-            "Откройте ResursMap через Telegram",
-            "Уведомления доступны после подтверждения Telegram.",
+            "Войдите в аккаунт ResursMap",
+            "Уведомления доступны после входа в аккаунт.",
         )
     } else if notifications.is_empty() {
         empty_state_card(
@@ -1639,7 +1639,7 @@ pub fn render_public_user_profile(params: RenderPublicUserProfileParams<'_>) -> 
                 if (response.status === 401) {{
                     if (status) {{
                         status.textContent =
-                            "Откройте ResursMap через Telegram.";
+                            "Войдите в аккаунт ResursMap.";
                     }}
 
                     sendButton.disabled = false;
@@ -1800,8 +1800,8 @@ pub fn render_favorites(
 ) -> String {
     let cards = if !authenticated {
         empty_state_card(
-            "Откройте через Telegram",
-            "Чтобы видеть избранное, откройте ResursMap через кнопку бота.",
+            "Войдите в аккаунт",
+            "Чтобы видеть избранное, войдите в аккаунт ResursMap.",
         )
     } else if resources.is_empty() {
         empty_state_card(

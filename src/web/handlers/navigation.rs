@@ -195,8 +195,10 @@ pub async fn app_search(
                      FROM profiles_fts
                      JOIN profiles p
                        ON p.rowid = profiles_fts.rowid
+                     JOIN users u
+                       ON u.id = p.user_id
+                      AND u.is_active = 1
                      WHERE profiles_fts MATCH ?1
-                       AND p.client_id LIKE 'tg:%'
                        AND p.public_id <> ''
                      ORDER BY
                         CASE

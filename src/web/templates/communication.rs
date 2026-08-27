@@ -11,7 +11,7 @@ pub fn render_contact_requests(
 
     let cards = if !authenticated {
         empty_state_card(
-            "Откройте ResursMap через Telegram",
+            "Войдите в аккаунт ResursMap",
             "После входа здесь будут ваши запросы на связь.",
         )
     } else if requests.is_empty() {
@@ -381,7 +381,7 @@ pub fn render_messages(
 
     let content = if !authenticated {
         empty_state_card(
-            "Откройте ResursMap через Telegram",
+            "Войдите в аккаунт ResursMap",
             "После входа здесь появятся ваши личные сообщения.",
         )
     } else if conversations.is_empty() {
@@ -640,7 +640,7 @@ pub fn render_chat(
 
     let content = if !authenticated {
         empty_state_card(
-            "Откройте ResursMap через Telegram",
+            "Войдите в аккаунт ResursMap",
             "Для доступа к внутренним сообщениям требуется подтверждённая сессия.",
         )
     } else if messages.is_empty()

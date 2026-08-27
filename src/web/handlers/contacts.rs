@@ -50,7 +50,7 @@ pub async fn contact_requests_page(
                 END
              FROM contact_requests cr
              LEFT JOIN profiles p
-               ON p.client_id = ('tg:' || cr.sender_user_id)
+               ON p.user_id = cr.sender_user_id
              WHERE cr.receiver_user_id = ?1
              ORDER BY
                 CASE cr.status
@@ -98,7 +98,7 @@ pub async fn accept_contact_request(
         Some(id) => id,
 
         None => {
-            return (StatusCode::UNAUTHORIZED, "Требуется вход через Telegram").into_response();
+            return (StatusCode::UNAUTHORIZED, "Требуется вход в аккаунт").into_response();
         }
     };
 
@@ -248,7 +248,7 @@ pub async fn reject_contact_request(
         Some(id) => id,
 
         None => {
-            return (StatusCode::UNAUTHORIZED, "Требуется вход через Telegram").into_response();
+            return (StatusCode::UNAUTHORIZED, "Требуется вход в аккаунт").into_response();
         }
     };
 
@@ -408,13 +408,12 @@ pub async fn api_contact_request(
         };
 
         db.query_row(
-            "SELECT CAST(
-                substr(client_id, 4)
-                AS INTEGER
-            )
-             FROM profiles
-             WHERE public_id = ?1
-               AND client_id LIKE 'tg:%'
+            "SELECT p.user_id
+             FROM profiles AS p
+             JOIN users AS u
+               ON u.id = p.user_id
+              AND u.is_active = 1
+             WHERE p.public_id = ?1
              LIMIT 1",
             rusqlite::params![public_id],
             |row| row.get(0),
