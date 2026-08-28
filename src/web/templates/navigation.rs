@@ -228,7 +228,7 @@ pub fn render_continents(
      ">
 
     <img src="/static/icon-512.png"
-         alt="ResursMap"
+         alt="Логотип"
          style="
             width:116px;
             height:116px;
@@ -310,13 +310,13 @@ r#"<section class="hero">
          ">
 
     <div class="card-title">
-        Приложение ResursMap
+        Установить приложение
     </div>
 
     <div id="resursmap-install-hint"
          class="card-meta"
          style="margin-top:5px;line-height:1.45;">
-        Установите ResursMap на телефон.
+        Установите на телефон.
     </div>
 
     <div class="rm-install-grid">
@@ -428,7 +428,7 @@ r#"<section class="hero">
     <div class="rm-home-section">
 
         <div class="rm-home-label">
-            Как работает ResursMap
+            Как это работает
         </div>
 
         <div class="rm-flow">
@@ -523,7 +523,7 @@ pub fn render_continent(ci: usize) -> String {
         );
 
         return page_shell(
-            &format!("{} · ResursMap", name),
+            &format!("{}", name),
             &topbar("RESOURCE NETWORK", "globe"),
             &simple_hero(
                 "map",
@@ -575,7 +575,7 @@ pub fn render_country(ci: usize, si: usize) -> String {
             );
 
             return page_shell(
-                &format!("{} · ResursMap", country),
+                &format!("{}", country),
                 &topbar("RESOURCE NETWORK", "globe"),
                 &simple_hero(
                     "map-pin",
@@ -648,7 +648,7 @@ pub fn render_city(ci: usize, si: usize, zi: usize) -> String {
                 );
 
                 return page_shell(
-                    &format!("{} · ResursMap", city),
+                    &format!("{}", city),
                     &topbar("RESOURCE NETWORK", "globe"),
                     &simple_hero(
                         "map-pin",
@@ -758,7 +758,7 @@ pub fn render_search(
                     } else if !safe_username.is_empty() {
                         format!("@{}", safe_username)
                     } else {
-                        "Участник ResursMap".to_string()
+                        "Участник".to_string()
                     };
 
                     let username_html = if !safe_username.is_empty()
