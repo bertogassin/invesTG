@@ -106,9 +106,9 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
             _ => ("", ""),
         };
         format!(
-            r#"<span style="display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:999px;font-size:11px;font-weight:800;letter-spacing:.04em;{badge_style}">
+            r#"<a href="/app/center" style="display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:999px;font-size:11px;font-weight:800;letter-spacing:.04em;text-decoration:none;{badge_style}">
                 {badge_text}
-            </span>"#,
+            </a>"#,
             badge_style = badge_style,
             badge_text = badge_text,
         )
