@@ -47,7 +47,7 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
     let safe_first_name = escape_html(first_name);
     let safe_last_name = escape_html(last_name);
     let safe_intent_text = escape_html(intent_text);
-    let _safe_category = escape_html(category);
+    let safe_category = escape_html(category);
 
     let _unread_messages_badge = if unread_messages_count > 0 {
         format!(
@@ -553,6 +553,40 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
             font-size:13px;
             font-weight:800;
         ">
+            Ваша профессия
+        </div>
+
+        <input
+            id="profile-category"
+            type="text"
+            maxlength="80"
+            value="{safe_category}"
+            placeholder="Например: электрик, сантехник, дизайнер..."
+            style="
+                width:100%;
+                box-sizing:border-box;
+                padding:14px;
+                border-radius:14px;
+                border:1px solid var(--line);
+                background:rgba(0,0,0,.035);
+                color:var(--text);
+                font:inherit;
+            "
+         class="ui-input">
+
+    </label>
+
+
+    <label style="
+        display:block;
+        margin-top:15px;
+    ">
+
+        <div style="
+            margin-bottom:7px;
+            font-size:13px;
+            font-weight:800;
+        ">
             Срок актуальности
         </div>
 
@@ -649,6 +683,7 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
         settings_icon = icon("user"),
         intent_status_text = intent_status_text,
         safe_intent_text = safe_intent_text,
+        safe_category = safe_category,
         contact_checked = contact_checked,
         ready_dot_style = if contact_checked == "checked" {
             "background:#22c55e;box-shadow:0 0 8px rgba(34,197,94,.5);"
