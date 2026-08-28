@@ -17,7 +17,10 @@ mod resources;
 pub use resources::*;
 
 mod admin;
+mod admin_access;
+mod admin_v2;
 pub use admin::*;
+pub use admin_v2::*;
 
 mod navigation;
 pub use navigation::*;

@@ -1,3 +1,5 @@
+pub(crate) use admin_dashboard::*;
+mod admin_dashboard;
 mod common;
 pub use common::escape_html;
 pub(crate) use common::extended_navigation_card;
