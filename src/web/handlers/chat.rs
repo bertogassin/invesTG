@@ -10,6 +10,7 @@ use axum::{
     http::{header, HeaderMap, StatusCode},
     response::{Html, IntoResponse, Response},
 };
+use teloxide::prelude::*;
 
 pub async fn messages_page(State(state): State<AppState>, headers: HeaderMap) -> Html<String> {
     let user_id = match verify_user_session(&state, &headers) {
@@ -414,6 +415,27 @@ pub async fn send_chat_message(
                  )",
                 rusqlite::params![other_user_id],
             );
+
+            // Отправим уведомление в Telegram, если привязан
+            let telegram_id: Option<i64> = db
+                .query_row(
+                    "SELECT telegram_id FROM users WHERE id = ?1",
+                    rusqlite::params![other_user_id],
+                    |row| row.get(0),
+                )
+                .ok();
+
+            if let Some(tg_id) = telegram_id {
+                if tg_id > 0 {
+                    let bot = Bot::new(state.bot_token.clone());
+                    let _ = crate::bot::handler::send_notification(
+                        &bot,
+                        tg_id,
+                        "📩 У вас новое сообщение в ResursMap!\n\nОткройте чат: https://resursmap.de/app/messages",
+                    )
+                    .await;
+                }
+            }
         }
     }
 

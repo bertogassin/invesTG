@@ -5,6 +5,11 @@ use std::fs;
 use teloxide::prelude::*;
 use teloxide::types::{InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo};
 
+pub async fn send_notification(bot: &Bot, telegram_id: i64, text: &str) -> ResponseResult<()> {
+    bot.send_message(ChatId(telegram_id), text).await?;
+    Ok(())
+}
+
 pub async fn start_handler(bot: Bot, msg: Message) -> ResponseResult<()> {
     let map_web_app = WebAppInfo {
         url: "https://resursmap.de/app/auth".to_string().parse().unwrap(),
@@ -68,6 +73,59 @@ pub async fn help_handler(bot: Bot, msg: Message) -> ResponseResult<()> {
         msg.chat.id,
         "Доступные команды:\n/start — приветствие\n/help — помощь\n/cities — список городов с ссылками",
     ).await?;
+    Ok(())
+}
+
+pub async fn stats_handler(
+    bot: Bot,
+    msg: Message,
+    db_pool: crate::db::pool::DbPool,
+) -> ResponseResult<()> {
+    let users_count: i64 = db_pool
+        .get()
+        .ok()
+        .and_then(|conn| {
+            conn.query_row(
+                "SELECT COUNT(*) FROM users WHERE is_active = 1",
+                [],
+                |row| row.get(0),
+            )
+            .ok()
+        })
+        .unwrap_or(0);
+
+    let resources_count: i64 = db_pool
+        .get()
+        .ok()
+        .and_then(|conn| {
+            conn.query_row(
+                "SELECT COUNT(*) FROM resources WHERE is_active = 1",
+                [],
+                |row| row.get(0),
+            )
+            .ok()
+        })
+        .unwrap_or(0);
+
+    let online_count: i64 = db_pool
+        .get()
+        .ok()
+        .and_then(|conn| {
+            conn.query_row(
+                "SELECT COUNT(*) FROM profiles WHERE last_seen_at > strftime('%s','now') - 300",
+                [],
+                |row| row.get(0),
+            )
+            .ok()
+        })
+        .unwrap_or(0);
+
+    let text = format!(
+        "📊 Статистика ResursMap\n\n👥 Людей: {}\n🟢 Онлайн: {}\n📦 Ресурсов: {}\n\n🌍 https://resursmap.de/app",
+        users_count, online_count, resources_count
+    );
+
+    bot.send_message(msg.chat.id, text).await?;
     Ok(())
 }
 
