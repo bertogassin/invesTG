@@ -2,7 +2,8 @@ use rusqlite::{params, Connection, Transaction, TransactionBehavior};
 use std::path::Path;
 use std::time::Duration;
 
-pub const ADMIN_V2_SCHEMA_VERSION: i64 = 1;
+const ADMIN_V2_FOUNDATION_VERSION: i64 = 1;
+pub const ADMIN_V2_SCHEMA_VERSION: i64 = 2;
 pub const INITIAL_OWNER_USER_ID: i64 = 8_775_621_311;
 
 const ADMIN_V2_SCHEMA: &str = r#"
@@ -201,6 +202,48 @@ BEGIN
 END;
 "#;
 
+const ADMIN_V2_SECURITY_SCHEMA: &str = r#"
+CREATE TABLE IF NOT EXISTS admin_reauth_challenges (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    challenge_public_id TEXT NOT NULL UNIQUE,
+    user_id INTEGER NOT NULL,
+    assignment_id INTEGER NOT NULL,
+    session_public_id TEXT NOT NULL,
+    purpose TEXT NOT NULL
+        CHECK(purpose IN (
+            'owner_step_up',
+            'critical_admin_action',
+            'financial_operation',
+            'emergency_action'
+        )),
+    delivery_channel TEXT NOT NULL
+        CHECK(delivery_channel IN ('email')),
+    destination_hash TEXT NOT NULL,
+    code_hash TEXT NOT NULL,
+    attempts INTEGER NOT NULL DEFAULT 0
+        CHECK(attempts BETWEEN 0 AND 5),
+    expires_at INTEGER NOT NULL,
+    consumed_at INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+    FOREIGN KEY(user_id) REFERENCES users(id),
+    FOREIGN KEY(assignment_id) REFERENCES admin_assignments(id),
+    CHECK(expires_at > created_at)
+);
+
+CREATE INDEX IF NOT EXISTS idx_admin_reauth_session
+    ON admin_reauth_challenges(
+        session_public_id,
+        purpose,
+        created_at DESC
+    );
+
+CREATE INDEX IF NOT EXISTS idx_admin_reauth_user_recent
+    ON admin_reauth_challenges(
+        user_id,
+        created_at DESC
+    );
+"#;
+
 const PERMISSIONS: &[(&str, i64, i64, &str, i64)] = &[
     ("moderation.review", 0, 1, "Проверка материалов", 0),
     ("moderation.reject", 1, 1, "Отклонение материалов", 0),
@@ -315,6 +358,14 @@ fn initialize_connection(connection: &mut Connection, owner_user_id: i64) -> rus
     transaction.execute(
         "INSERT OR IGNORE INTO schema_migrations (version, name)
          VALUES (?1, 'admin_v2_foundation')",
+        params![ADMIN_V2_FOUNDATION_VERSION],
+    )?;
+
+    transaction.execute_batch(ADMIN_V2_SECURITY_SCHEMA)?;
+
+    transaction.execute(
+        "INSERT OR IGNORE INTO schema_migrations (version, name)
+         VALUES (?1, 'admin_v2_owner_step_up')",
         params![ADMIN_V2_SCHEMA_VERSION],
     )?;
 
@@ -574,5 +625,31 @@ mod tests {
             .expect("deactivate");
 
         assert!(initialize_connection(&mut connection, INITIAL_OWNER_USER_ID).is_err());
+    }
+
+    #[test]
+    fn migration_creates_reauthentication_challenges() {
+        let mut connection = test_connection();
+
+        initialize_connection(&mut connection, INITIAL_OWNER_USER_ID)
+            .expect("admin security migration");
+
+        let table_count: i64 = connection
+            .query_row(
+                "SELECT COUNT(*)
+                 FROM sqlite_master
+                 WHERE type = 'table'
+                   AND name = 'admin_reauth_challenges'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("table count");
+
+        let version: i64 = connection
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .expect("schema version");
+
+        assert_eq!(table_count, 1);
+        assert_eq!(version, ADMIN_V2_SCHEMA_VERSION);
     }
 }

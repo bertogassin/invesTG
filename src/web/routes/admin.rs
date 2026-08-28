@@ -1,4 +1,5 @@
 use super::super::handlers::administrators_panel;
+use super::super::handlers::{admin_security_page, admin_step_up_request, admin_step_up_verify};
 use super::super::handlers::{
     center_panel,
     {
@@ -18,6 +19,9 @@ pub(super) fn routes() -> Router<AppState> {
     Router::new()
         .route("/app/center", get(center_panel))
         .route("/app/center/administrators", get(administrators_panel))
+        .route("/app/center/security", get(admin_security_page))
+        .route("/app/center/security/request", post(admin_step_up_request))
+        .route("/app/center/security/verify", post(admin_step_up_verify))
         .route("/app/admin/login", get(admin_login_page).post(admin_login))
         .route("/app/admin/resources", get(admin_resources))
         .route("/app/admin/reports", get(admin_reports))

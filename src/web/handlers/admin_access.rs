@@ -264,53 +264,35 @@ pub(super) fn scope_is_authorized(
         .unwrap_or(false)
 }
 
-pub(super) fn verify_admin_session(
+pub(super) fn valid_admin_session_public_id(
     state: &AppState,
     headers: &HeaderMap,
     user_id: i64,
     assignment_id: i64,
-) -> bool {
-    let Some(cookie_header) = headers
-        .get(header::COOKIE)
-        .and_then(|value| value.to_str().ok())
-    else {
-        return false;
-    };
+) -> Option<String> {
+    let cookie_header = headers.get(header::COOKIE)?.to_str().ok()?;
 
     let cookie_prefix = format!("{ADMIN_SESSION_COOKIE}=");
 
-    let Some(token) = cookie_header
+    let token = cookie_header
         .split(';')
         .map(str::trim)
-        .find_map(|value| value.strip_prefix(&cookie_prefix))
-    else {
-        return false;
-    };
+        .find_map(|value| value.strip_prefix(&cookie_prefix))?;
 
-    let mut token_parts = token.splitn(2, '.');
-
-    let Some(public_id) = token_parts.next() else {
-        return false;
-    };
-
-    let Some(secret) = token_parts.next() else {
-        return false;
-    };
+    let (public_id, secret) = token.split_once('.')?;
 
     if public_id.len() != 32
         || secret.len() != 64
         || !public_id.bytes().all(|byte| byte.is_ascii_hexdigit())
         || !secret.bytes().all(|byte| byte.is_ascii_hexdigit())
     {
-        return false;
+        return None;
     }
 
     let session_hash = hash_admin_session_token(token);
     let now = unix_now();
 
-    let Ok(connection) = state.db_pool.get() else {
-        return false;
-    };
+    let connection = state.db_pool.get().ok()?;
 
     let valid: i64 = connection
         .query_row(
@@ -328,7 +310,7 @@ pub(super) fn verify_admin_session(
         .unwrap_or(0);
 
     if valid != 1 {
-        return false;
+        return None;
     }
 
     let _ = connection.execute(
@@ -338,7 +320,16 @@ pub(super) fn verify_admin_session(
         params![public_id, now],
     );
 
-    true
+    Some(public_id.to_string())
+}
+
+pub(super) fn verify_admin_session(
+    state: &AppState,
+    headers: &HeaderMap,
+    user_id: i64,
+    assignment_id: i64,
+) -> bool {
+    valid_admin_session_public_id(state, headers, user_id, assignment_id).is_some()
 }
 
 pub(super) fn create_admin_session(

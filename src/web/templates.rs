@@ -1,6 +1,7 @@
 pub(crate) use admin_dashboard::*;
 mod admin_administrators;
 mod admin_dashboard;
+mod admin_security;
 mod common;
 pub use common::escape_html;
 pub(crate) use common::extended_navigation_card;
@@ -25,3 +26,5 @@ pub use navigation::*;
 pub use admin_administrators::{
     render_admin_administrators, AdminAdministratorRow, AdminAdministratorsData, AdminSessionRow,
 };
+
+pub use admin_security::{render_admin_security, AdminSecurityData};

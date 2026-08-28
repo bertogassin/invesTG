@@ -509,6 +509,7 @@ pub(crate) fn render_admin_dashboard(data: AdminDashboardData<'_>) -> String {
         <a href="#system-state">Система</a>
         <a href="#admin-hierarchy">Иерархия</a>
         <a href="/app/center/administrators">Администраторы</a>
+        <a href="/app/center/security">Безопасность</a>
     </nav>
 
     <section class="admin-owner-hero"
