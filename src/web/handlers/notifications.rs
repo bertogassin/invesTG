@@ -1,7 +1,14 @@
+use super::auth::verify_authenticated_user;
 use super::auth::verify_user_session;
 use crate::state::app_state::AppState;
 use crate::web::templates;
-use axum::{extract::State, http::HeaderMap, response::Html};
+use axum::{extract::State, response::Html};
+use axum::{
+    http::HeaderMap,
+    response::{IntoResponse, Response},
+    Json,
+};
+use serde_json::json;
 
 pub async fn notifications_page(State(state): State<AppState>, headers: HeaderMap) -> Html<String> {
     let user_id = match verify_user_session(&state, &headers) {
@@ -64,4 +71,32 @@ pub async fn notifications_page(State(state): State<AppState>, headers: HeaderMa
     drop(db);
 
     Html(templates::render_notifications(notifications, true))
+}
+
+pub async fn unread_count(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    let user = match verify_authenticated_user(&state, &headers) {
+        Some(user) => user,
+        None => {
+            return Json(json!({
+                "count": 0
+            }))
+            .into_response();
+        }
+    };
+
+    let count = state
+        .db_pool
+        .get()
+        .ok()
+        .and_then(|conn| {
+            conn.query_row(
+                "SELECT COUNT(*) FROM user_notifications WHERE user_id = ?1 AND is_read = 0",
+                rusqlite::params![user.user_id],
+                |row| row.get::<_, i64>(0),
+            )
+            .ok()
+        })
+        .unwrap_or(0);
+
+    Json(json!({ "count": count })).into_response()
 }
