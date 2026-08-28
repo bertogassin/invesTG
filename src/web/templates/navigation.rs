@@ -358,22 +358,22 @@ pub fn render_continents() -> String {
 {section_head_features}
 
 <div class="feature-grid">
-    <a href="/app/search" class="feature" style="text-decoration:none;color:inherit;">
-        {search_icon}
-        <strong>Поиск</strong>
-        <span>Находите людей, ресурсы и услуги.</span>
+    <a href="/app/my-resources" class="feature" style="text-decoration:none;color:inherit;">
+        {map_icon}
+        <strong>Мои ресурсы</strong>
+        <span>Публикации и управление.</span>
     </a>
 
-    <a href="/app/me" class="feature" style="text-decoration:none;color:inherit;">
-        {user_icon}
-        <strong>Профиль</strong>
-        <span>Ваши данные, голоса и активность.</span>
+    <a href="/app/favorites" class="feature" style="text-decoration:none;color:inherit;">
+        {heart_icon}
+        <strong>Избранное</strong>
+        <span>Сохранённые ресурсы.</span>
     </a>
 
-    <a href="/app/menu" class="feature" style="text-decoration:none;color:inherit;">
-        {menu_icon}
-        <strong>Меню</strong>
-        <span>Настройки приложения и персонализация.</span>
+    <a href="/app/messages" class="feature" style="text-decoration:none;color:inherit;">
+        {message_icon}
+        <strong>Сообщения</strong>
+        <span>Личные диалоги.</span>
     </a>
 </div>
 
@@ -493,9 +493,9 @@ pub fn render_continents() -> String {
             "Найти город, услугу или ресурс...",
         ),
         cards = cards,
-        search_icon = icon("search"),
-        user_icon = icon("user"),
-        menu_icon = icon("menu"),
+        map_icon = icon("map"),
+        heart_icon = icon("heart"),
+        message_icon = icon("message-circle"),
         quick_search = quick_search,
         quick_profile = quick_profile,
         quick_my_resources = quick_my_resources,
