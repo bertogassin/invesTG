@@ -34,6 +34,7 @@ pub async fn app_me(State(state): State<AppState>, headers: HeaderMap) -> Html<S
                 unread_notifications_count: 0,
                 pending_contact_requests_count: 0,
                 unread_messages_count: 0,
+                moderator_level: 0,
                 open_contact: false,
                 intent_text: "",
                 intent_until: 0,
@@ -145,6 +146,14 @@ pub async fn app_me(State(state): State<AppState>, headers: HeaderMap) -> Html<S
         )
         .unwrap_or(0);
 
+    let moderator_level: i64 = db
+        .query_row(
+            "SELECT COALESCE(MAX(level), 0) FROM moderator_roles WHERE user_id = ?1 AND is_active = 1",
+            rusqlite::params![user_id],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
     let unread_notifications_count: i64 = db
         .query_row(
             "SELECT COUNT(*)
@@ -197,6 +206,7 @@ pub async fn app_me(State(state): State<AppState>, headers: HeaderMap) -> Html<S
         unread_notifications_count,
         pending_contact_requests_count,
         unread_messages_count,
+        moderator_level,
         open_contact: open_contact == 1,
         intent_text: &intent_text,
         intent_until,

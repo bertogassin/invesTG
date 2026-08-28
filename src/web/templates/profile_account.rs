@@ -17,6 +17,7 @@ pub struct RenderMeParams<'a> {
     pub unread_notifications_count: i64,
     pub pending_contact_requests_count: i64,
     pub unread_messages_count: i64,
+    pub moderator_level: i64,
     pub open_contact: bool,
     pub intent_text: &'a str,
     pub intent_until: i64,
@@ -38,6 +39,7 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
         unread_notifications_count,
         pending_contact_requests_count,
         unread_messages_count,
+        moderator_level,
         open_contact,
         intent_text,
         intent_until,
@@ -93,6 +95,25 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
         "Пользователь".to_string()
     } else {
         "Гость".to_string()
+    };
+
+    let moderator_badge = if moderator_level > 0 {
+        let (badge_text, badge_style) = match moderator_level {
+            1 => ("Модератор города", "background:rgba(101,184,201,.12);border:1px solid rgba(101,184,201,.35);color:#8bd8e4;"),
+            2 => ("Модератор страны", "background:rgba(192,192,192,.10);border:1px solid rgba(192,192,192,.40);color:#c0c0c0;"),
+            3 => ("Модератор континента", "background:rgba(214,183,122,.10);border:1px solid rgba(214,183,122,.45);color:#f0d69c;"),
+            4 => ("Центр управления", "background:rgba(10,10,10,.85);border:1px solid rgba(214,183,122,.28);color:#d6b77a;box-shadow:0 0 20px rgba(214,183,122,.15);"),
+            _ => ("", ""),
+        };
+        format!(
+            r#"<span style="display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:999px;font-size:11px;font-weight:800;letter-spacing:.04em;{badge_style}">
+                {badge_text}
+            </span>"#,
+            badge_style = badge_style,
+            badge_text = badge_text,
+        )
+    } else {
+        String::new()
     };
 
     let username_html = if !safe_username.is_empty() {
@@ -174,6 +195,7 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
             </div>
 
             {username_html}
+            {moderator_badge}
 
             {telegram_id_html}
 
@@ -187,6 +209,7 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
             display_name = display_name,
             username_html = username_html,
             telegram_id_html = telegram_id_html,
+            moderator_badge = moderator_badge,
         )
     } else {
         format!(
