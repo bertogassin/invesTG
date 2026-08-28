@@ -1,7 +1,7 @@
 use super::common::{
     bottom_nav, empty_state_card, escape_html, icon, navigation_card, page_document, page_shell,
-    people_result_card, quick_navigation_card, resource_result_card, search_form_hero, search_hero,
-    section_head, simple_hero, topbar,
+    people_result_card, resource_result_card, search_form_hero, search_hero, section_head,
+    simple_hero, topbar,
 };
 use std::collections::BTreeMap;
 
@@ -45,16 +45,6 @@ pub fn render_continents() -> String {
 
     let section_head_countries = section_head("Страны", "Выберите страну для продолжения", None);
     let section_head_features = section_head("Возможности", "Всё необходимое в одном месте", None);
-
-    let quick_search = quick_navigation_card("/app/search", "⌕", "Поиск", "Люди, услуги и ресурсы");
-    let quick_profile = quick_navigation_card("/app/me", "◎", "Профиль", "Аккаунт и настройки");
-    let quick_my_resources =
-        quick_navigation_card("/app/my-resources", "◆", "Мои ресурсы", "Ваши публикации");
-    let quick_favorites =
-        quick_navigation_card("/app/favorites", "♡", "Избранное", "Сохранённые ресурсы");
-    let quick_messages = quick_navigation_card("/app/messages", "✉", "Сообщения", "Личные диалоги");
-    let quick_notifications =
-        quick_navigation_card("/app/notifications", "◉", "Уведомления", "Важные события");
 
     let head_extra = r####"<link rel="manifest" href="/static/manifest.webmanifest">
 <meta name="theme-color" content="rgb(17,17,17)">
@@ -384,16 +374,27 @@ pub fn render_continents() -> String {
 
         <div>
             <div class="rm-home-label">
-                Быстрый доступ
+                Возможности
             </div>
 
-            <div class="rm-quick-grid">
-                {quick_search}
-                {quick_profile}
-                {quick_my_resources}
-                {quick_favorites}
-                {quick_messages}
-                {quick_notifications}
+            <div class="feature-grid">
+                <a href="/app/my-resources" class="feature" style="text-decoration:none;color:inherit;">
+                    {map_icon}
+                    <strong>Мои ресурсы</strong>
+                    <span>Публикации и управление.</span>
+                </a>
+
+                <a href="/app/favorites" class="feature" style="text-decoration:none;color:inherit;">
+                    {heart_icon}
+                    <strong>Избранное</strong>
+                    <span>Сохранённые ресурсы.</span>
+                </a>
+
+                <a href="/app/messages" class="feature" style="text-decoration:none;color:inherit;">
+                    {message_icon}
+                    <strong>Сообщения</strong>
+                    <span>Личные диалоги.</span>
+                </a>
             </div>
         </div>
 
@@ -496,12 +497,6 @@ pub fn render_continents() -> String {
         map_icon = icon("map"),
         heart_icon = icon("heart"),
         message_icon = icon("message-circle"),
-        quick_search = quick_search,
-        quick_profile = quick_profile,
-        quick_my_resources = quick_my_resources,
-        quick_favorites = quick_favorites,
-        quick_messages = quick_messages,
-        quick_notifications = quick_notifications,
     );
 
     let body_after = r####"<script src="/static/pwa-install.js" defer></script>"####;
