@@ -474,6 +474,12 @@ body::before {
         border-color .2s ease,
         background .2s ease,
         box-shadow .2s ease;
+
+    -webkit-tap-highlight-color: transparent;
+}
+
+.card:active {
+    transform: scale(.98);
 }
 
 .card:hover {
@@ -639,7 +645,11 @@ body::before {
 }
 
 .nav-item:active {
-    transform: scale(.96);
+    transform: scale(.94);
+}
+
+.nav-item .icon {
+    pointer-events: none;
 }
 
 .nav-item .icon {
