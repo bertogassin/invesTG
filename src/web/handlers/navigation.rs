@@ -1,8 +1,9 @@
+use super::auth::verify_authenticated_user;
 use crate::state::app_state::AppState;
 use crate::web::templates;
 use axum::{
     extract::{Path, Query, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::{Html, IntoResponse, Response},
 };
 use std::collections::BTreeMap;
@@ -15,7 +16,16 @@ pub async fn app_menu() -> Html<String> {
     Html(templates::render_menu())
 }
 
-pub async fn app_root(State(state): State<AppState>) -> Html<String> {
+pub async fn app_root(State(state): State<AppState>, headers: HeaderMap) -> Html<String> {
+    // Обновим last_seen_at для авторизованного пользователя
+    if let Some(user) = verify_authenticated_user(&state, &headers) {
+        if let Ok(db) = crate::db::pool::get_connection(&state.db_pool) {
+            let _ = db.execute(
+                "UPDATE profiles SET last_seen_at = strftime('%s','now') WHERE user_id = ?1",
+                rusqlite::params![user.user_id],
+            );
+        }
+    }
     let users_count = state
         .db_pool
         .get()
@@ -270,7 +280,8 @@ pub async fn app_search(
                         p.last_name,
                         p.open_contact,
                         p.intent_text,
-                        p.intent_until
+                        p.intent_until,
+                        p.last_seen_at
                      FROM profiles_fts
                      JOIN profiles p
                        ON p.rowid = profiles_fts.rowid
