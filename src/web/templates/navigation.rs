@@ -863,6 +863,7 @@ pub fn render_search(
                         &username_html,
                         &intent_html,
                         contact_html,
+                        *open_contact > 0,
                     )
                 },
             )

@@ -1317,6 +1317,7 @@ pub(crate) fn people_result_card(
     username_html: &str,
     intent_html: &str,
     contact_html: &str,
+    is_ready: bool,
 ) -> String {
     format!(
         r#"
@@ -1341,7 +1342,11 @@ pub(crate) fn people_result_card(
                  font-size:17px;
                  line-height:1.3;
                  overflow-wrap:anywhere;
+                 display:flex;
+                 align-items:center;
+                 gap:8px;
              ">
+            {ready_dot}
             {display_name}
         </div>
 
@@ -1368,6 +1373,11 @@ pub(crate) fn people_result_card(
 "#,
         href = escape_html(href),
         user_icon = icon("user"),
+        ready_dot = if is_ready {
+            r#"<span style="width:10px;height:10px;border-radius:50%;background:#22c55e;box-shadow:0 0 6px rgba(34,197,94,.5);flex:0 0 auto;"></span>"#
+        } else {
+            ""
+        },
         display_name = display_name_html,
         username_html = username_html,
         intent_html = intent_html,
