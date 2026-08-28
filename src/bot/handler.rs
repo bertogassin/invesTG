@@ -77,6 +77,7 @@ pub async fn help_handler(bot: Bot, msg: Message) -> ResponseResult<()> {
     Ok(())
 }
 
+#[allow(dead_code)]
 pub async fn stats_handler(
     bot: Bot,
     msg: Message,

@@ -7,7 +7,7 @@ mod utils;
 mod web;
 
 use bot::groups::welcome_chat_member;
-use bot::handler::{cities_handler, help_handler, start_handler, stats_handler};
+use bot::handler::{cities_handler, help_handler, start_handler};
 use bot::security::{is_security_candidate, security_observer};
 use bot::translator::{is_translation_command, translation_handler};
 use state::app_state::AppState;

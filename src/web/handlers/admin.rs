@@ -1980,6 +1980,7 @@ function blockModerator(uid) {{
     Html(html).into_response()
 }
 
+#[allow(dead_code)]
 pub async fn block_moderator(
     State(state): State<AppState>,
     headers: HeaderMap,

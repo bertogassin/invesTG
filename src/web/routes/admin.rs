@@ -1,5 +1,5 @@
 use super::super::handlers::{
-    block_moderator, center_panel,
+    center_panel,
     {
         admin_approve_resource, admin_bulk_resources, admin_close_report,
         admin_hide_reported_resource, admin_login, admin_login_page,
