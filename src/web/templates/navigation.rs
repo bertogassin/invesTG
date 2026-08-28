@@ -29,6 +29,7 @@ pub fn world() -> BTreeMap<&'static str, BTreeMap<&'static str, Vec<&'static str
 
 pub fn render_continents(
     users_count: i64,
+    online_count: i64,
     resources_count: i64,
     _categories: Vec<(String, i64)>,
     people_by_category: Vec<(String, i64)>,
@@ -231,6 +232,10 @@ pub fn render_continents(
             <span>людей</span>
         </div>
         <div class="rm-stat">
+            <strong style="color:#22c55e;">{online_count}</strong>
+            <span>онлайн</span>
+        </div>
+        <div class="rm-stat">
             <strong>{resources_count}</strong>
             <span>ресурсов</span>
         </div>
@@ -254,6 +259,7 @@ pub fn render_continents(
 </section>"#,
         globe_icon = icon("globe"),
         users_count = users_count,
+        online_count = online_count,
         resources_count = resources_count,
         categories_count = people_by_category.len(),
         categories_html = _categories
@@ -513,7 +519,7 @@ pub fn render_continent(ci: usize) -> String {
         );
     }
 
-    render_continents(0, 0, Vec::new(), Vec::new())
+    render_continents(0, 0, 0, Vec::new(), Vec::new())
 }
 
 // ============================================================
@@ -566,7 +572,7 @@ pub fn render_country(ci: usize, si: usize) -> String {
         }
     }
 
-    render_continents(0, 0, Vec::new(), Vec::new())
+    render_continents(0, 0, 0, Vec::new(), Vec::new())
 }
 
 // ============================================================
@@ -644,7 +650,7 @@ pub fn render_city(ci: usize, si: usize, zi: usize) -> String {
         }
     }
 
-    render_continents(0, 0, Vec::new(), Vec::new())
+    render_continents(0, 0, 0, Vec::new(), Vec::new())
 }
 
 // ============================================================

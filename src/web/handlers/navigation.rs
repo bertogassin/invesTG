@@ -40,6 +40,20 @@ pub async fn app_root(State(state): State<AppState>, headers: HeaderMap) -> Html
         })
         .unwrap_or(0);
 
+    let online_count = state
+        .db_pool
+        .get()
+        .ok()
+        .and_then(|conn| {
+            conn.query_row(
+                "SELECT COUNT(*) FROM profiles WHERE last_seen_at > strftime('%s','now') - 300",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+            .ok()
+        })
+        .unwrap_or(0);
+
     let resources_count = state
         .db_pool
         .get()
@@ -98,6 +112,7 @@ pub async fn app_root(State(state): State<AppState>, headers: HeaderMap) -> Html
 
     Html(templates::render_continents(
         users_count,
+        online_count,
         resources_count,
         categories,
         people_by_category,
