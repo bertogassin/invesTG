@@ -31,6 +31,8 @@ async fn main() {
     // одноразовое startup-соединение.
     drop(db::queries::init_db().expect("Не удалось инициализировать базу данных"));
 
+    db::admin_v2::initialize().expect("Не удалось применить миграцию административной системы V2");
+
     // Единственный постоянный production-доступ к SQLite — connection pool.
     let db_pool = db::pool::create_pool().expect("Не удалось создать SQLite connection pool");
 
