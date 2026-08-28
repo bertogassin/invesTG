@@ -1134,6 +1134,7 @@ pub(crate) fn page_document(
 
 {body_after}
 
+<script src="/static/splash.js" defer></script>
 <script src="/static/theme-toggle.js" defer></script>
 
 </body>
