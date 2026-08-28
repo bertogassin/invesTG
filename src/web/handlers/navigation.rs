@@ -15,8 +15,61 @@ pub async fn app_menu() -> Html<String> {
     Html(templates::render_menu())
 }
 
-pub async fn app_root() -> Html<String> {
-    Html(templates::render_continents())
+pub async fn app_root(State(state): State<AppState>) -> Html<String> {
+    let users_count = state
+        .db_pool
+        .get()
+        .ok()
+        .and_then(|conn| {
+            conn.query_row(
+                "SELECT COUNT(*) FROM users WHERE is_active = 1",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+            .ok()
+        })
+        .unwrap_or(0);
+
+    let resources_count = state
+        .db_pool
+        .get()
+        .ok()
+        .and_then(|conn| {
+            conn.query_row(
+                "SELECT COUNT(*) FROM resources WHERE is_active = 1",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+            .ok()
+        })
+        .unwrap_or(0);
+
+    let categories = state.db_pool.get()
+        .ok()
+        .map(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT category, COUNT(*) as cnt FROM resources WHERE is_active = 1 GROUP BY category ORDER BY cnt DESC LIMIT 10"
+            ).ok();
+            let mut result = Vec::new();
+            if let Some(stmt) = stmt.as_mut() {
+                let rows = stmt.query_map([], |row| {
+                    Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+                });
+                if let Ok(rows) = rows {
+                    for row in rows.flatten() {
+                        result.push(row);
+                    }
+                }
+            }
+            result
+        })
+        .unwrap_or_default();
+
+    Html(templates::render_continents(
+        users_count,
+        resources_count,
+        categories,
+    ))
 }
 
 pub async fn app_search(

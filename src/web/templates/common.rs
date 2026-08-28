@@ -1653,40 +1653,6 @@ pub(crate) fn simple_hero(
     )
 }
 
-pub(crate) fn search_hero(
-    eyebrow: &str,
-    title: &str,
-    description: &str,
-    placeholder: &str,
-) -> String {
-    format!(
-        r#"<section class="hero">
-    <div class="eyebrow">
-        <span class="eyebrow-dot"></span>
-        {eyebrow}
-    </div>
-
-    <h1>{title}</h1>
-
-    <p>{description}</p>
-
-    <div class="search">
-        {search_icon}
-        <input
-            type="text"
-            placeholder="{placeholder}"
-            onkeydown="if(event.key==='Enter') window.location='/app/search?q='+encodeURIComponent(this.value)"
-        >
-    </div>
-</section>"#,
-        eyebrow = escape_html(eyebrow),
-        title = escape_html(title),
-        description = escape_html(description),
-        search_icon = icon("search"),
-        placeholder = escape_html(placeholder),
-    )
-}
-
 pub(crate) fn search_form_hero(
     eyebrow: &str,
     title: &str,

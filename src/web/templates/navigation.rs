@@ -1,7 +1,6 @@
 use super::common::{
     bottom_nav, empty_state_card, escape_html, icon, navigation_card, page_document, page_shell,
-    people_result_card, resource_result_card, search_form_hero, search_hero, section_head,
-    simple_hero, topbar,
+    people_result_card, resource_result_card, search_form_hero, section_head, simple_hero, topbar,
 };
 use std::collections::BTreeMap;
 
@@ -28,7 +27,11 @@ pub fn world() -> BTreeMap<&'static str, BTreeMap<&'static str, Vec<&'static str
 // LUCIDE SVG
 // ============================================================
 
-pub fn render_continents() -> String {
+pub fn render_continents(
+    users_count: i64,
+    resources_count: i64,
+    categories: Vec<(String, i64)>,
+) -> String {
     let w = world();
     let mut cards = String::new();
 
@@ -253,6 +256,48 @@ pub fn render_continents() -> String {
     </div>
 </div>"####;
 
+    let hero =
+        format!(
+r#"<section class="hero">
+    <div class="eyebrow">
+        {globe_icon}
+        ResursMap
+    </div>
+
+    <h1>Карта ресурсов</h1>
+
+    <p>Люди, города, услуги и возможности — всё необходимое рядом с вами.</p>
+
+    <div class="rm-stats-row">
+        <div class="rm-stat">
+            <strong>{users_count}</strong>
+            <span>людей</span>
+        </div>
+        <div class="rm-stat">
+            <strong>{resources_count}</strong>
+            <span>ресурсов</span>
+        </div>
+        <div class="rm-stat">
+            <strong>{categories_count}</strong>
+            <span>профессий</span>
+        </div>
+    </div>
+
+    <div class="rm-categories">
+        {categories_html}
+    </div>
+</section>"#,
+            globe_icon = icon("globe"),
+            users_count = users_count,
+            resources_count = resources_count,
+            categories_count = categories.len(),
+            categories_html = categories.iter().map(|(cat, cnt)| format!(
+                r#"<a class="rm-category" href="/app/search?q={cat}">{cat} <span>{cnt}</span></a>"#,
+                cat = cat,
+                cnt = cnt,
+            )).collect::<Vec<_>>().join(""),
+    );
+
     let main_html = format!(
         r####"<div id="resursmap-brand-logo"
      style="
@@ -462,12 +507,7 @@ pub fn render_continents() -> String {
 
 </section>"####,
         topbar = topbar("RESOURCE NETWORK", "globe"),
-        hero = search_hero(
-            "ResursMap",
-            "Карта ресурсов",
-            "Люди, города, услуги и возможности — всё необходимое рядом с вами.",
-            "Найти город, услугу или ресурс...",
-        ),
+        hero = hero,
         cards = cards,
         map_icon = icon("map"),
         heart_icon = icon("heart"),
@@ -534,7 +574,7 @@ pub fn render_continent(ci: usize) -> String {
         );
     }
 
-    render_continents()
+    render_continents(0, 0, Vec::new())
 }
 
 // ============================================================
@@ -587,7 +627,7 @@ pub fn render_country(ci: usize, si: usize) -> String {
         }
     }
 
-    render_continents()
+    render_continents(0, 0, Vec::new())
 }
 
 // ============================================================
@@ -665,7 +705,7 @@ pub fn render_city(ci: usize, si: usize, zi: usize) -> String {
         }
     }
 
-    render_continents()
+    render_continents(0, 0, Vec::new())
 }
 
 // ============================================================
