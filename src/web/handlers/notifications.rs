@@ -73,6 +73,7 @@ pub async fn notifications_page(State(state): State<AppState>, headers: HeaderMa
     Html(templates::render_notifications(notifications, true))
 }
 
+#[allow(dead_code)]
 pub async fn unread_count(State(state): State<AppState>, headers: HeaderMap) -> Response {
     let user = match verify_authenticated_user(&state, &headers) {
         Some(user) => user,
