@@ -5,6 +5,7 @@ use std::fs;
 use teloxide::prelude::*;
 use teloxide::types::{InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo};
 
+#[allow(dead_code)]
 pub async fn send_notification(bot: &Bot, telegram_id: i64, text: &str) -> ResponseResult<()> {
     bot.send_message(ChatId(telegram_id), text).await?;
     Ok(())

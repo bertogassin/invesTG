@@ -1,3 +1,4 @@
+use super::auth::verify_authenticated_user;
 use super::auth::{create_admin_session, is_admin_session, verify_telegram_init_data};
 use super::common::{
     csrf_rejected_response, input_text_is_valid, rate_limit_retry_after, request_is_cross_site,
@@ -1818,4 +1819,212 @@ pub async fn admin_reject_resource(
         )
             .into_response(),
     }
+}
+
+// ============ ЦЕНТР УПРАВЛЕНИЯ ============
+
+pub async fn center_panel(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    let user = match verify_authenticated_user(&state, &headers) {
+        Some(user) => user,
+        None => {
+            return (StatusCode::UNAUTHORIZED, "Требуется вход").into_response();
+        }
+    };
+
+    // Проверим, что пользователь — level 4 (Центр)
+    let is_center: bool = state.db_pool.get()
+        .ok()
+        .and_then(|conn| {
+            conn.query_row(
+                "SELECT COUNT(*) FROM moderator_roles WHERE user_id = ?1 AND level = 4 AND is_active = 1",
+                rusqlite::params![user.user_id],
+                |row| row.get::<_, i64>(0),
+            ).ok()
+        })
+        .map(|count| count > 0)
+        .unwrap_or(false);
+
+    if !is_center {
+        return (StatusCode::NOT_FOUND, "404").into_response();
+    }
+
+    // Загрузим всех модераторов и их действия
+    let moderators: Vec<(i64, i64, i64, i64)> = state.db_pool.get()
+        .ok()
+        .map(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT user_id, level, COALESCE(continent_index, -1), COALESCE(country_index, -1) FROM moderator_roles WHERE is_active = 1 ORDER BY level DESC"
+            ).ok();
+            let mut result = Vec::new();
+            if let Some(stmt) = stmt.as_mut() {
+                let rows = stmt.query_map([], |row| {
+                    Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+                });
+                if let Ok(rows) = rows {
+                    for row in rows.flatten() {
+                        result.push(row);
+                    }
+                }
+            }
+            result
+        })
+        .unwrap_or_default();
+
+    let actions: Vec<(i64, String, String, String, i64)> = state.db_pool.get()
+        .ok()
+        .map(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT moderator_id, action_type, target_type, details, created_at FROM moderation_actions ORDER BY created_at DESC LIMIT 100"
+            ).ok();
+            let mut result = Vec::new();
+            if let Some(stmt) = stmt.as_mut() {
+                let rows = stmt.query_map([], |row| {
+                    Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?))
+                });
+                if let Ok(rows) = rows {
+                    for row in rows.flatten() {
+                        result.push(row);
+                    }
+                }
+            }
+            result
+        })
+        .unwrap_or_default();
+
+    let moderators_html = moderators.iter().map(|(uid, level, ci, si)| {
+        format!(
+            r#"<tr>
+    <td>{uid}</td>
+    <td>{level}</td>
+    <td>{ci}</td>
+    <td>{si}</td>
+    <td><button onclick="blockModerator({uid})" style="padding:6px 12px;border:none;border-radius:8px;background:#dc2626;color:#fff;cursor:pointer;">Заблокировать</button></td>
+</tr>"#,
+            uid = uid,
+            level = level,
+            ci = ci,
+            si = si,
+        )
+    }).collect::<Vec<_>>().join("");
+
+    let actions_html = actions
+        .iter()
+        .map(|(mid, action, target, details, ts)| {
+            format!(
+                r#"<tr>
+    <td>{mid}</td>
+    <td>{action}</td>
+    <td>{target}</td>
+    <td>{details}</td>
+    <td>{ts}</td>
+</tr>"#,
+                mid = mid,
+                action = action,
+                target = target,
+                details = details,
+                ts = ts,
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("");
+
+    let html = format!(
+        r#"<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Центр управления · ResursMap</title>
+<style>
+body {{ background:#080a0d; color:#f3f0e9; font-family:sans-serif; margin:0; padding:20px; }}
+h1 {{ color:#d6b77a; }}
+table {{ width:100%; border-collapse:collapse; margin-top:20px; }}
+td, th {{ padding:10px; border-bottom:1px solid rgba(255,255,255,.08); text-align:left; }}
+th {{ color:#d6b77a; }}
+</style>
+</head>
+<body>
+<h1>🏛 Центр управления</h1>
+<p>Скрытая панель — только для level 4.</p>
+
+<h2>Модераторы</h2>
+<table>
+<tr><th>User ID</th><th>Level</th><th>Континент</th><th>Страна</th><th></th></tr>
+{moderators}
+</table>
+
+<h2>История действий (последние 100)</h2>
+<table>
+<tr><th>Модератор</th><th>Действие</th><th>Тип</th><th>Детали</th><th>Время</th></tr>
+{actions}
+</table>
+
+<script>
+function blockModerator(uid) {{
+    fetch('/api/center/block-moderator', {{
+        method: 'POST',
+        headers: {{'Content-Type': 'application/json'}},
+        body: JSON.stringify({{ user_id: uid }})
+    }}).then(r => r.json()).then(d => {{
+        alert(d.ok ? 'Заблокирован' : 'Ошибка');
+        location.reload();
+    }});
+}}
+</script>
+</body>
+</html>"#,
+        moderators = moderators_html,
+        actions = actions_html,
+    );
+
+    Html(html).into_response()
+}
+
+pub async fn block_moderator(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<serde_json::Value>,
+) -> Response {
+    let user = match verify_authenticated_user(&state, &headers) {
+        Some(user) => user,
+        None => return (StatusCode::UNAUTHORIZED, Json(json!({"ok": false}))).into_response(),
+    };
+
+    let is_center: bool = state.db_pool.get()
+        .ok()
+        .and_then(|conn| {
+            conn.query_row(
+                "SELECT COUNT(*) FROM moderator_roles WHERE user_id = ?1 AND level = 4 AND is_active = 1",
+                rusqlite::params![user.user_id],
+                |row| row.get::<_, i64>(0),
+            ).ok()
+        })
+        .map(|count| count > 0)
+        .unwrap_or(false);
+
+    if !is_center {
+        return (StatusCode::FORBIDDEN, Json(json!({"ok": false}))).into_response();
+    }
+
+    let target_id = payload.get("user_id").and_then(|v| v.as_i64()).unwrap_or(0);
+
+    if target_id <= 0 {
+        return (StatusCode::BAD_REQUEST, Json(json!({"ok": false}))).into_response();
+    }
+
+    let _ = state.db_pool.get().ok().map(|conn| {
+        conn.execute(
+            "UPDATE moderator_roles SET is_active = 0 WHERE user_id = ?1",
+            rusqlite::params![target_id],
+        )
+    });
+
+    let _ = state.db_pool.get().ok().map(|conn| {
+        conn.execute(
+            "INSERT INTO moderation_actions (moderator_id, action_type, target_type, target_id, details) VALUES (?1, 'block_moderator', 'moderator', ?2, 'Заблокирован Центром')",
+            rusqlite::params![user.user_id, target_id],
+        )
+    });
+
+    Json(json!({"ok": true})).into_response()
 }

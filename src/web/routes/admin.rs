@@ -1,8 +1,11 @@
 use super::super::handlers::{
-    admin_approve_resource, admin_bulk_resources, admin_close_report, admin_hide_reported_resource,
-    admin_login, admin_login_page, admin_reject_reported_resource, admin_reject_resource,
-    admin_reports, admin_resources, admin_toggle_active, admin_toggle_premium,
-    admin_toggle_verified,
+    block_moderator, center_panel,
+    {
+        admin_approve_resource, admin_bulk_resources, admin_close_report,
+        admin_hide_reported_resource, admin_login, admin_login_page,
+        admin_reject_reported_resource, admin_reject_resource, admin_reports, admin_resources,
+        admin_toggle_active, admin_toggle_premium, admin_toggle_verified,
+    },
 };
 use crate::state::app_state::AppState;
 use axum::{
@@ -12,6 +15,7 @@ use axum::{
 
 pub(super) fn routes() -> Router<AppState> {
     Router::new()
+        .route("/app/center", get(center_panel))
         .route("/app/admin/login", get(admin_login_page).post(admin_login))
         .route("/app/admin/resources", get(admin_resources))
         .route("/app/admin/reports", get(admin_reports))
