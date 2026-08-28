@@ -300,46 +300,7 @@ r#"<section class="hero">
     );
 
     let main_html = format!(
-        r####"<div id="resursmap-brand-logo"
-     style="
-        display:flex;
-        align-items:center;
-        gap:12px;
-        margin:4px 0 18px 0;
-     ">
-
-    <img src="/static/icon-192.png"
-         alt="ResursMap"
-         style="
-            width:52px;
-            height:52px;
-            border-radius:15px;
-            box-shadow:0 8px 24px rgba(0,0,0,.18);
-         ">
-
-    <div>
-        <div style="
-            font-size:20px;
-            font-weight:900;
-            line-height:1.1;
-        ">
-            ResursMap
-        </div>
-
-        <div style="
-            margin-top:4px;
-            font-size:10px;
-            font-weight:800;
-            letter-spacing:.12em;
-            text-transform:uppercase;
-            color:var(--gold-light);
-        ">
-            Resource Network
-        </div>
-    </div>
-</div>
-
-
+        r####"
 <section id="resursmap-install-panel"
          class="card"
          style="
