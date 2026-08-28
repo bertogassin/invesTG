@@ -148,7 +148,15 @@ pub async fn app_me(State(state): State<AppState>, headers: HeaderMap) -> Html<S
 
     let moderator_level: i64 = db
         .query_row(
-            "SELECT COALESCE(MAX(level), 0) FROM moderator_roles WHERE user_id = ?1 AND is_active = 1",
+            "SELECT COALESCE(MAX(role_level), 0)
+             FROM admin_assignments
+             WHERE user_id = ?1
+               AND status = 'active'
+               AND valid_from <= strftime('%s','now')
+               AND (
+                    valid_until IS NULL
+                    OR valid_until > strftime('%s','now')
+               )",
             rusqlite::params![user_id],
             |row| row.get(0),
         )

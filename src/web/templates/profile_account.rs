@@ -99,10 +99,26 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
 
     let moderator_badge = if moderator_level > 0 {
         let (badge_text, badge_style) = match moderator_level {
-            1 => ("Модератор города", "background:rgba(101,184,201,.12);border:1px solid rgba(101,184,201,.35);color:#8bd8e4;"),
-            2 => ("Модератор страны", "background:rgba(192,192,192,.10);border:1px solid rgba(192,192,192,.40);color:#c0c0c0;"),
-            3 => ("Модератор континента", "background:rgba(214,183,122,.10);border:1px solid rgba(214,183,122,.45);color:#f0d69c;"),
-            4 => ("Центр управления", "background:rgba(10,10,10,.85);border:1px solid rgba(214,183,122,.28);color:#d6b77a;box-shadow:0 0 20px rgba(214,183,122,.15);"),
+            1 => (
+                "Уровень 1 · Помощник группы",
+                "background:rgba(42,199,133,.10);border:1px solid rgba(42,199,133,.34);color:#69e6ae;",
+            ),
+            2 => (
+                "Уровень 2 · Администратор города",
+                "background:rgba(100,168,255,.10);border:1px solid rgba(100,168,255,.36);color:#8fc2ff;",
+            ),
+            3 => (
+                "Уровень 3 · Администратор страны",
+                "background:linear-gradient(90deg,rgba(100,168,255,.09),rgba(214,183,122,.08));border:1px solid rgba(214,183,122,.38);color:#e6d09f;",
+            ),
+            4 => (
+                "Уровень 4 · Администратор континента",
+                "background:linear-gradient(90deg,rgba(137,116,255,.12),rgba(214,183,122,.08));border:1px solid rgba(137,116,255,.42);color:#c2b7ff;",
+            ),
+            5 => (
+                "Уровень 5 · Global Owner",
+                "background:linear-gradient(90deg,rgba(214,183,122,.15),rgba(137,116,255,.10));border:1px solid rgba(214,183,122,.48);color:#f0d69c;box-shadow:0 0 24px rgba(214,183,122,.14);",
+            ),
             _ => ("", ""),
         };
         format!(
