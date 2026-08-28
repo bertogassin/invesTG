@@ -647,6 +647,28 @@ body::before {
     height: 22px;
 }
 
+.nav-badge {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #dc2626;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 800;
+    box-sizing: border-box;
+}
+
+.nav-item {
+    position: relative;
+}
+
 .nav-item.active .icon {
     stroke-width: 2.2;
 }
@@ -1135,6 +1157,7 @@ pub(crate) fn page_document(
 {body_after}
 
 <script src="/static/splash.js" defer></script>
+<script src="/static/notification-sound.js" defer></script>
 <script src="/static/theme-toggle.js" defer></script>
 
 </body>
@@ -1171,6 +1194,10 @@ pub(crate) fn page_shell(
 }
 
 pub(crate) fn bottom_nav(active: &str) -> String {
+    bottom_nav_with_badge(active, 0)
+}
+
+pub(crate) fn bottom_nav_with_badge(active: &str, unread_count: i64) -> String {
     let item_class = |name: &str| {
         if active == name {
             "nav-item active"
@@ -1200,6 +1227,7 @@ pub(crate) fn bottom_nav(active: &str) -> String {
 
     <a class="{menu_class}" href="/app/menu">
         {nav_menu}
+        {unread_badge}
         <span>Меню</span>
     </a>
 
@@ -1213,6 +1241,11 @@ pub(crate) fn bottom_nav(active: &str) -> String {
         nav_search = icon("search"),
         nav_user = icon("user"),
         nav_menu = icon("menu"),
+        unread_badge = if unread_count > 0 {
+            format!(r#"<span class="nav-badge">{}</span>"#, unread_count)
+        } else {
+            String::new()
+        },
     )
 }
 
