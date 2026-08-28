@@ -141,8 +141,24 @@ pub async fn center_panel(State(state): State<AppState>, headers: HeaderMap) -> 
         .filter(|permission| context.has_permission(**permission))
         .count() as i64;
 
+    let owner_display_name: String = connection
+        .query_row(
+            "SELECT CASE
+                WHEN TRIM(first_name || ' ' || last_name) <> ''
+                    THEN TRIM(first_name || ' ' || last_name)
+                WHEN username <> ''
+                    THEN '@' || username
+                ELSE 'Владелец ResursMap'
+             END
+             FROM profiles
+             WHERE user_id = ?1",
+            params![context.user_id],
+            |row| row.get(0),
+        )
+        .unwrap_or_else(|_| "Владелец ResursMap".to_string());
+
     let data = AdminDashboardData {
-        owner_name: &authenticated_user.client_id,
+        owner_name: &owner_display_name,
         level: context.level.number(),
         level_title: context.level.title(),
         territory: &context.scope_name,
