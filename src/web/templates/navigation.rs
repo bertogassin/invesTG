@@ -257,9 +257,8 @@ pub fn render_continents(
     </div>
 </div>"####;
 
-    let hero =
-        format!(
-r#"<section class="hero">
+    let hero = format!(
+        r#"<section class="hero">
     <div class="eyebrow">
         {globe_icon}
         ResursMap
@@ -287,16 +286,37 @@ r#"<section class="hero">
     <div class="rm-categories">
         {categories_html}
     </div>
+
+    <div style="margin-top:14px;font-size:11px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);">
+        Люди по профессиям
+    </div>
+
+    <div class="rm-categories">
+        {people_categories_html}
+    </div>
 </section>"#,
-            globe_icon = icon("globe"),
-            users_count = users_count,
-            resources_count = resources_count,
-            categories_count = people_by_category.len(),
-            categories_html = people_by_category.iter().map(|(cat, cnt)| format!(
+        globe_icon = icon("globe"),
+        users_count = users_count,
+        resources_count = resources_count,
+        categories_count = people_by_category.len(),
+        categories_html = _categories
+            .iter()
+            .map(|(cat, cnt)| format!(
                 r#"<a class="rm-category" href="/app/search?q={cat}">{cat} <span>{cnt}</span></a>"#,
                 cat = cat,
                 cnt = cnt,
-            )).collect::<Vec<_>>().join(""),
+            ))
+            .collect::<Vec<_>>()
+            .join(""),
+        people_categories_html = people_by_category
+            .iter()
+            .map(|(cat, cnt)| format!(
+                r#"<a class="rm-category" href="/app/search?q={cat}">{cat} <span>{cnt}</span></a>"#,
+                cat = cat,
+                cnt = cnt,
+            ))
+            .collect::<Vec<_>>()
+            .join(""),
     );
 
     let main_html = format!(
