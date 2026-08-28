@@ -98,6 +98,8 @@ pub(super) fn request_is_cross_site(headers: &HeaderMap) -> bool {
         if origin != "https://resursmap.de"
             && origin != "https://www.resursmap.de"
             && origin != "http://127.0.0.1:3000"
+            && !origin.starts_with("https://telegram.me")
+            && !origin.starts_with("https://web.telegram.org")
         {
             return true;
         }
