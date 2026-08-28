@@ -372,31 +372,6 @@ pub fn render_continents() -> String {
 
     <div class="rm-desktop-two">
 
-        <div>
-            <div class="rm-home-label">
-                Возможности
-            </div>
-
-            <div class="feature-grid">
-                <a href="/app/my-resources" class="feature" style="text-decoration:none;color:inherit;">
-                    {map_icon}
-                    <strong>Мои ресурсы</strong>
-                    <span>Публикации и управление.</span>
-                </a>
-
-                <a href="/app/favorites" class="feature" style="text-decoration:none;color:inherit;">
-                    {heart_icon}
-                    <strong>Избранное</strong>
-                    <span>Сохранённые ресурсы.</span>
-                </a>
-
-                <a href="/app/messages" class="feature" style="text-decoration:none;color:inherit;">
-                    {message_icon}
-                    <strong>Сообщения</strong>
-                    <span>Личные диалоги.</span>
-                </a>
-            </div>
-        </div>
 
         <div>
             <div class="rm-home-label">
