@@ -1,4 +1,5 @@
 pub(crate) use admin_dashboard::*;
+mod admin_administrators;
 mod admin_dashboard;
 mod common;
 pub use common::escape_html;
@@ -20,3 +21,7 @@ pub use communication::*;
 
 mod navigation;
 pub use navigation::*;
+
+pub use admin_administrators::{
+    render_admin_administrators, AdminAdministratorRow, AdminAdministratorsData, AdminSessionRow,
+};

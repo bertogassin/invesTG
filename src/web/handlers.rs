@@ -18,6 +18,7 @@ pub use resources::*;
 
 mod admin;
 mod admin_access;
+mod admin_administrators;
 mod admin_v2;
 pub use admin::*;
 pub use admin_v2::*;
@@ -34,3 +35,5 @@ mod common;
 
 mod auth;
 pub use auth::{app_auth, app_auth_page, app_logout, email_auth_request, email_auth_verify};
+
+pub use admin_administrators::administrators_panel;

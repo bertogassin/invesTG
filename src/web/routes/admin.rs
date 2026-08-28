@@ -1,3 +1,4 @@
+use super::super::handlers::administrators_panel;
 use super::super::handlers::{
     center_panel,
     {
@@ -16,6 +17,7 @@ use axum::{
 pub(super) fn routes() -> Router<AppState> {
     Router::new()
         .route("/app/center", get(center_panel))
+        .route("/app/center/administrators", get(administrators_panel))
         .route("/app/admin/login", get(admin_login_page).post(admin_login))
         .route("/app/admin/resources", get(admin_resources))
         .route("/app/admin/reports", get(admin_reports))
