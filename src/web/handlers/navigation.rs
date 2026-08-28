@@ -65,10 +65,32 @@ pub async fn app_root(State(state): State<AppState>) -> Html<String> {
         })
         .unwrap_or_default();
 
+    let people_by_category = state.db_pool.get()
+        .ok()
+        .map(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT p.category, COUNT(*) as cnt FROM profiles p JOIN users u ON u.id = p.user_id WHERE u.is_active = 1 AND p.category <> '' GROUP BY p.category ORDER BY cnt DESC LIMIT 10"
+            ).ok();
+            let mut result = Vec::new();
+            if let Some(stmt) = stmt.as_mut() {
+                let rows = stmt.query_map([], |row| {
+                    Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+                });
+                if let Ok(rows) = rows {
+                    for row in rows.flatten() {
+                        result.push(row);
+                    }
+                }
+            }
+            result
+        })
+        .unwrap_or_default();
+
     Html(templates::render_continents(
         users_count,
         resources_count,
         categories,
+        people_by_category,
     ))
 }
 

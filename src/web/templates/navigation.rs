@@ -30,7 +30,8 @@ pub fn world() -> BTreeMap<&'static str, BTreeMap<&'static str, Vec<&'static str
 pub fn render_continents(
     users_count: i64,
     resources_count: i64,
-    categories: Vec<(String, i64)>,
+    _categories: Vec<(String, i64)>,
+    people_by_category: Vec<(String, i64)>,
 ) -> String {
     let w = world();
     let mut cards = String::new();
@@ -290,8 +291,8 @@ r#"<section class="hero">
             globe_icon = icon("globe"),
             users_count = users_count,
             resources_count = resources_count,
-            categories_count = categories.len(),
-            categories_html = categories.iter().map(|(cat, cnt)| format!(
+            categories_count = people_by_category.len(),
+            categories_html = people_by_category.iter().map(|(cat, cnt)| format!(
                 r#"<a class="rm-category" href="/app/search?q={cat}">{cat} <span>{cnt}</span></a>"#,
                 cat = cat,
                 cnt = cnt,
@@ -574,7 +575,7 @@ pub fn render_continent(ci: usize) -> String {
         );
     }
 
-    render_continents(0, 0, Vec::new())
+    render_continents(0, 0, Vec::new(), Vec::new())
 }
 
 // ============================================================
@@ -627,7 +628,7 @@ pub fn render_country(ci: usize, si: usize) -> String {
         }
     }
 
-    render_continents(0, 0, Vec::new())
+    render_continents(0, 0, Vec::new(), Vec::new())
 }
 
 // ============================================================
@@ -705,7 +706,7 @@ pub fn render_city(ci: usize, si: usize, zi: usize) -> String {
         }
     }
 
-    render_continents(0, 0, Vec::new())
+    render_continents(0, 0, Vec::new(), Vec::new())
 }
 
 // ============================================================
