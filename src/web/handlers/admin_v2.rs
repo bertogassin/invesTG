@@ -1,10 +1,13 @@
-use super::admin_access::{load_admin_context, record_denied_access, AdminPermission};
+use super::admin_access::{
+    create_admin_session, load_admin_context, record_denied_access, scope_is_authorized,
+    verify_admin_session, AdminPermission,
+};
 use super::auth::verify_authenticated_user;
 use crate::state::app_state::AppState;
 use crate::web::templates::{render_admin_dashboard, AdminDashboardData};
 use axum::{
     extract::State,
-    http::{HeaderMap, HeaderValue, StatusCode},
+    http::{header, HeaderMap, HeaderValue, StatusCode},
     response::{Html, IntoResponse, Response},
 };
 use rusqlite::params;
@@ -44,6 +47,65 @@ pub async fn center_panel(State(state): State<AppState>, headers: HeaderMap) -> 
         );
 
         return (StatusCode::FORBIDDEN, "Доступ запрещён").into_response();
+    }
+
+    if !scope_is_authorized(&state, &context, context.scope_id) {
+        record_denied_access(
+            &state,
+            authenticated_user.user_id,
+            "admin_scope_access_denied",
+            "Назначенная территория не прошла серверную проверку",
+        );
+
+        return (StatusCode::FORBIDDEN, "Территория недоступна").into_response();
+    }
+
+    if !verify_admin_session(&state, &headers, context.user_id, context.assignment_id) {
+        let cookie = match create_admin_session(&state, &context, &headers) {
+            Ok(cookie) => cookie,
+            Err(_) => {
+                record_denied_access(
+                    &state,
+                    authenticated_user.user_id,
+                    "admin_session_creation_failed",
+                    "Не удалось создать короткую административную сессию",
+                );
+
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    "Не удалось открыть защищённую административную сессию",
+                )
+                    .into_response();
+            }
+        };
+
+        let cookie_header = match HeaderValue::from_str(&cookie) {
+            Ok(value) => value,
+            Err(_) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Ошибка защищённой сессии",
+                )
+                    .into_response();
+            }
+        };
+
+        let mut response = StatusCode::SEE_OTHER.into_response();
+
+        response
+            .headers_mut()
+            .insert(header::LOCATION, HeaderValue::from_static("/app/center"));
+
+        response
+            .headers_mut()
+            .insert(header::SET_COOKIE, cookie_header);
+
+        response.headers_mut().insert(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("no-store, no-cache, must-revalidate, private"),
+        );
+
+        return response;
     }
 
     let connection = match crate::db::pool::get_connection(&state.db_pool) {
