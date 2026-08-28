@@ -424,6 +424,15 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
         cursor:pointer;
     ">
 
+        <span style="
+            width:12px;
+            height:12px;
+            border-radius:50%;
+            flex:0 0 auto;
+            margin-top:4px;
+            {ready_dot_style}
+        "></span>
+
         <input
             id="profile-open-contact"
             type="checkbox"
@@ -440,7 +449,7 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
                 font-size:14px;
                 font-weight:800;
             ">
-                Показывать мой контакт
+                Готов к общению
             </div>
 
             <div style="
@@ -449,8 +458,8 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
                 margin-top:3px;
                 line-height:1.4;
             ">
-                Другие пользователи смогут понять,
-                что вы открыты для связи.
+                Зелёная точка означает, что вы
+                на связи и готовы к контакту.
             </div>
         </div>
 
@@ -638,6 +647,11 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
         intent_status_text = intent_status_text,
         safe_intent_text = safe_intent_text,
         contact_checked = contact_checked,
+        ready_dot_style = if contact_checked == "checked" {
+            "background:#22c55e;box-shadow:0 0 8px rgba(34,197,94,.5);"
+        } else {
+            "background:#3f3f46;"
+        },
         contact_requests_card =
             super::extended_navigation_card(super::ExtendedNavigationCardParams {
                 id: None,
