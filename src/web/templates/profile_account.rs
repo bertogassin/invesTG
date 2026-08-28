@@ -87,7 +87,7 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
     } else if !safe_username.is_empty() {
         format!("@{}", safe_username)
     } else if authenticated {
-        "Пользователь ResursMap".to_string()
+        "Пользователь".to_string()
     } else {
         "Гость".to_string()
     };
@@ -106,7 +106,7 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
             margin-top:5px;
             color:var(--muted);
             font-size:13px;
-        ">Аккаунт ResursMap</div>"#
+        ">Аккаунт</div>"#
             .to_string()
     } else {
         String::new()
@@ -189,7 +189,7 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
         format!(
             "{}{}",
             empty_state_card(
-                "Войдите в аккаунт ResursMap",
+                "Войдите в аккаунт",
                 "После входа здесь появятся ваш профиль, ресурсы, избранное и статистика.",
             ),
             navigation_card("/app/auth", "user", "Войти в аккаунт", "Telegram или email",),
@@ -328,7 +328,7 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
         String::new()
     };
 
-    let section_head_account = section_head("Ваш ResursMap", "Управление аккаунтом", None);
+    let section_head_account = section_head("Ваш аккаунт", "Управление аккаунтом", None);
 
     let content_html = format!(
         r####"{account_header}
@@ -658,7 +658,7 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
                 href: "/app/contact-requests",
                 icon_html: "👥",
                 title: "Запросы на связь",
-                meta: "Входящие запросы от участников ResursMap",
+                meta: "Входящие запросы от участников",
                 trailing_html: Some(&format!(
                     r#"<div style="
     display:flex;
@@ -796,7 +796,7 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
                     ) {{
                         if (status) {{
                             status.textContent =
-                                "Войдите в аккаунт ResursMap.";
+                                "Войдите в аккаунт.";
                         }}
 
                         saveButton.disabled = false;
@@ -848,7 +848,7 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
             "user",
             "Личный кабинет",
             "Мой профиль",
-            "Ваши ресурсы, сохранённые места и активность в ResursMap.",
+            "Ваши ресурсы, сохранённые места и активность.",
         ),
         content = content_html,
     );
@@ -873,7 +873,7 @@ pub fn render_notifications(
 ) -> String {
     let cards = if !authenticated {
         empty_state_card(
-            "Войдите в аккаунт ResursMap",
+            "Войдите в аккаунт",
             "Уведомления доступны после входа в аккаунт.",
         )
     } else if notifications.is_empty() {
@@ -1108,7 +1108,7 @@ pub fn render_public_user_profile(params: RenderPublicUserProfileParams<'_>) -> 
     } else if !username.trim().is_empty() {
         format!("@{}", username.trim())
     } else {
-        "Участник ResursMap".to_string()
+        "Участник".to_string()
     };
 
     let safe_username = escape_html(username);
@@ -1125,7 +1125,7 @@ pub fn render_public_user_profile(params: RenderPublicUserProfileParams<'_>) -> 
     } else if !safe_username.is_empty() {
         format!("@{}", safe_username)
     } else {
-        "Участник ResursMap".to_string()
+        "Участник".to_string()
     };
 
     let contact_html = if open_contact && !safe_username.is_empty() {
@@ -1195,7 +1195,7 @@ pub fn render_public_user_profile(params: RenderPublicUserProfileParams<'_>) -> 
              margin-bottom:14px;
          ">
         Контакт установлен. Вы можете продолжить общение
-        во внутреннем чате ResursMap.
+        во внутреннем чате.
     </div>
 
     <a href="/app/chat/{chat_user_id}"
@@ -1245,7 +1245,7 @@ pub fn render_public_user_profile(params: RenderPublicUserProfileParams<'_>) -> 
              line-height:1.5;
              margin-bottom:14px;
          ">
-        Отправьте запрос через ResursMap.
+        Отправьте запрос.
     </div>
 
     <button
@@ -1261,7 +1261,7 @@ pub fn render_public_user_profile(params: RenderPublicUserProfileParams<'_>) -> 
             font-weight:850;
             cursor:pointer;
         " class="ui-button">
-        Связаться через ResursMap
+        Связаться
     </button>
 
     <div id="contact-request-panel"
@@ -1603,7 +1603,7 @@ pub fn render_public_user_profile(params: RenderPublicUserProfileParams<'_>) -> 
                 if (response.status === 401) {{
                     if (status) {{
                         status.textContent =
-                            "Войдите в аккаунт ResursMap.";
+                            "Войдите в аккаунт.";
                     }}
 
                     sendButton.disabled = false;
@@ -1697,7 +1697,7 @@ pub fn render_public_user_profile(params: RenderPublicUserProfileParams<'_>) -> 
             hero = back_hero(
                 &back_link("javascript:history.back()", "Назад", "arrow-left",),
                 "user",
-                "Участник ResursMap",
+                "Участник",
                 &hero_display_name,
                 "Публичный профиль участника сообщества.",
             ),
