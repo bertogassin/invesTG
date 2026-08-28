@@ -523,7 +523,7 @@ pub fn render_continent(ci: usize) -> String {
         );
 
         return page_shell(
-            &format!("{}", name),
+            name,
             &topbar("RESOURCE NETWORK", "globe"),
             &simple_hero(
                 "map",
@@ -575,7 +575,7 @@ pub fn render_country(ci: usize, si: usize) -> String {
             );
 
             return page_shell(
-                &format!("{}", country),
+                country,
                 &topbar("RESOURCE NETWORK", "globe"),
                 &simple_hero(
                     "map-pin",
@@ -648,7 +648,7 @@ pub fn render_city(ci: usize, si: usize, zi: usize) -> String {
                 );
 
                 return page_shell(
-                    &format!("{}", city),
+                    city,
                     &topbar("RESOURCE NETWORK", "globe"),
                     &simple_hero(
                         "map-pin",

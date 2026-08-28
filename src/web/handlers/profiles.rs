@@ -37,6 +37,7 @@ pub async fn app_me(State(state): State<AppState>, headers: HeaderMap) -> Html<S
                 open_contact: false,
                 intent_text: "",
                 intent_until: 0,
+                category: "",
             }));
         }
     };
@@ -51,7 +52,7 @@ pub async fn app_me(State(state): State<AppState>, headers: HeaderMap) -> Html<S
         }
     };
 
-    let profile: Option<(String, String, String, i64, String, i64)> = db
+    let profile: Option<(String, String, String, i64, String, i64, String)> = db
         .query_row(
             "SELECT
                 username,
@@ -59,7 +60,8 @@ pub async fn app_me(State(state): State<AppState>, headers: HeaderMap) -> Html<S
                 last_name,
                 open_contact,
                 intent_text,
-                intent_until
+                intent_until,
+                category
              FROM profiles
              WHERE client_id = ?1",
             rusqlite::params![&client_id],
@@ -71,13 +73,14 @@ pub async fn app_me(State(state): State<AppState>, headers: HeaderMap) -> Html<S
                     row.get(3)?,
                     row.get(4)?,
                     row.get(5)?,
+                    row.get(6)?,
                 ))
             },
         )
         .ok();
 
-    let (username, first_name, last_name, open_contact, intent_text, intent_until) = profile
-        .unwrap_or_else(|| {
+    let (username, first_name, last_name, open_contact, intent_text, intent_until, category) =
+        profile.unwrap_or_else(|| {
             (
                 String::new(),
                 String::new(),
@@ -85,6 +88,7 @@ pub async fn app_me(State(state): State<AppState>, headers: HeaderMap) -> Html<S
                 0,
                 String::new(),
                 0,
+                String::new(),
             )
         });
 
@@ -196,6 +200,7 @@ pub async fn app_me(State(state): State<AppState>, headers: HeaderMap) -> Html<S
         open_contact: open_contact == 1,
         intent_text: &intent_text,
         intent_until,
+        category: &category,
     }))
 }
 
@@ -397,7 +402,7 @@ pub async fn api_profile_get(State(state): State<AppState>, headers: HeaderMap) 
         }
     };
 
-    let profile: Option<(String, String, String, i64, String, i64)> = db
+    let profile: Option<(String, String, String, i64, String, i64, String)> = db
         .query_row(
             "SELECT
                 username,
@@ -405,7 +410,8 @@ pub async fn api_profile_get(State(state): State<AppState>, headers: HeaderMap) 
                 last_name,
                 open_contact,
                 intent_text,
-                intent_until
+                intent_until,
+                category
              FROM profiles
              WHERE client_id = ?1",
             rusqlite::params![&client_id],
@@ -417,6 +423,7 @@ pub async fn api_profile_get(State(state): State<AppState>, headers: HeaderMap) 
                     row.get(3)?,
                     row.get(4)?,
                     row.get(5)?,
+                    row.get(6)?,
                 ))
             },
         )
@@ -424,8 +431,8 @@ pub async fn api_profile_get(State(state): State<AppState>, headers: HeaderMap) 
 
     drop(db);
 
-    let (username, first_name, last_name, open_contact, intent_text, intent_until) = profile
-        .unwrap_or_else(|| {
+    let (username, first_name, last_name, open_contact, intent_text, intent_until, _category) =
+        profile.unwrap_or_else(|| {
             (
                 String::new(),
                 String::new(),
@@ -433,6 +440,7 @@ pub async fn api_profile_get(State(state): State<AppState>, headers: HeaderMap) 
                 0,
                 String::new(),
                 0,
+                String::new(),
             )
         });
 

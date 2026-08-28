@@ -20,6 +20,7 @@ pub struct RenderMeParams<'a> {
     pub open_contact: bool,
     pub intent_text: &'a str,
     pub intent_until: i64,
+    pub category: &'a str,
 }
 
 pub fn render_me(params: RenderMeParams<'_>) -> String {
@@ -40,11 +41,13 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
         open_contact,
         intent_text,
         intent_until,
+        category,
     } = params;
     let safe_username = escape_html(username);
     let safe_first_name = escape_html(first_name);
     let safe_last_name = escape_html(last_name);
     let safe_intent_text = escape_html(intent_text);
+    let _safe_category = escape_html(category);
 
     let _unread_messages_badge = if unread_messages_count > 0 {
         format!(
