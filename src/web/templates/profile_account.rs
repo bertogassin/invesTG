@@ -1,7 +1,6 @@
 use super::common::{
-    back_hero, back_link, bottom_nav, bottom_nav_with_badge, empty_state_card, escape_html, icon,
-    navigation_card, page_document, page_shell, profile_resource_card, section_head, simple_hero,
-    topbar,
+    back_hero, back_link, bottom_nav, empty_state_card, escape_html, icon, navigation_card,
+    page_document, page_shell, profile_resource_card, section_head, simple_hero, topbar,
 };
 
 pub struct RenderMeParams<'a> {
