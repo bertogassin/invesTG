@@ -212,50 +212,7 @@ pub fn render_continents(
     }
 </style>"####;
 
-    let body_before_main = r####"<div id="resursmap-splash"
-     style="
-        position:fixed;
-        inset:0;
-        z-index:99999;
-        display:flex;
-        align-items:center;
-        justify-content:center;
-        flex-direction:column;
-        background:
-          radial-gradient(circle at 50% 38%,rgba(214,183,122,.12),transparent 38%),
-          linear-gradient(160deg,var(--bg),var(--bg-soft));
-        transition:opacity .45s ease,visibility .45s ease;
-     ">
-
-    <img src="/static/icon-512.png"
-         alt="Логотип"
-         style="
-            width:116px;
-            height:116px;
-            border-radius:28px;
-            box-shadow:0 18px 60px rgba(0,0,0,.35);
-         ">
-
-    <div style="
-        margin-top:20px;
-        font-size:27px;
-        font-weight:900;
-        letter-spacing:.03em;
-        color:var(--text);
-    ">
-        ResursMap
-    </div>
-
-    <div style="
-        margin-top:7px;
-        font-size:12px;
-        letter-spacing:.14em;
-        text-transform:uppercase;
-        color:var(--gold);
-    ">
-        Resource Network
-    </div>
-</div>"####;
+    let body_before_main = r####""####;
 
     let hero = format!(
         r#"<section class="hero">
