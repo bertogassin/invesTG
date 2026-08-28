@@ -313,6 +313,7 @@ pub async fn app_search(
                             row.get(4)?,
                             row.get(5)?,
                             row.get(6)?,
+                            row.get(7)?,
                         ))
                     })?
                     .collect::<Result<Vec<_>, _>>()

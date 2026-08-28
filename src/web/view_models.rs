@@ -58,4 +58,4 @@ pub type SearchResourceRow = (
     usize,
     usize,
 );
-pub type SearchPersonRow = (String, String, String, String, i64, String, i64);
+pub type SearchPersonRow = (String, String, String, String, i64, String, i64, i64);

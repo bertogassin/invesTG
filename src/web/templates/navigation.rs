@@ -711,6 +711,7 @@ pub fn render_search(
                     open_contact,
                     intent_text,
                     intent_until,
+                    last_seen_at,
                 )| {
                     let escape_html = |value: &str| -> String {
                         value
@@ -757,6 +758,8 @@ pub fn render_search(
                         .map(|d| d.as_secs() as i64)
                         .unwrap_or(0);
 
+                    let is_online = *last_seen_at > 0 && (now - *last_seen_at) < 300;
+
                     let intent_is_active = !safe_intent.trim().is_empty()
                         && (*intent_until == 0 || *intent_until >= now);
 
@@ -782,7 +785,13 @@ pub fn render_search(
                         String::new()
                     };
 
-                    let contact_html = if *open_contact != 0 {
+                    let contact_html = if is_online {
+                        r#"<span style="
+                                font-size:10px;
+                                font-weight:850;
+                                color:#22c55e;
+                            ">🟢 Онлайн</span>"#
+                    } else if *open_contact != 0 {
                         r#"<span style="
                                 font-size:10px;
                                 font-weight:850;
@@ -802,7 +811,7 @@ pub fn render_search(
                         &username_html,
                         &intent_html,
                         contact_html,
-                        *open_contact > 0,
+                        is_online || *open_contact > 0,
                     )
                 },
             )
