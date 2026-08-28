@@ -241,6 +241,22 @@ pub fn render_admin_administrators(data: AdminAdministratorsData) -> String {
                         </div>
 
                         <div class="user-agent">{user_agent}</div>
+
+                        <form class="revoke-form"
+                              method="post"
+                              action="/app/center/sessions/{session_id}/revoke">
+                            <label>
+                                Причина завершения сессии
+                                <input name="reason"
+                                       minlength="5"
+                                       maxlength="500"
+                                       required
+                                       placeholder="Например: неизвестное устройство">
+                            </label>
+                            <button type="submit">
+                                Завершить эту сессию
+                            </button>
+                        </form>
                     </article>
                     "#,
                     display_name = escape_html(&session.display_name),
@@ -254,6 +270,7 @@ pub fn render_admin_administrators(data: AdminAdministratorsData) -> String {
                     expires_at = session.expires_at,
                     device_label = escape_html(&session.device_label),
                     user_agent = escape_html(user_agent),
+                    session_id = escape_html(&session.public_id),
                 )
             })
             .collect::<Vec<_>>()
@@ -579,6 +596,43 @@ h1 {{
     overflow-wrap:anywhere;
     font-size:10px;
 }}
+.revoke-form {{
+    display:grid;
+    grid-template-columns:minmax(0,1fr) auto;
+    align-items:end;
+    gap:10px;
+    margin-top:16px;
+    padding-top:16px;
+    border-top:1px solid rgba(255,255,255,.07);
+}}
+.revoke-form label {{
+    color:var(--muted);
+    font-size:11px;
+    font-weight:750;
+}}
+.revoke-form input {{
+    width:100%;
+    min-height:44px;
+    display:block;
+    margin-top:7px;
+    padding:0 13px;
+    border:1px solid rgba(255,255,255,.12);
+    border-radius:13px;
+    outline:none;
+    color:var(--text);
+    background:rgba(255,255,255,.035);
+    font:inherit;
+}}
+.revoke-form button {{
+    min-height:44px;
+    padding:0 15px;
+    border:1px solid rgba(255,109,120,.30);
+    border-radius:13px;
+    color:#ff8992;
+    background:rgba(255,109,120,.08);
+    font-weight:900;
+    cursor:pointer;
+}}
 .empty {{
     color:var(--muted);
     text-align:center;
@@ -599,6 +653,9 @@ h1 {{
     }}
     .session-grid {{
         grid-template-columns:repeat(2,minmax(0,1fr));
+    }}
+    .revoke-form {{
+        grid-template-columns:1fr;
     }}
 }}
 @media (max-width:430px) {{
