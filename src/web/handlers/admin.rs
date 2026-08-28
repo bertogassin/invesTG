@@ -1831,7 +1831,6 @@ pub async fn center_panel(State(state): State<AppState>, headers: HeaderMap) -> 
         }
     };
 
-    // Проверим, что пользователь — level 4 (Центр)
     let is_center: bool = state.db_pool.get()
         .ok()
         .and_then(|conn| {
@@ -1848,7 +1847,6 @@ pub async fn center_panel(State(state): State<AppState>, headers: HeaderMap) -> 
         return (StatusCode::NOT_FOUND, "404").into_response();
     }
 
-    // Загрузим всех модераторов и их действия
     let moderators: Vec<(i64, i64, i64, i64)> = state.db_pool.get()
         .ok()
         .map(|conn| {
@@ -1891,33 +1889,83 @@ pub async fn center_panel(State(state): State<AppState>, headers: HeaderMap) -> 
         })
         .unwrap_or_default();
 
-    let moderators_html = moderators.iter().map(|(uid, level, ci, si)| {
-        format!(
-            r#"<tr>
-    <td>{uid}</td>
-    <td>{level}</td>
-    <td>{ci}</td>
-    <td>{si}</td>
-    <td><button onclick="blockModerator({uid})" style="padding:6px 12px;border:none;border-radius:8px;background:#dc2626;color:#fff;cursor:pointer;">Заблокировать</button></td>
-</tr>"#,
-            uid = uid,
-            level = level,
-            ci = ci,
-            si = si,
-        )
-    }).collect::<Vec<_>>().join("");
+    let level_badge = |level: i64| -> &'static str {
+        match level {
+            1 => "🏙 Модератор города",
+            2 => "🇫🇷 Модератор страны",
+            3 => "🌍 Модератор континента",
+            4 => "👑 Центр управления",
+            _ => "Неизвестно",
+        }
+    };
+
+    let moderators_html = moderators
+        .iter()
+        .map(|(uid, level, ci, si)| {
+            format!(
+                r#"<article style="
+    border:1px solid rgba(214,183,122,.22);
+    border-radius:18px;
+    padding:16px;
+    margin-bottom:12px;
+    background:rgba(214,183,122,.05);
+    box-shadow:0 8px 24px rgba(0,0,0,.15);
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:12px;
+    flex-wrap:wrap;
+">
+    <div>
+        <div style="font-size:13px;font-weight:800;color:#f0d69c;margin-bottom:4px;">
+            {badge}
+        </div>
+        <div style="font-size:11px;color:#8f96a3;">
+            User ID: {uid} · Континент: {ci} · Страна: {si}
+        </div>
+    </div>
+    <button onclick="blockModerator({uid})" style="
+        padding:8px 16px;
+        border:none;
+        border-radius:10px;
+        background:#dc2626;
+        color:#fff;
+        font-size:12px;
+        font-weight:800;
+        cursor:pointer;
+        transition:opacity .2s;
+    " onmouseover="this.style.opacity=.85" onmouseout="this.style.opacity=1">
+        Заблокировать
+    </button>
+</article>"#,
+                badge = level_badge(*level),
+                uid = uid,
+                ci = ci,
+                si = si,
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("");
 
     let actions_html = actions
         .iter()
         .map(|(mid, action, target, details, ts)| {
             format!(
-                r#"<tr>
-    <td>{mid}</td>
-    <td>{action}</td>
-    <td>{target}</td>
-    <td>{details}</td>
-    <td>{ts}</td>
-</tr>"#,
+                r#"<article style="
+    border:1px solid rgba(255,255,255,.08);
+    border-radius:14px;
+    padding:14px;
+    margin-bottom:10px;
+    background:rgba(0,0,0,.25);
+">
+    <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+        <span style="font-size:12px;font-weight:800;color:#d6b77a;">{action}</span>
+        <span style="font-size:10px;color:#8f96a3;">{ts}</span>
+    </div>
+    <div style="font-size:11px;color:#9ca3af;margin-top:4px;">
+        Модератор: {mid} · {target}: {details}
+    </div>
+</article>"#,
                 mid = mid,
                 action = action,
                 target = target,
@@ -1936,28 +1984,67 @@ pub async fn center_panel(State(state): State<AppState>, headers: HeaderMap) -> 
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Центр управления · ResursMap</title>
 <style>
-body {{ background:#080a0d; color:#f3f0e9; font-family:sans-serif; margin:0; padding:20px; }}
-h1 {{ color:#d6b77a; }}
-table {{ width:100%; border-collapse:collapse; margin-top:20px; }}
-td, th {{ padding:10px; border-bottom:1px solid rgba(255,255,255,.08); text-align:left; }}
-th {{ color:#d6b77a; }}
+* {{ box-sizing:border-box; }}
+body {{
+    margin:0;
+    padding:20px;
+    background:linear-gradient(160deg,#080a0d,#0e1116);
+    color:#f3f0e9;
+    font-family:Inter,-apple-system,sans-serif;
+    min-height:100vh;
+}}
+.page {{
+    max-width:700px;
+    margin:0 auto;
+}}
+h1 {{
+    color:#d6b77a;
+    font-size:28px;
+    margin:0 0 6px;
+}}
+.subtitle {{
+    color:#8f96a3;
+    font-size:13px;
+    margin-bottom:24px;
+}}
+h2 {{
+    color:#f0d69c;
+    font-size:18px;
+    margin:24px 0 12px;
+}}
+.card {{
+    border:1px solid rgba(214,183,122,.22);
+    border-radius:18px;
+    padding:16px;
+    margin-bottom:12px;
+    background:rgba(214,183,122,.05);
+    box-shadow:0 8px 24px rgba(0,0,0,.15);
+}}
+button.block {{
+    padding:8px 16px;
+    border:none;
+    border-radius:10px;
+    background:#dc2626;
+    color:#fff;
+    font-size:12px;
+    font-weight:800;
+    cursor:pointer;
+    transition:opacity .2s;
+}}
+button.block:hover {{ opacity:.85; }}
 </style>
 </head>
 <body>
+<div class="page">
 <h1>🏛 Центр управления</h1>
-<p>Скрытая панель — только для level 4.</p>
+<p class="subtitle">Скрытая панель — только для level 4.</p>
 
 <h2>Модераторы</h2>
-<table>
-<tr><th>User ID</th><th>Level</th><th>Континент</th><th>Страна</th><th></th></tr>
 {moderators}
-</table>
 
-<h2>История действий (последние 100)</h2>
-<table>
-<tr><th>Модератор</th><th>Действие</th><th>Тип</th><th>Детали</th><th>Время</th></tr>
+<h2>История действий</h2>
 {actions}
-</table>
+</div>
 
 <script>
 function blockModerator(uid) {{
@@ -1966,8 +2053,7 @@ function blockModerator(uid) {{
         headers: {{'Content-Type': 'application/json'}},
         body: JSON.stringify({{ user_id: uid }})
     }}).then(r => r.json()).then(d => {{
-        alert(d.ok ? 'Заблокирован' : 'Ошибка');
-        location.reload();
+        if (d.ok) {{ location.reload(); }}
     }});
 }}
 </script>
@@ -1978,54 +2064,4 @@ function blockModerator(uid) {{
     );
 
     Html(html).into_response()
-}
-
-#[allow(dead_code)]
-pub async fn block_moderator(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-    Json(payload): Json<serde_json::Value>,
-) -> Response {
-    let user = match verify_authenticated_user(&state, &headers) {
-        Some(user) => user,
-        None => return (StatusCode::UNAUTHORIZED, Json(json!({"ok": false}))).into_response(),
-    };
-
-    let is_center: bool = state.db_pool.get()
-        .ok()
-        .and_then(|conn| {
-            conn.query_row(
-                "SELECT COUNT(*) FROM moderator_roles WHERE user_id = ?1 AND level = 4 AND is_active = 1",
-                rusqlite::params![user.user_id],
-                |row| row.get::<_, i64>(0),
-            ).ok()
-        })
-        .map(|count| count > 0)
-        .unwrap_or(false);
-
-    if !is_center {
-        return (StatusCode::FORBIDDEN, Json(json!({"ok": false}))).into_response();
-    }
-
-    let target_id = payload.get("user_id").and_then(|v| v.as_i64()).unwrap_or(0);
-
-    if target_id <= 0 {
-        return (StatusCode::BAD_REQUEST, Json(json!({"ok": false}))).into_response();
-    }
-
-    let _ = state.db_pool.get().ok().map(|conn| {
-        conn.execute(
-            "UPDATE moderator_roles SET is_active = 0 WHERE user_id = ?1",
-            rusqlite::params![target_id],
-        )
-    });
-
-    let _ = state.db_pool.get().ok().map(|conn| {
-        conn.execute(
-            "INSERT INTO moderation_actions (moderator_id, action_type, target_type, target_id, details) VALUES (?1, 'block_moderator', 'moderator', ?2, 'Заблокирован Центром')",
-            rusqlite::params![user.user_id, target_id],
-        )
-    });
-
-    Json(json!({"ok": true})).into_response()
 }
