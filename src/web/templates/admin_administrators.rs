@@ -346,6 +346,24 @@ body {{
     font-weight:900;
     letter-spacing:.08em;
 }}
+.topbar-actions {{
+    display:flex;
+    align-items:center;
+    gap:10px;
+}}
+.create-assignment {{
+    min-height:44px;
+    display:inline-flex;
+    align-items:center;
+    padding:0 15px;
+    border:1px solid rgba(223,192,127,.34);
+    border-radius:14px;
+    color:var(--gold);
+    background:var(--gold-soft);
+    text-decoration:none;
+    font-size:12px;
+    font-weight:950;
+}}
 .hero {{
     position:relative;
     overflow:hidden;
@@ -660,6 +678,21 @@ h1 {{
 }}
 @media (max-width:430px) {{
     body {{ padding-left:12px;padding-right:12px; }}
+    .topbar {{
+        align-items:flex-start;
+    }}
+    .topbar-actions {{
+        flex-direction:column;
+        align-items:flex-end;
+    }}
+    .protected {{
+        display:none;
+    }}
+    .create-assignment {{
+        max-width:170px;
+        min-height:40px;
+        text-align:center;
+    }}
     .administrator-card,
     .session-card {{ padding:16px; }}
     .status {{ align-self:flex-start; }}
@@ -678,7 +711,15 @@ h1 {{
 <main class="page">
     <div class="topbar">
         <a class="back" href="/app/center">← Центр управления</a>
-        <span class="protected">ЗАЩИЩЁННЫЙ РАЗДЕЛ</span>
+        <div class="topbar-actions">
+            <a class="create-assignment"
+               href="/app/center/administrators/new">
+                + Назначить администратора
+            </a>
+            <span class="protected">
+                ЗАЩИЩЁННЫЙ РАЗДЕЛ
+            </span>
+        </div>
     </div>
 
     <section class="hero">

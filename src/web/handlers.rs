@@ -19,6 +19,7 @@ pub use resources::*;
 mod admin;
 mod admin_access;
 mod admin_administrators;
+mod admin_assignment_actions;
 mod admin_security;
 mod admin_session_actions;
 mod admin_v2;
@@ -39,6 +40,8 @@ mod auth;
 pub use auth::{app_auth, app_auth_page, app_logout, email_auth_request, email_auth_verify};
 
 pub use admin_administrators::administrators_panel;
+
+pub use admin_assignment_actions::{create_admin_assignment, new_admin_assignment_page};
 
 pub use admin_security::{admin_security_page, admin_step_up_request, admin_step_up_verify};
 

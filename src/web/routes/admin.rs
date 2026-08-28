@@ -10,6 +10,7 @@ use super::super::handlers::{
         admin_toggle_active, admin_toggle_premium, admin_toggle_verified,
     },
 };
+use super::super::handlers::{create_admin_assignment, new_admin_assignment_page};
 use crate::state::app_state::AppState;
 use axum::{
     routing::{get, post},
@@ -19,7 +20,14 @@ use axum::{
 pub(super) fn routes() -> Router<AppState> {
     Router::new()
         .route("/app/center", get(center_panel))
-        .route("/app/center/administrators", get(administrators_panel))
+        .route(
+            "/app/center/administrators",
+            get(administrators_panel).post(create_admin_assignment),
+        )
+        .route(
+            "/app/center/administrators/new",
+            get(new_admin_assignment_page),
+        )
         .route("/app/center/security", get(admin_security_page))
         .route("/app/center/security/request", post(admin_step_up_request))
         .route("/app/center/security/verify", post(admin_step_up_verify))
