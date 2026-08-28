@@ -494,6 +494,23 @@ pub async fn api_profile_set(
         .unwrap_or("")
         .trim();
 
+    let category = payload
+        .get("category")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim();
+
+    if !input_text_is_valid(category, 0, 80) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({
+                "ok": false,
+                "error": "invalid_category"
+            })),
+        )
+            .into_response();
+    }
+
     if !input_text_is_valid(intent_text, 0, 300) {
         return (
             StatusCode::BAD_REQUEST,
@@ -562,6 +579,7 @@ pub async fn api_profile_set(
             open_contact,
             intent_text,
             intent_until,
+            category,
             updated_at
          )
          VALUES (
@@ -570,6 +588,7 @@ pub async fn api_profile_set(
             ?3,
             ?4,
             ?5,
+            ?6,
             strftime('%s','now')
          )
 
@@ -579,6 +598,7 @@ pub async fn api_profile_set(
             open_contact = excluded.open_contact,
             intent_text = excluded.intent_text,
             intent_until = excluded.intent_until,
+            category = excluded.category,
             updated_at = strftime('%s','now')",
         rusqlite::params![
             &client_id,
@@ -586,6 +606,7 @@ pub async fn api_profile_set(
             if open_contact { 1 } else { 0 },
             intent_text,
             intent_until,
+            category,
         ],
     );
 

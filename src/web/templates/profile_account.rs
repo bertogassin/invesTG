@@ -773,6 +773,9 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
     const intent =
         document.getElementById("profile-intent");
 
+    const categoryInput =
+        document.getElementById("profile-category");
+
     const duration =
         document.getElementById("profile-duration");
 
@@ -787,6 +790,7 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
         saveButton &&
         openContact &&
         intent &&
+        categoryInput &&
         duration
     ) {{
         saveButton.addEventListener(
@@ -822,7 +826,8 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
                                         Number(
                                             duration.value
                                         )
-                                }})
+                                },
+                        category: categoryInput.value.trim()})
                             }}
                         );
 
