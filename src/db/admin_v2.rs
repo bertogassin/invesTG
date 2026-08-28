@@ -3,7 +3,8 @@ use std::path::Path;
 use std::time::Duration;
 
 const ADMIN_V2_FOUNDATION_VERSION: i64 = 1;
-pub const ADMIN_V2_SCHEMA_VERSION: i64 = 2;
+const ADMIN_V2_OWNER_STEP_UP_VERSION: i64 = 2;
+pub const ADMIN_V2_SCHEMA_VERSION: i64 = 3;
 pub const INITIAL_OWNER_USER_ID: i64 = 8_775_621_311;
 
 const ADMIN_V2_SCHEMA: &str = r#"
@@ -366,6 +367,14 @@ fn initialize_connection(connection: &mut Connection, owner_user_id: i64) -> rus
     transaction.execute(
         "INSERT OR IGNORE INTO schema_migrations (version, name)
          VALUES (?1, 'admin_v2_owner_step_up')",
+        params![ADMIN_V2_OWNER_STEP_UP_VERSION],
+    )?;
+
+    seed_geographic_hierarchy(&transaction)?;
+
+    transaction.execute(
+        "INSERT OR IGNORE INTO schema_migrations (version, name)
+         VALUES (?1, 'admin_v2_geographic_hierarchy')",
         params![ADMIN_V2_SCHEMA_VERSION],
     )?;
 
@@ -413,6 +422,135 @@ fn seed_world_scope(transaction: &Transaction<'_>) -> rusqlite::Result<()> {
             updated_at = strftime('%s','now')",
         [],
     )?;
+
+    Ok(())
+}
+
+fn seed_geographic_hierarchy(transaction: &Transaction<'_>) -> rusqlite::Result<()> {
+    let world_scope_id: i64 = transaction.query_row(
+        "SELECT id
+         FROM geographic_scopes
+         WHERE scope_type = 'world'
+           AND external_key = 'world'",
+        [],
+        |row| row.get(0),
+    )?;
+
+    for (continent_index, (continent, countries)) in crate::geography::world().iter().enumerate() {
+        let continent_key = format!("continent:{continent_index}");
+
+        transaction.execute(
+            "INSERT INTO geographic_scopes (
+                scope_type,
+                parent_scope_id,
+                external_key,
+                display_name,
+                is_active
+             )
+             VALUES ('continent', ?1, ?2, ?3, 1)
+             ON CONFLICT(scope_type, external_key)
+             DO UPDATE SET
+                parent_scope_id = excluded.parent_scope_id,
+                display_name = excluded.display_name,
+                is_active = 1,
+                updated_at = strftime('%s','now')",
+            params![world_scope_id, continent_key, continent],
+        )?;
+
+        let continent_scope_id: i64 = transaction.query_row(
+            "SELECT id
+                 FROM geographic_scopes
+                 WHERE scope_type = 'continent'
+                   AND external_key = ?1",
+            params![continent_key],
+            |row| row.get(0),
+        )?;
+
+        for (country_index, (country, cities)) in countries.iter().enumerate() {
+            let country_key = format!("country:{continent_index}:{country_index}");
+
+            transaction.execute(
+                "INSERT INTO geographic_scopes (
+                    scope_type,
+                    parent_scope_id,
+                    external_key,
+                    display_name,
+                    is_active
+                 )
+                 VALUES ('country', ?1, ?2, ?3, 1)
+                 ON CONFLICT(scope_type, external_key)
+                 DO UPDATE SET
+                    parent_scope_id = excluded.parent_scope_id,
+                    display_name = excluded.display_name,
+                    is_active = 1,
+                    updated_at = strftime('%s','now')",
+                params![continent_scope_id, country_key, country],
+            )?;
+
+            let country_scope_id: i64 = transaction.query_row(
+                "SELECT id
+                     FROM geographic_scopes
+                     WHERE scope_type = 'country'
+                       AND external_key = ?1",
+                params![country_key],
+                |row| row.get(0),
+            )?;
+
+            for (city_index, city) in cities.iter().enumerate() {
+                let city_key = format!("city:{continent_index}:{country_index}:{city_index}");
+
+                transaction.execute(
+                    "INSERT INTO geographic_scopes (
+                        scope_type,
+                        parent_scope_id,
+                        external_key,
+                        display_name,
+                        is_active
+                     )
+                     VALUES ('city', ?1, ?2, ?3, 1)
+                     ON CONFLICT(scope_type, external_key)
+                     DO UPDATE SET
+                        parent_scope_id = excluded.parent_scope_id,
+                        display_name = excluded.display_name,
+                        is_active = 1,
+                        updated_at = strftime('%s','now')",
+                    params![country_scope_id, city_key, city],
+                )?;
+
+                let city_scope_id: i64 = transaction.query_row(
+                    "SELECT id
+                         FROM geographic_scopes
+                         WHERE scope_type = 'city'
+                           AND external_key = ?1",
+                    params![city_key],
+                    |row| row.get(0),
+                )?;
+
+                let group_key =
+                    format!("group:{continent_index}:{country_index}:{city_index}:main");
+
+                let group_name = format!("Городская группа · {city}");
+
+                transaction.execute(
+                    "INSERT INTO geographic_scopes (
+                        scope_type,
+                        parent_scope_id,
+                        external_key,
+                        display_name,
+                        is_active
+                     )
+                     VALUES ('group', ?1, ?2, ?3, 1)
+                     ON CONFLICT(scope_type, external_key)
+                     DO UPDATE SET
+                        parent_scope_id = excluded.parent_scope_id,
+                        display_name = excluded.display_name,
+                        is_active = 1,
+                        updated_at = strftime('%s','now')",
+                    params![city_scope_id, group_key, group_name],
+                )?;
+            }
+        }
+    }
 
     Ok(())
 }
@@ -651,5 +789,42 @@ mod tests {
 
         assert_eq!(table_count, 1);
         assert_eq!(version, ADMIN_V2_SCHEMA_VERSION);
+    }
+
+    #[test]
+    fn migration_seeds_geographic_hierarchy() {
+        let mut connection = test_connection();
+
+        initialize_connection(&mut connection, INITIAL_OWNER_USER_ID).expect("geography migration");
+
+        let counts = ["world", "continent", "country", "city", "group"].map(|scope_type| {
+            connection
+                .query_row(
+                    "SELECT COUNT(*)
+                     FROM geographic_scopes
+                     WHERE scope_type = ?1
+                       AND is_active = 1",
+                    params![scope_type],
+                    |row| row.get::<_, i64>(0),
+                )
+                .expect("scope count")
+        });
+
+        assert_eq!(counts, [1, 1, 3, 13, 13]);
+
+        let nice_parent: String = connection
+            .query_row(
+                "SELECT parent.display_name
+                 FROM geographic_scopes AS city
+                 JOIN geographic_scopes AS parent
+                   ON parent.id = city.parent_scope_id
+                 WHERE city.scope_type = 'city'
+                   AND city.display_name = 'Ницца'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("Nice parent");
+
+        assert_eq!(nice_parent, "Франция");
     }
 }

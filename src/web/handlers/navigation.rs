@@ -145,7 +145,7 @@ pub async fn app_search(
 
         let mut location_matches: Vec<(usize, usize, usize)> = Vec::new();
 
-        let world_data = templates::world();
+        let world_data = crate::geography::world();
 
         for (ci, (_, countries)) in world_data.iter().enumerate() {
             for (si, (country, cities)) in countries.iter().enumerate() {

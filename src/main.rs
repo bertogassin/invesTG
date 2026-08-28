@@ -2,6 +2,7 @@ use std::env;
 
 mod bot;
 mod db;
+mod geography;
 mod state;
 mod utils;
 mod web;

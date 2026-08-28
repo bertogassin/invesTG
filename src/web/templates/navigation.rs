@@ -2,26 +2,7 @@ use super::common::{
     bottom_nav, empty_state_card, escape_html, icon, navigation_card, page_document, page_shell,
     people_result_card, resource_result_card, search_form_hero, section_head, simple_hero, topbar,
 };
-use std::collections::BTreeMap;
-
-pub fn world() -> BTreeMap<&'static str, BTreeMap<&'static str, Vec<&'static str>>> {
-    let mut w = BTreeMap::new();
-
-    let mut eu = BTreeMap::new();
-
-    eu.insert(
-        "Франция",
-        vec!["Париж", "Марсель", "Лион", "Тулуза", "Ницца"],
-    );
-
-    eu.insert("Германия", vec!["Берлин", "Гамбург", "Мюнхен", "Кёльн"]);
-
-    eu.insert("Италия", vec!["Рим", "Милан", "Неаполь", "Турин"]);
-
-    w.insert("Европа", eu);
-
-    w
-}
+use crate::geography::world;
 
 // ============================================================
 // LUCIDE SVG
