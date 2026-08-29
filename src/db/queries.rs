@@ -482,6 +482,64 @@ pub fn init_db() -> Result<Connection> {
         [],
     )?;
 
+    // Chat V4 durable message identity and mutation schema.
+    //
+    // These additive migrations remain safe for existing
+    // production databases.
+    let _ = conn.execute(
+        "ALTER TABLE messages
+         ADD COLUMN reply_to_message_id INTEGER",
+        [],
+    );
+
+    let _ = conn.execute(
+        "ALTER TABLE messages
+         ADD COLUMN edited_at INTEGER NOT NULL DEFAULT 0",
+        [],
+    );
+
+    let _ = conn.execute(
+        "ALTER TABLE messages
+         ADD COLUMN deleted_at INTEGER NOT NULL DEFAULT 0",
+        [],
+    );
+
+    let _ = conn.execute(
+        "ALTER TABLE messages
+         ADD COLUMN client_message_id TEXT NOT NULL DEFAULT ''",
+        [],
+    );
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_messages_chat_reply
+         ON messages(
+             conversation_id,
+             reply_to_message_id
+         )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_messages_chat_owner
+         ON messages(
+             conversation_id,
+             sender_user_id,
+             id
+         )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS
+             idx_messages_client_identity
+         ON messages(
+             sender_user_id,
+             client_message_id
+         )
+         WHERE client_message_id <> ''",
+        [],
+    )?;
+
     // BOT B3.5A — additive persistent security storage.
     crate::db::security::init_security_schema(&conn)?;
 

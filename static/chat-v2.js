@@ -77,6 +77,47 @@
         var pollTimer = null;
         var draftKey =
             "resursmap-chat-draft:" + otherUserId;
+        var pendingSendKey =
+            "resursmap-chat-pending:" + otherUserId;
+        var pendingSend = null;
+
+        function createClientMessageId() {
+            if (
+                window.crypto &&
+                typeof window.crypto.randomUUID ===
+                    "function"
+            ) {
+                return window.crypto.randomUUID();
+            }
+
+            return (
+                "fallback_" +
+                Date.now().toString(36) +
+                "_" +
+                Math.random()
+                    .toString(36)
+                    .slice(2, 14)
+            );
+        }
+
+        function savePendingSend(value) {
+            pendingSend = value;
+
+            try {
+                if (value) {
+                    localStorage.setItem(
+                        pendingSendKey,
+                        JSON.stringify(value)
+                    );
+                } else {
+                    localStorage.removeItem(
+                        pendingSendKey
+                    );
+                }
+            } catch (_) {
+                // Storage may be disabled.
+            }
+        }
 
         function setConnection(text, className) {
             connectionState.textContent = text;
@@ -537,6 +578,21 @@
                 return;
             }
 
+            if (
+                !pendingSend ||
+                pendingSend.message !== message
+            ) {
+                savePendingSend({
+                    clientMessageId:
+                        createClientMessageId(),
+                    message: message,
+                    replyToMessageId:
+                        window.ResursMapChatReply
+                            ? window.ResursMapChatReply.id
+                            : null
+                });
+            }
+
             sending = true;
             sendState.textContent = "Отправка…";
             updateComposer();
@@ -553,11 +609,11 @@
                                 "application/json"
                         },
                         body: JSON.stringify({
-                            message: message,
+                            message: pendingSend.message,
                             reply_to_message_id:
-                                window.ResursMapChatReply
-                                    ? window.ResursMapChatReply.id
-                                    : null
+                                pendingSend.replyToMessageId,
+                            client_message_id:
+                                pendingSend.clientMessageId
                         })
                     }
                 );
@@ -580,6 +636,7 @@
                     )
                 );
 
+                savePendingSend(null);
                 input.value = "";
                 updateComposer();
                 input.focus();
@@ -661,7 +718,13 @@
 
         window.addEventListener(
             "online",
-            pollMessages
+            function () {
+                pollMessages();
+
+                if (pendingSend && !sending) {
+                    sendMessage();
+                }
+            }
         );
 
         document.addEventListener(
@@ -687,8 +750,29 @@
         try {
             input.value =
                 localStorage.getItem(draftKey) || "";
+
+            var storedPending =
+                localStorage.getItem(pendingSendKey);
+
+            if (storedPending) {
+                var parsedPending =
+                    JSON.parse(storedPending);
+
+                if (
+                    parsedPending &&
+                    typeof parsedPending.message ===
+                        "string" &&
+                    typeof parsedPending
+                        .clientMessageId === "string"
+                ) {
+                    pendingSend = parsedPending;
+                    input.value =
+                        parsedPending.message;
+                }
+            }
         } catch (_) {
             input.value = "";
+            pendingSend = null;
         }
 
         loadOlder.hidden = !mayHaveOlder;
@@ -703,6 +787,13 @@
         );
 
         window.setTimeout(pollMessages, 500);
+
+        if (
+            pendingSend &&
+            navigator.onLine !== false
+        ) {
+            window.setTimeout(sendMessage, 700);
+        }
     });
 })();
 

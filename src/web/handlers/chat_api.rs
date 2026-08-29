@@ -25,6 +25,7 @@ pub struct ChatMessagesQuery {
 pub struct ChatSendPayload {
     message: String,
     reply_to_message_id: Option<i64>,
+    client_message_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -73,6 +74,13 @@ fn normalized_limit(value: Option<i64>) -> i64 {
 
 fn message_is_valid(message: &str) -> bool {
     input_text_is_valid(message, 1, 2000)
+}
+
+fn client_message_id_is_valid(value: &str) -> bool {
+    (16..=80).contains(&value.len())
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
 }
 
 fn conversation_id(
@@ -435,6 +443,12 @@ pub async fn api_chat_send(
 
     let message = payload.message.trim();
 
+    let client_message_id = payload.client_message_id.as_deref().unwrap_or("").trim();
+
+    if !client_message_id.is_empty() && !client_message_id_is_valid(client_message_id) {
+        return json_error(StatusCode::BAD_REQUEST, "invalid_client_message_id");
+    }
+
     if !message_is_valid(message) {
         return json_error(StatusCode::BAD_REQUEST, "invalid_message");
     }
@@ -467,6 +481,55 @@ pub async fn api_chat_send(
             return json_error(StatusCode::FORBIDDEN, "conversation_not_open");
         }
     };
+
+    if !client_message_id.is_empty() {
+        let existing: Option<(i64, String, i64, i64, i64)> = connection
+            .query_row(
+                "SELECT
+                    id,
+                    message,
+                    delivered_at,
+                    read_at,
+                    created_at
+                 FROM messages
+                 WHERE sender_user_id = ?1
+                   AND client_message_id = ?2
+                 LIMIT 1",
+                rusqlite::params![user_id, client_message_id],
+                |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                    ))
+                },
+            )
+            .ok();
+
+        if let Some((existing_id, existing_message, delivered_at, read_at, created_at)) = existing {
+            return (
+                StatusCode::OK,
+                Json(json!({
+                    "ok": true,
+                    "duplicate": true,
+                    "message": {
+                        "id": existing_id,
+                        "sender_user_id": user_id,
+                        "message": existing_message,
+                        "is_mine": true,
+                        "delivered_at": delivered_at,
+                        "read_at": read_at,
+                        "created_at": created_at,
+                        "client_message_id":
+                            client_message_id
+                    }
+                })),
+            )
+                .into_response();
+        }
+    }
 
     let reply_to_message_id = match payload.reply_to_message_id {
         Some(reply_id) if reply_id > 0 => {
@@ -514,12 +577,20 @@ pub async fn api_chat_send(
                 delivered_at,
                 read_at,
                 created_at,
-                reply_to_message_id
+                reply_to_message_id,
+                client_message_id
              )
              VALUES (
-                ?1, ?2, ?3, 0, 0, 0, ?4, ?5
+                ?1, ?2, ?3, 0, 0, 0, ?4, ?5, ?6
              )",
-            rusqlite::params![conversation_id, user_id, message, now, reply_to_message_id],
+            rusqlite::params![
+                conversation_id,
+                user_id,
+                message,
+                now,
+                reply_to_message_id,
+                client_message_id
+            ],
         )
         .unwrap_or(0)
         != 1
@@ -896,10 +967,22 @@ mod tests {
     }
 
     #[test]
+    fn client_message_identity_is_strict() {
+        assert!(client_message_id_is_valid(
+            "018f7f43-9f52-7d20-a612-4f006c663f10"
+        ));
+        assert!(client_message_id_is_valid("fallback_1234567890"));
+        assert!(!client_message_id_is_valid(""));
+        assert!(!client_message_id_is_valid("short"));
+        assert!(!client_message_id_is_valid("identity with spaces"));
+    }
+
+    #[test]
     fn lifecycle_cursor_rules_are_stable() {
         let payload = ChatSendPayload {
             message: "Ответ".to_string(),
             reply_to_message_id: Some(42),
+            client_message_id: None,
         };
 
         assert_eq!(payload.reply_to_message_id, Some(42));
