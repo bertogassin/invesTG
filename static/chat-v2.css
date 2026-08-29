@@ -987,3 +987,123 @@ body:has(#chat-form) main {
             )!important;
     }
 }
+
+/* Chat UI V3.3 performance and overlap fix */
+:root {
+    --chat-composer-height:112px;
+}
+
+.chat-shell {
+    height:
+        max(
+            440px,
+            calc(
+                var(--chat-viewport-height, 100vh)
+                - 270px
+            )
+        )!important;
+    min-height:0!important;
+    max-height:none!important;
+    contain:layout paint;
+}
+
+#chat-messages {
+    height:100%!important;
+    min-height:0!important;
+    max-height:none!important;
+    flex:1 1 0!important;
+    overflow-y:auto!important;
+    overflow-x:hidden!important;
+    padding-bottom:
+        calc(
+            var(--chat-composer-height)
+            + 38px
+            + env(safe-area-inset-bottom)
+        )!important;
+    scroll-padding-bottom:
+        calc(
+            var(--chat-composer-height)
+            + 38px
+            + env(safe-area-inset-bottom)
+        );
+    -webkit-overflow-scrolling:touch;
+    overscroll-behavior-y:contain;
+    touch-action:pan-y;
+}
+
+#chat-end {
+    display:block;
+    width:100%;
+    height:
+        calc(
+            var(--chat-composer-height)
+            + 28px
+            + env(safe-area-inset-bottom)
+        );
+    flex:0 0 auto;
+    pointer-events:none;
+}
+
+#chat-form.chat-composer {
+    transition:
+        border-color .16s ease,
+        box-shadow .16s ease!important;
+    will-change:auto;
+    contain:layout style;
+}
+
+.chat-message-row {
+    contain:layout style;
+}
+
+.chat-bubble {
+    content-visibility:auto;
+    contain-intrinsic-size:auto 72px;
+}
+
+body.chat-overlay-open #chat-form.chat-composer {
+    pointer-events:none;
+}
+
+@media (max-width:540px) {
+    .chat-shell {
+        height:
+            max(
+                460px,
+                calc(
+                    var(--chat-viewport-height, 100vh)
+                    - 225px
+                )
+            )!important;
+    }
+
+    #chat-messages {
+        padding-bottom:
+            calc(
+                var(--chat-composer-height)
+                + 46px
+                + env(safe-area-inset-bottom)
+            )!important;
+        scroll-padding-bottom:
+            calc(
+                var(--chat-composer-height)
+                + 46px
+                + env(safe-area-inset-bottom)
+            );
+    }
+
+    #chat-end {
+        height:
+            calc(
+                var(--chat-composer-height)
+                + 38px
+                + env(safe-area-inset-bottom)
+            );
+    }
+}
+
+@media (prefers-reduced-motion:reduce) {
+    #chat-messages {
+        scroll-behavior:auto!important;
+    }
+}

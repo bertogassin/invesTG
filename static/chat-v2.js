@@ -172,8 +172,8 @@
         }
 
         function scrollToBottom(behavior) {
-            historyEnd.scrollIntoView({
-                block: "end",
+            history.scrollTo({
+                top: history.scrollHeight,
                 behavior: behavior || "auto"
             });
         }
@@ -662,11 +662,8 @@
         if (window.visualViewport) {
             window.visualViewport.addEventListener(
                 "resize",
-                updateViewportHeight
-            );
-            window.visualViewport.addEventListener(
-                "scroll",
-                updateViewportHeight
+                updateViewportHeight,
+                { passive: true }
             );
         }
 
@@ -690,7 +687,7 @@
 
         pollTimer = window.setInterval(
             pollMessages,
-            3000
+            4000
         );
 
         window.setTimeout(pollMessages, 500);
@@ -920,6 +917,27 @@
             if (!row) {
                 return;
             }
+
+            var renderSignature = [
+                String(message.message || ""),
+                Number(message.reply_to_message_id || 0),
+                String(message.reply_message || ""),
+                Number(message.edited_at || 0),
+                Number(message.deleted_at || 0),
+                Number(message.read_at || 0),
+                Number(message.delivered_at || 0)
+            ].join("|");
+
+            if (
+                row.dataset.renderSignature ===
+                renderSignature
+            ) {
+                messageCache.set(id, message);
+                return;
+            }
+
+            row.dataset.renderSignature =
+                renderSignature;
 
             messageCache.set(id, message);
 
@@ -1361,7 +1379,7 @@
 
         refreshTimer = window.setInterval(
             refreshRecent,
-            9000
+            15000
         );
 
         window.addEventListener(
@@ -1387,6 +1405,40 @@
 
         if (!form) {
             return;
+        }
+
+        function publishComposerHeight() {
+            document.documentElement.style.setProperty(
+                "--chat-composer-height",
+                Math.ceil(
+                    form.getBoundingClientRect().height
+                ) + "px"
+            );
+        }
+
+        publishComposerHeight();
+
+        if ("ResizeObserver" in window) {
+            var composerObserver =
+                new ResizeObserver(
+                    publishComposerHeight
+                );
+
+            composerObserver.observe(form);
+
+            window.addEventListener(
+                "pagehide",
+                function () {
+                    composerObserver.disconnect();
+                },
+                { once: true }
+            );
+        } else {
+            window.addEventListener(
+                "resize",
+                publishComposerHeight,
+                { passive: true }
+            );
         }
 
         // Запрещаем браузеру переходить на сырой JSON/текст
