@@ -1206,7 +1206,7 @@ body:has(#chat-form) main {
 }
 
 #chat-input {
-    padding-right:8px!important;
+    padding-right:42px!important;
     scroll-margin-bottom:150px;
 }
 

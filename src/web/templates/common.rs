@@ -7,7 +7,7 @@ pub fn escape_html(value: &str) -> String {
         .replace('\'', "&#39;")
 }
 
-pub const STATIC_ASSET_VERSION: &str = "4.8.0";
+pub const STATIC_ASSET_VERSION: &str = "4.8.1";
 
 pub fn static_asset(path: &str) -> String {
     let normalized = if path.starts_with("/static/") {

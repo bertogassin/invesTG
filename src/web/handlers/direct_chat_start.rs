@@ -265,13 +265,13 @@ pub async fn api_start_direct_chat(
                 created_at
              )
              VALUES (
-                ?1, NULL,
+                ?1, ?2,
                 'chat_message',
                 'Новое сообщение',
                 'Вам написал участник ResursMap.',
-                0, ?2
+                0, ?3
              )",
-            rusqlite::params![receiver_user_id, now],
+            rusqlite::params![receiver_user_id, sender_user_id, now],
         );
     }
 

@@ -102,15 +102,6 @@ pub async fn messages_page(State(state): State<AppState>, headers: HeaderMap) ->
         })
         .unwrap_or_else(|_| vec![]);
 
-    let _ = db.execute(
-        "UPDATE user_notifications
-         SET is_read = 1
-         WHERE user_id = ?1
-           AND kind = 'chat_message'
-           AND is_read = 0",
-        rusqlite::params![user_id],
-    );
-
     drop(db);
 
     Html(templates::render_messages(true, conversations))
@@ -151,6 +142,13 @@ pub async fn chat_page(
             return Html("<h1>503</h1><p>База данных временно недоступна.</p>".to_string());
         }
     };
+
+    let _ = db.execute(
+        "UPDATE profiles
+         SET last_seen_at = strftime('%s','now')
+         WHERE user_id = ?1",
+        rusqlite::params![user_id],
+    );
 
     let conversation_id: Option<i64> = db
         .query_row(
@@ -263,50 +261,17 @@ pub async fn chat_page(
         })
         .unwrap_or_default();
 
-    let read_through_id: i64 = db
-        .query_row(
-            "SELECT COALESCE(MAX(id), 0)
-             FROM messages
-             WHERE conversation_id = ?1
-               AND sender_user_id = ?2
-               AND is_read = 0",
-            rusqlite::params![conversation_id, other_user_id],
-            |row| row.get(0),
-        )
-        .unwrap_or(0);
-
-    let read_changed = db
-        .execute(
-        "UPDATE messages
-         SET is_read = 1,
-             delivered_at = CASE
-                 WHEN delivered_at = 0
-                 THEN strftime('%s','now')
-                 ELSE delivered_at
-             END,
-             read_at = CASE
-                 WHEN read_at = 0
-                 THEN strftime('%s','now')
-                 ELSE read_at
-             END
-         WHERE conversation_id = ?1
-           AND sender_user_id = ?2
-           AND is_read = 0",
-        rusqlite::params![conversation_id, other_user_id,],
-    )
-        .unwrap_or(0);
+    let _ = db.execute(
+        "UPDATE user_notifications
+         SET is_read = 1
+         WHERE user_id = ?1
+           AND kind = 'chat_message'
+           AND is_read = 0
+           AND resource_id = ?2",
+        rusqlite::params![user_id, other_user_id],
+    );
 
     drop(db);
-
-    if read_changed > 0 && read_through_id > 0 {
-        state.publish_chat_event(
-            "message.read",
-            conversation_id,
-            read_through_id,
-            user_id,
-            other_user_id,
-        );
-    }
 
     Html(templates::render_chat(
         true,
@@ -480,14 +445,14 @@ pub async fn send_chat_message(
                  )
                  VALUES (
                     ?1,
-                    NULL,
+                    ?2,
                     'chat_message',
                     'Новое сообщение',
                     'У вас новое сообщение в ResursMap.',
                     0,
                     strftime('%s','now')
                  )",
-                rusqlite::params![other_user_id],
+                rusqlite::params![other_user_id, user_id],
             );
 
             // Отправим уведомление в Telegram, если привязан

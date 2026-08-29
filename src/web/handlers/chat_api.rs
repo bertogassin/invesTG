@@ -19,6 +19,8 @@ pub struct ChatMessagesQuery {
     before_id: Option<i64>,
     after_id: Option<i64>,
     limit: Option<i64>,
+    mark_read: Option<bool>,
+    read_through_id: Option<i64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -105,6 +107,82 @@ fn conversation_id(
         .ok()
 }
 
+fn touch_profile_last_seen(connection: &rusqlite::Connection, user_id: i64) {
+    let now = crate::web::handlers::common::unix_now();
+
+    let _ = connection.execute(
+        "UPDATE profiles
+         SET last_seen_at = ?1
+         WHERE user_id = ?2",
+        rusqlite::params![now, user_id],
+    );
+}
+
+fn load_api_message_by_id(
+    connection: &rusqlite::Connection,
+    conversation_id: i64,
+    message_id: i64,
+    user_id: i64,
+) -> Option<ChatApiMessage> {
+    connection
+        .query_row(
+            "SELECT
+                messages.id,
+                messages.sender_user_id,
+                messages.message,
+                messages.delivered_at,
+                messages.read_at,
+                messages.created_at,
+                messages.reply_to_message_id,
+                (
+                    SELECT reply.sender_user_id
+                    FROM messages AS reply
+                    WHERE reply.id =
+                        messages.reply_to_message_id
+                      AND reply.conversation_id =
+                        messages.conversation_id
+                ),
+                COALESCE((
+                    SELECT CASE
+                        WHEN reply.deleted_at > 0
+                        THEN 'Сообщение удалено'
+                        ELSE reply.message
+                    END
+                    FROM messages AS reply
+                    WHERE reply.id =
+                        messages.reply_to_message_id
+                      AND reply.conversation_id =
+                        messages.conversation_id
+                ), ''),
+                messages.edited_at,
+                messages.deleted_at,
+                COALESCE(messages.client_message_id, '')
+             FROM messages
+             WHERE messages.id = ?1
+               AND messages.conversation_id = ?2
+             LIMIT 1",
+            rusqlite::params![message_id, conversation_id],
+            |row| {
+                Ok(ChatApiMessage {
+                    id: row.get(0)?,
+                    sender_user_id: row.get(1)?,
+                    message: row.get(2)?,
+                    is_mine: row.get::<_, i64>(1)? == user_id,
+                    delivered_at: row.get(3)?,
+                    read_at: row.get(4)?,
+                    created_at: row.get(5)?,
+                    reply_to_message_id: row.get(6)?,
+                    reply_sender_user_id: row.get(7)?,
+                    reply_message: row.get(8)?,
+                    edited_at: row.get(9)?,
+                    deleted_at: row.get(10)?,
+                    client_message_id: row.get(11)?,
+                })
+            },
+        )
+        .ok()
+}
+
 fn json_error(status: StatusCode, error: &str) -> Response {
     (
         status,
@@ -151,6 +229,8 @@ pub async fn api_chat_messages(
             return json_error(StatusCode::SERVICE_UNAVAILABLE, "database_unavailable");
         }
     };
+
+    touch_profile_last_seen(&connection, user_id);
 
     let conversation_id = match conversation_id(&connection, user_id, other_user_id) {
         Some(conversation_id) => conversation_id,
@@ -369,38 +449,46 @@ pub async fn api_chat_messages(
     }
 
     let latest_visible_id = messages.iter().map(|message| message.id).max().unwrap_or(0);
+    let should_mark_read = query.mark_read.unwrap_or(false);
 
-    if latest_visible_id > 0 {
-        let now = crate::web::handlers::common::unix_now();
+    if should_mark_read {
+        let read_through_id = query
+            .read_through_id
+            .filter(|value| *value > 0)
+            .unwrap_or(latest_visible_id);
 
-        let read_changed = connection
-            .execute(
-                "UPDATE messages
-                 SET is_read = 1,
-                     delivered_at = CASE
-                         WHEN delivered_at = 0 THEN ?4
-                         ELSE delivered_at
-                     END,
-                     read_at = CASE
-                         WHEN read_at = 0 THEN ?4
-                         ELSE read_at
-                     END
-                 WHERE conversation_id = ?1
-                   AND sender_user_id = ?2
-                   AND id <= ?3
-                   AND read_at = 0",
-                rusqlite::params![conversation_id, other_user_id, latest_visible_id, now],
-            )
-            .unwrap_or(0);
+        if read_through_id > 0 {
+            let now = crate::web::handlers::common::unix_now();
 
-        if read_changed > 0 {
-            state.publish_chat_event(
-                "message.read",
-                conversation_id,
-                latest_visible_id,
-                user_id,
-                other_user_id,
-            );
+            let read_changed = connection
+                .execute(
+                    "UPDATE messages
+                     SET is_read = 1,
+                         delivered_at = CASE
+                             WHEN delivered_at = 0 THEN ?4
+                             ELSE delivered_at
+                         END,
+                         read_at = CASE
+                             WHEN read_at = 0 THEN ?4
+                             ELSE read_at
+                         END
+                     WHERE conversation_id = ?1
+                       AND sender_user_id = ?2
+                       AND id <= ?3
+                       AND read_at = 0",
+                    rusqlite::params![conversation_id, other_user_id, read_through_id, now],
+                )
+                .unwrap_or(0);
+
+            if read_changed > 0 {
+                state.publish_chat_event(
+                    "message.read",
+                    conversation_id,
+                    read_through_id,
+                    user_id,
+                    other_user_id,
+                );
+            }
         }
     }
 
@@ -491,51 +579,32 @@ pub async fn api_chat_send(
     };
 
     if !client_message_id.is_empty() {
-        let existing: Option<(i64, String, i64, i64, i64)> = connection
+        let existing_id: Option<i64> = connection
             .query_row(
-                "SELECT
-                    id,
-                    message,
-                    delivered_at,
-                    read_at,
-                    created_at
+                "SELECT id
                  FROM messages
                  WHERE sender_user_id = ?1
                    AND client_message_id = ?2
                  LIMIT 1",
                 rusqlite::params![user_id, client_message_id],
-                |row| {
-                    Ok((
-                        row.get(0)?,
-                        row.get(1)?,
-                        row.get(2)?,
-                        row.get(3)?,
-                        row.get(4)?,
-                    ))
-                },
+                |row| row.get(0),
             )
             .ok();
 
-        if let Some((existing_id, existing_message, delivered_at, read_at, created_at)) = existing {
-            return (
-                StatusCode::OK,
-                Json(json!({
-                    "ok": true,
-                    "duplicate": true,
-                    "message": {
-                        "id": existing_id,
-                        "sender_user_id": user_id,
-                        "message": existing_message,
-                        "is_mine": true,
-                        "delivered_at": delivered_at,
-                        "read_at": read_at,
-                        "created_at": created_at,
-                        "client_message_id":
-                            client_message_id
-                    }
-                })),
-            )
-                .into_response();
+        if let Some(existing_id) = existing_id {
+            if let Some(message) =
+                load_api_message_by_id(&connection, conversation_id, existing_id, user_id)
+            {
+                return (
+                    StatusCode::OK,
+                    Json(json!({
+                        "ok": true,
+                        "duplicate": true,
+                        "message": message
+                    })),
+                )
+                    .into_response();
+            }
         }
     }
 
@@ -630,8 +699,9 @@ pub async fn api_chat_send(
              SET created_at = ?2
              WHERE user_id = ?1
                AND kind = 'chat_message'
-               AND is_read = 0",
-            rusqlite::params![other_user_id, now],
+               AND is_read = 0
+               AND (resource_id = ?3 OR resource_id IS NULL)",
+            rusqlite::params![other_user_id, now, user_id],
         )
         .unwrap_or(0);
 
@@ -650,12 +720,12 @@ pub async fn api_chat_send(
                     created_at
                  )
                  VALUES (
-                    ?1, NULL, 'chat_message',
+                    ?1, ?2, 'chat_message',
                     'Новое сообщение',
                     'У вас новое сообщение в ResursMap.',
-                    0, ?2
+                    0, ?3
                  )",
-                rusqlite::params![other_user_id, now],
+                rusqlite::params![other_user_id, user_id, now],
             )
             .unwrap_or(0)
             != 1
@@ -962,6 +1032,8 @@ pub async fn api_chat_peer(
             return json_error(StatusCode::SERVICE_UNAVAILABLE, "database_unavailable");
         }
     };
+
+    touch_profile_last_seen(&connection, user_id);
 
     let conversation_open = conversation_id(&connection, user_id, other_user_id).is_some();
 

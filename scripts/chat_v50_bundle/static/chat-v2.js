@@ -413,6 +413,35 @@
             scrollBottomButton.hidden = nearBottom();
         }
 
+        var markReadTimer = null;
+
+        function markReadAtBottomDebounced() {
+            if (!nearBottom() || lastMessageId <= 0) {
+                return;
+            }
+
+            if (markReadTimer) {
+                window.clearTimeout(markReadTimer);
+            }
+
+            markReadTimer = window.setTimeout(function () {
+                fetchJson(
+                    "/api/chat/" +
+                    otherUserId +
+                    "/messages?limit=1&mark_read=1&read_through_id=" +
+                    lastMessageId
+                )
+                    .then(function (data) {
+                        updateReadStatuses(
+                            Number(data.peer_read_through_id || 0)
+                        );
+                    })
+                    .catch(function () {
+                        // Best-effort read sync.
+                    });
+            }, 350);
+        }
+
         function scrollToBottom(behavior) {
             history.scrollTo({
                 top: history.scrollHeight,
@@ -821,12 +850,20 @@
             polling = true;
 
             try {
+                var markReadQuery = nearBottom()
+                    ? (
+                        "&mark_read=1&read_through_id=" +
+                        Math.max(lastMessageId, 0)
+                    )
+                    : "&mark_read=0";
+
                 var data = await fetchJson(
                     "/api/chat/" +
                     otherUserId +
                     "/messages?after_id=" +
                     Math.max(lastMessageId, 0) +
-                    "&limit=100"
+                    "&limit=100" +
+                    markReadQuery
                 );
 
                 appendMessages(data.messages || []);
@@ -977,8 +1014,18 @@
                         }
                     );
                     if (data.message) {
-                        data.message.reply_message = item.replyMessage || "";
-                        data.message.reply_sender_user_id = item.replySenderUserId || null;
+                        if (
+                            !data.message.reply_to_message_id &&
+                            item.replyToMessageId
+                        ) {
+                            data.message.reply_to_message_id =
+                                item.replyToMessageId;
+                        }
+
+                        data.message.reply_message =
+                            item.replyMessage || "";
+                        data.message.reply_sender_user_id =
+                            item.replySenderUserId || null;
                     }
                     clearItemRetryTimer(item.clientMessageId);
                     removePendingRow(item.clientMessageId);
@@ -1135,7 +1182,10 @@
 
         history.addEventListener(
             "scroll",
-            updateScrollBottomButton,
+            function () {
+                updateScrollBottomButton();
+                markReadAtBottomDebounced();
+            },
             { passive: true }
         );
 
@@ -1182,6 +1232,18 @@
             "resursmap:chat-realtime-sync",
             function () {
                 pollMessages(true);
+            }
+        );
+
+        document.addEventListener(
+            "resursmap:chat-sync-messages",
+            function (event) {
+                var detail = event.detail || {};
+
+                appendMessages(detail.messages || []);
+                updateReadStatuses(
+                    Number(detail.peer_read_through_id || 0)
+                );
             }
         );
 
@@ -1282,6 +1344,13 @@
             30000
         );
 
+        var safetyPollTimer = window.setInterval(
+            function () {
+                pollMessages(true);
+            },
+            120000
+        );
+
         presenceTimer = window.setInterval(
             refreshPeerPresence,
             45000
@@ -1291,6 +1360,7 @@
             "pagehide",
             function () {
                 window.clearInterval(pollTimer);
+                window.clearInterval(safetyPollTimer);
                 window.clearInterval(presenceTimer);
 
                 if (typingStopTimer) {
@@ -1304,6 +1374,7 @@
         window.setTimeout(refreshPeerPresence, 400);
 
         window.setTimeout(pollMessages, 500);
+        window.setTimeout(markReadAtBottomDebounced, 700);
 
         renderPendingQueue();
 
@@ -1772,9 +1843,24 @@
             return requestJson(
                 "/api/chat/" +
                 otherUserId +
-                "/messages?limit=100"
+                "/messages?limit=100&mark_read=0"
             )
                 .then(function (data) {
+                    document.dispatchEvent(
+                        new CustomEvent(
+                            "resursmap:chat-sync-messages",
+                            {
+                                detail: {
+                                    messages: data.messages || [],
+                                    peer_read_through_id:
+                                        Number(
+                                            data.peer_read_through_id || 0
+                                        )
+                                }
+                            }
+                        )
+                    );
+
                     (data.messages || []).forEach(
                         renderMessage
                     );
@@ -1917,6 +2003,14 @@
                 );
 
                 if (!row) {
+                    return;
+                }
+
+                if (
+                    event.target.closest(
+                        ".chat-message-meta, .chat-message-status"
+                    )
+                ) {
                     return;
                 }
 
@@ -2212,28 +2306,6 @@
                 event.preventDefault();
             },
             true
-        );
-
-        window.addEventListener(
-            "error",
-            function () {
-                if (state) {
-                    state.textContent =
-                        "Переподключение…";
-                    state.classList.add("is-error");
-                }
-            }
-        );
-
-        window.addEventListener(
-            "unhandledrejection",
-            function () {
-                if (state) {
-                    state.textContent =
-                        "Связь восстанавливается…";
-                    state.classList.add("is-error");
-                }
-            }
         );
     }
 

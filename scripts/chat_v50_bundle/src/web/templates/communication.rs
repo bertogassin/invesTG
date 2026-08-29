@@ -354,6 +354,33 @@ pub fn render_contact_requests(
 // TASK 7.22G-C — MESSAGES LIST
 // ============================================================
 
+fn format_inbox_time(updated_at: i64) -> String {
+    if updated_at <= 0 {
+        return String::new();
+    }
+
+    let paris = chrono_tz::Europe::Paris;
+    let datetime = chrono::DateTime::<chrono::Utc>::from_timestamp(updated_at, 0)
+        .map(|dt| dt.with_timezone(&paris));
+
+    let Some(dt) = datetime else {
+        return String::new();
+    };
+
+    let today = chrono::Utc::now().with_timezone(&paris).date_naive();
+    let date = dt.date_naive();
+
+    if date == today {
+        dt.format("%H:%M").to_string()
+    } else if date == today - chrono::Duration::days(1) {
+        "Вчера".to_string()
+    } else if today.signed_duration_since(date).num_days() < 7 {
+        dt.format("%a").to_string()
+    } else {
+        dt.format("%d.%m").to_string()
+    }
+}
+
 pub fn render_messages(
     authenticated: bool,
     conversations: Vec<crate::web::view_models::ConversationRow>,
@@ -421,13 +448,7 @@ pub fn render_messages(
                     let has_last_message = !safe_last_message.is_empty();
 
                     let last_time = if has_last_message {
-                        chrono::DateTime::<chrono::Utc>::from_timestamp(updated_at, 0)
-                            .map(|dt| {
-                                dt.with_timezone(&chrono_tz::Europe::Paris)
-                                    .format("%H:%M")
-                                    .to_string()
-                            })
-                            .unwrap_or_default()
+                        format_inbox_time(updated_at)
                     } else {
                         String::new()
                     };
@@ -635,16 +656,24 @@ fn render_chat_message_row(
 
     let reply_html = if message.reply_to_message_id > 0 {
         let reply_preview = escape_html(&message.reply_message);
+        let reply_author = if message.reply_sender_user_id > 0
+            && message.reply_sender_user_id == message.sender_user_id
+        {
+            "Сообщение"
+        } else {
+            "Ответ"
+        };
 
         format!(
             r#"
         <button type="button"
                 class="chat-reply-quote"
                 data-target-message-id="{reply_to}">
-            <strong>Ответ</strong>
+            <strong>{reply_author}</strong>
             <span>{reply_preview}</span>
         </button>"#,
             reply_to = message.reply_to_message_id,
+            reply_author = reply_author,
             reply_preview = reply_preview,
         )
     } else {
