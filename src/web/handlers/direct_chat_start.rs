@@ -279,6 +279,14 @@ pub async fn api_start_direct_chat(
         return json_error(StatusCode::INTERNAL_SERVER_ERROR, "transaction_failed");
     }
 
+    state.publish_chat_event(
+        "message.created",
+        conversation_id,
+        message_id,
+        sender_user_id,
+        receiver_user_id,
+    );
+
     (
         StatusCode::CREATED,
         Json(json!({

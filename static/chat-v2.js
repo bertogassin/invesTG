@@ -440,10 +440,15 @@
             return data;
         }
 
-        async function pollMessages() {
+        async function pollMessages(force) {
             if (
                 polling ||
-                document.visibilityState === "hidden"
+                document.visibilityState === "hidden" ||
+                (
+                    force !== true &&
+                    document.documentElement.dataset
+                        .chatRealtime === "online"
+                )
             ) {
                 return;
             }
@@ -661,7 +666,9 @@
 
         document.addEventListener(
             "resursmap:chat-realtime-sync",
-            pollMessages
+            function () {
+                pollMessages(true);
+            }
         );
 
         if (window.visualViewport) {
@@ -692,7 +699,7 @@
 
         pollTimer = window.setInterval(
             pollMessages,
-            2500
+            30000
         );
 
         window.setTimeout(pollMessages, 500);
@@ -1384,7 +1391,7 @@
 
         refreshTimer = window.setInterval(
             refreshRecent,
-            10000
+            30000
         );
 
         window.addEventListener(
@@ -1601,6 +1608,10 @@
                 "open",
                 function () {
                     retryAttempt = 0;
+
+                    document.documentElement.dataset
+                        .chatRealtime = "online";
+
                     requestSync();
 
                     heartbeatTimer =
@@ -1648,7 +1659,12 @@
                 "close",
                 function () {
                     clearTimers();
+
+                    delete document.documentElement.dataset
+                        .chatRealtime;
+
                     socket = null;
+                    requestSync();
                     scheduleReconnect();
                 }
             );

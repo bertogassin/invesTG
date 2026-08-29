@@ -357,23 +357,35 @@ pub async fn api_chat_messages(
     if latest_visible_id > 0 {
         let now = crate::web::handlers::common::unix_now();
 
-        let _ = connection.execute(
-            "UPDATE messages
-             SET is_read = 1,
-                 delivered_at = CASE
-                     WHEN delivered_at = 0 THEN ?4
-                     ELSE delivered_at
-                 END,
-                 read_at = CASE
-                     WHEN read_at = 0 THEN ?4
-                     ELSE read_at
-                 END
-             WHERE conversation_id = ?1
-               AND sender_user_id = ?2
-               AND id <= ?3
-               AND read_at = 0",
-            rusqlite::params![conversation_id, other_user_id, latest_visible_id, now],
-        );
+        let read_changed = connection
+            .execute(
+                "UPDATE messages
+                 SET is_read = 1,
+                     delivered_at = CASE
+                         WHEN delivered_at = 0 THEN ?4
+                         ELSE delivered_at
+                     END,
+                     read_at = CASE
+                         WHEN read_at = 0 THEN ?4
+                         ELSE read_at
+                     END
+                 WHERE conversation_id = ?1
+                   AND sender_user_id = ?2
+                   AND id <= ?3
+                   AND read_at = 0",
+                rusqlite::params![conversation_id, other_user_id, latest_visible_id, now],
+            )
+            .unwrap_or(0);
+
+        if read_changed > 0 {
+            state.publish_chat_event(
+                "message.read",
+                conversation_id,
+                latest_visible_id,
+                user_id,
+                other_user_id,
+            );
+        }
     }
 
     let peer_read_through_id: i64 = connection
