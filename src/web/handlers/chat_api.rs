@@ -24,6 +24,7 @@ pub struct ChatMessagesQuery {
 #[derive(Debug, Deserialize)]
 pub struct ChatSendPayload {
     message: String,
+    reply_to_message_id: Option<i64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -47,6 +48,11 @@ struct ChatApiMessage {
     delivered_at: i64,
     read_at: i64,
     created_at: i64,
+    reply_to_message_id: Option<i64>,
+    reply_sender_user_id: Option<i64>,
+    reply_message: String,
+    edited_at: i64,
+    deleted_at: i64,
 }
 
 fn normalized_pair(current_user_id: i64, other_user_id: i64) -> Option<(i64, i64)> {
@@ -152,9 +158,32 @@ pub async fn api_chat_messages(
                     id,
                     sender_user_id,
                     message,
-                    delivered_at,
-                    read_at,
-                    created_at
+                    messages.delivered_at,
+                    messages.read_at,
+                    messages.created_at,
+                    messages.reply_to_message_id,
+                    (
+                        SELECT reply.sender_user_id
+                        FROM messages AS reply
+                        WHERE reply.id =
+                            messages.reply_to_message_id
+                          AND reply.conversation_id =
+                            messages.conversation_id
+                    ),
+                    COALESCE((
+                        SELECT CASE
+                            WHEN reply.deleted_at > 0
+                            THEN 'Сообщение удалено'
+                            ELSE reply.message
+                        END
+                        FROM messages AS reply
+                        WHERE reply.id =
+                            messages.reply_to_message_id
+                          AND reply.conversation_id =
+                            messages.conversation_id
+                    ), ''),
+                    messages.edited_at,
+                    messages.deleted_at
                  FROM messages
                  WHERE conversation_id = ?1
                    AND id < ?2
@@ -174,6 +203,11 @@ pub async fn api_chat_messages(
                                 delivered_at: row.get(3)?,
                                 read_at: row.get(4)?,
                                 created_at: row.get(5)?,
+                                reply_to_message_id: row.get(6)?,
+                                reply_sender_user_id: row.get(7)?,
+                                reply_message: row.get(8)?,
+                                edited_at: row.get(9)?,
+                                deleted_at: row.get(10)?,
                             })
                         },
                     )?
@@ -186,9 +220,32 @@ pub async fn api_chat_messages(
                     id,
                     sender_user_id,
                     message,
-                    delivered_at,
-                    read_at,
-                    created_at
+                    messages.delivered_at,
+                    messages.read_at,
+                    messages.created_at,
+                    messages.reply_to_message_id,
+                    (
+                        SELECT reply.sender_user_id
+                        FROM messages AS reply
+                        WHERE reply.id =
+                            messages.reply_to_message_id
+                          AND reply.conversation_id =
+                            messages.conversation_id
+                    ),
+                    COALESCE((
+                        SELECT CASE
+                            WHEN reply.deleted_at > 0
+                            THEN 'Сообщение удалено'
+                            ELSE reply.message
+                        END
+                        FROM messages AS reply
+                        WHERE reply.id =
+                            messages.reply_to_message_id
+                          AND reply.conversation_id =
+                            messages.conversation_id
+                    ), ''),
+                    messages.edited_at,
+                    messages.deleted_at
                  FROM messages
                  WHERE conversation_id = ?1
                    AND id > ?2
@@ -208,6 +265,11 @@ pub async fn api_chat_messages(
                                 delivered_at: row.get(3)?,
                                 read_at: row.get(4)?,
                                 created_at: row.get(5)?,
+                                reply_to_message_id: row.get(6)?,
+                                reply_sender_user_id: row.get(7)?,
+                                reply_message: row.get(8)?,
+                                edited_at: row.get(9)?,
+                                deleted_at: row.get(10)?,
                             })
                         },
                     )?
@@ -220,9 +282,32 @@ pub async fn api_chat_messages(
                     id,
                     sender_user_id,
                     message,
-                    delivered_at,
-                    read_at,
-                    created_at
+                    messages.delivered_at,
+                    messages.read_at,
+                    messages.created_at,
+                    messages.reply_to_message_id,
+                    (
+                        SELECT reply.sender_user_id
+                        FROM messages AS reply
+                        WHERE reply.id =
+                            messages.reply_to_message_id
+                          AND reply.conversation_id =
+                            messages.conversation_id
+                    ),
+                    COALESCE((
+                        SELECT CASE
+                            WHEN reply.deleted_at > 0
+                            THEN 'Сообщение удалено'
+                            ELSE reply.message
+                        END
+                        FROM messages AS reply
+                        WHERE reply.id =
+                            messages.reply_to_message_id
+                          AND reply.conversation_id =
+                            messages.conversation_id
+                    ), ''),
+                    messages.edited_at,
+                    messages.deleted_at
                  FROM messages
                  WHERE conversation_id = ?1
                  ORDER BY id DESC
@@ -239,6 +324,11 @@ pub async fn api_chat_messages(
                             delivered_at: row.get(3)?,
                             read_at: row.get(4)?,
                             created_at: row.get(5)?,
+                            reply_to_message_id: row.get(6)?,
+                            reply_sender_user_id: row.get(7)?,
+                            reply_message: row.get(8)?,
+                            edited_at: row.get(9)?,
+                            deleted_at: row.get(10)?,
                         })
                     })?
                     .collect::<Result<Vec<_>, _>>()
@@ -366,6 +456,32 @@ pub async fn api_chat_send(
         }
     };
 
+    let reply_to_message_id = match payload.reply_to_message_id {
+        Some(reply_id) if reply_id > 0 => {
+            let exists: i64 = connection
+                .query_row(
+                    "SELECT COUNT(*)
+                         FROM messages
+                         WHERE id = ?1
+                           AND conversation_id = ?2
+                           AND deleted_at = 0",
+                    rusqlite::params![reply_id, conversation_id],
+                    |row| row.get(0),
+                )
+                .unwrap_or(0);
+
+            if exists != 1 {
+                return json_error(StatusCode::BAD_REQUEST, "invalid_reply");
+            }
+
+            Some(reply_id)
+        }
+        Some(_) => {
+            return json_error(StatusCode::BAD_REQUEST, "invalid_reply");
+        }
+        None => None,
+    };
+
     let now = crate::web::handlers::common::unix_now();
 
     let transaction =
@@ -385,10 +501,13 @@ pub async fn api_chat_send(
                 is_read,
                 delivered_at,
                 read_at,
-                created_at
+                created_at,
+                reply_to_message_id
              )
-             VALUES (?1, ?2, ?3, 0, 0, 0, ?4)",
-            rusqlite::params![conversation_id, user_id, message, now],
+             VALUES (
+                ?1, ?2, ?3, 0, 0, 0, ?4, ?5
+             )",
+            rusqlite::params![conversation_id, user_id, message, now, reply_to_message_id],
         )
         .unwrap_or(0)
         != 1
@@ -506,7 +625,12 @@ pub async fn api_chat_send(
                 "is_mine": true,
                 "delivered_at": 0,
                 "read_at": 0,
-                "created_at": now
+                "created_at": now,
+                "reply_to_message_id": reply_to_message_id,
+                "reply_sender_user_id": null,
+                "reply_message": "",
+                "edited_at": 0,
+                "deleted_at": 0
             }
         })),
     )
@@ -737,6 +861,13 @@ mod tests {
 
     #[test]
     fn lifecycle_cursor_rules_are_stable() {
+        let payload = ChatSendPayload {
+            message: "Ответ".to_string(),
+            reply_to_message_id: Some(42),
+        };
+
+        assert_eq!(payload.reply_to_message_id, Some(42));
+
         let query = ChatMessagesQuery {
             before_id: Some(10),
             after_id: None,
