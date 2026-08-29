@@ -1084,9 +1084,9 @@
 }
 
 .inbox-live-badge[data-state="online"] {
-    color: var(--success, #62e0ad);
-    border-color: rgba(98, 224, 173, .28);
-    background: rgba(98, 224, 173, .08);
+    color: var(--success, #6fe8b8);
+    border-color: rgba(111, 232, 184, .32);
+    background: rgba(111, 232, 184, .10);
 }
 
 .inbox-card-icon,

@@ -7,7 +7,7 @@ pub fn escape_html(value: &str) -> String {
         .replace('\'', "&#39;")
 }
 
-pub const STATIC_ASSET_VERSION: &str = "4.9.1";
+pub const STATIC_ASSET_VERSION: &str = "4.9.2";
 
 pub fn static_asset(path: &str) -> String {
     let normalized = if path.starts_with("/static/") {
@@ -144,25 +144,26 @@ pub(crate) fn base_style() -> &'static str {
     r#"
 :root {
     --bg: #080a0d;
-    --bg-soft: #0e1116;
-    --surface: #101319;
-    --card: rgba(22, 25, 31, .78);
-    --card-hover: rgba(29, 33, 40, .92);
-    --line: rgba(214, 183, 122, .18);
+    --bg-soft: #10141b;
+    --surface: #141922;
+    --card: rgba(24, 28, 36, .86);
+    --card-hover: rgba(32, 37, 46, .94);
+    --line: rgba(224, 196, 138, .22);
 
-    --text: #f3f0e9;
-    --muted: #9298a3;
+    --text: #f8f5ef;
+    --muted: #a3a9b4;
 
-    --gold: #d6b77a;
-    --gold-light: #f0d69c;
+    --gold: #e0c48a;
+    --gold-light: #f5dba8;
+    --gold-glow: rgba(224, 196, 138, .35);
 
-    --sea: #65b8c9;
-    --sea-light: #8bd8e4;
+    --sea: #72c4d4;
+    --sea-light: #9adced;
 
-    --success: #62e0ad;
-    --warning: #f3a94f;
-    --danger: #ff7882;
-    --info: #7ab9ff;
+    --success: #6fe8b8;
+    --warning: #ffb85c;
+    --danger: #ff8f98;
+    --info: #8ec5ff;
 
     --radius: 22px;
     --radius-sm: 14px;
@@ -248,13 +249,18 @@ body {
     background:
         radial-gradient(
             circle at 15% 0%,
-            rgba(101,184,201,.10),
+            rgba(114, 196, 212, .16),
+            transparent 38%
+        ),
+        radial-gradient(
+            circle at 85% 12%,
+            rgba(224, 196, 138, .14),
             transparent 34%
         ),
         radial-gradient(
-            circle at 85% 15%,
-            rgba(214,183,122,.08),
-            transparent 30%
+            circle at 50% 100%,
+            rgba(111, 232, 184, .05),
+            transparent 40%
         ),
         linear-gradient(
             145deg,
@@ -333,21 +339,27 @@ body::before {
     display: grid;
     place-items: center;
 
-    border: 1px solid rgba(214,183,122,.28);
+    border: 1px solid rgba(224, 196, 138, .38);
     border-radius: 14px;
 
     color: var(--gold-light);
 
     background:
+        radial-gradient(
+            circle at 30% 25%,
+            rgba(245, 219, 168, .32),
+            transparent 52%
+        ),
         linear-gradient(
             145deg,
-            rgba(214,183,122,.12),
-            rgba(0,0,0,.025)
+            rgba(224, 196, 138, .18),
+            rgba(114, 196, 212, .10)
         );
 
     box-shadow:
-        0 10px 35px rgba(0,0,0,.28),
-        inset 0 1px 0 var(--line);
+        0 10px 35px rgba(0, 0, 0, .28),
+        0 0 28px rgba(224, 196, 138, .12),
+        inset 0 1px 0 rgba(255, 255, 255, .08);
 }
 
 .brand-mark .brand-logo-icon {
@@ -648,7 +660,8 @@ body::before {
 }
 
 .feature .icon {
-    color: var(--sea-light);
+    color: var(--gold-light);
+    filter: drop-shadow(0 0 8px rgba(224, 196, 138, .16));
 }
 
 .feature strong {
@@ -697,7 +710,9 @@ body::before {
 
     box-shadow:
         0 20px 60px rgba(0,0,0,.5),
-        inset 0 1px 0 rgba(0,0,0,.06);
+        0 0 0 1px rgba(224, 196, 138, .08),
+        0 0 40px rgba(224, 196, 138, .06),
+        inset 0 1px 0 rgba(255, 255, 255, .05);
 }
 
 .nav-item {
@@ -728,7 +743,8 @@ body::before {
 .nav-item:hover,
 .nav-item.active {
     color: var(--gold-light);
-    background: rgba(214,183,122,.08);
+    background: rgba(224, 196, 138, .12);
+    box-shadow: inset 0 0 24px rgba(224, 196, 138, .08);
 }
 
 .nav-item:active {
@@ -896,15 +912,16 @@ body::before {
 .brand-mark {
     background:
         radial-gradient(circle at 30% 25%,
-            rgba(240,214,156,.28),
+            rgba(245, 219, 168, .34),
             transparent 48%),
         linear-gradient(145deg,
-            rgba(214,183,122,.16),
-            rgba(101,184,201,.08));
-    border: 1px solid rgba(214,183,122,.28);
+            rgba(224, 196, 138, .20),
+            rgba(114, 196, 212, .10));
+    border: 1px solid rgba(224, 196, 138, .36);
     box-shadow:
         0 8px 30px rgba(0,0,0,.35),
-        inset 0 1px 0 var(--line);
+        0 0 32px rgba(224, 196, 138, .14),
+        inset 0 1px 0 rgba(255,255,255,.08);
     backdrop-filter: blur(18px);
 }
 
@@ -957,7 +974,7 @@ body::before {
     top: -160px;
     right: -100px;
     border-radius: 50%;
-    background: rgba(101,184,201,.10);
+    background: rgba(114, 196, 212, .16);
     filter: blur(45px);
     pointer-events: none;
 }
@@ -970,7 +987,7 @@ body::before {
     bottom: -150px;
     left: -80px;
     border-radius: 50%;
-    background: rgba(214,183,122,.08);
+    background: rgba(224, 196, 138, .14);
     filter: blur(45px);
     pointer-events: none;
 }
@@ -1038,17 +1055,17 @@ body::before {
 
 .card:hover {
     transform: translateY(-4px);
-    border-color: rgba(214,183,122,.24);
+    border-color: rgba(224, 196, 138, .32);
     background:
         linear-gradient(
             145deg,
-            var(--line),
-            rgba(0,0,0,.025)
+            rgba(224, 196, 138, .08),
+            rgba(114, 196, 212, .04)
         );
     box-shadow:
         0 20px 50px rgba(0,0,0,.30),
-        0 0 35px rgba(214,183,122,.04),
-        inset 0 1px 0 rgba(0,0,0,.07);
+        0 0 40px rgba(224, 196, 138, .08),
+        inset 0 1px 0 rgba(255,255,255,.06);
 }
 
 .card:hover::before {
@@ -1057,12 +1074,14 @@ body::before {
 
 .card-icon {
     color: var(--gold-light);
-    transition: transform .25s ease, color .25s ease;
+    filter: drop-shadow(0 0 10px rgba(224, 196, 138, .18));
+    transition: transform .25s ease, color .25s ease, filter .25s ease;
 }
 
 .card:hover .card-icon {
     transform: scale(1.08);
-    color: var(--sea-light);
+    color: #fff1d0;
+    filter: drop-shadow(0 0 14px rgba(224, 196, 138, .32));
 }
 
 .card-arrow {
@@ -1129,24 +1148,15 @@ body::before {
 }
 
 .nav-item.active .icon {
-    filter: drop-shadow(0 0 8px rgba(214,183,122,.24));
+    filter: drop-shadow(0 0 10px rgba(224, 196, 138, .36));
 }
 
 .section-head {
-    display: flex;
-    align-items: flex-end;
-    justify-content: space-between;
-    margin-bottom: 16px;
-    padding-bottom: 12px;
-    border-bottom: 1px solid rgba(0,0,0,.06);
-}
-
-.section-title {
-    letter-spacing: -.02em;
+    border-bottom: 1px solid var(--line);
 }
 
 .section-caption {
-    color: rgba(0,0,0,.48);
+    color: var(--muted);
 }
 
 

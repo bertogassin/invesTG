@@ -43,11 +43,12 @@ pub fn render_continents(
         margin-top:12px;
         padding:10px 12px;
         border-radius:14px;
-        border:1px solid rgba(214,183,122,.18);
-        background:rgba(214,183,122,.06);
+        border:1px solid rgba(224,196,138,.24);
+        background:linear-gradient(135deg, rgba(224,196,138,.10), rgba(114,196,212,.06));
         color:var(--muted);
         font-size:13px;
         line-height:1.5;
+        box-shadow:0 0 24px rgba(224,196,138,.06);
     }
 
     .rm-home-label {

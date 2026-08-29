@@ -3,14 +3,11 @@ set -euo pipefail
 
 cd /root/resursmap
 
-echo "=== CHAT V5.1 PRODUCTION DEPLOY ==="
+echo "=== RESURSMAP PRODUCTION DEPLOY ==="
 echo "PWD=$(pwd)"
 echo "DATE_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
-if [[ ! -d scripts/chat_v50_bundle ]]; then
-  echo "DEPLOY_ABORTED=missing scripts/chat_v50_bundle"
-  exit 1
-fi
+git pull --ff-only origin main
 
 if [[ ! -f scripts/deploy_chat_v50.py ]]; then
   echo "DEPLOY_ABORTED=missing scripts/deploy_chat_v50.py"
@@ -25,4 +22,5 @@ git status --short --branch
 systemctl is-active resursmap
 curl -fsS http://127.0.0.1:3000/health
 sqlite3 data/votes.db 'PRAGMA integrity_check;'
-echo "CHAT_V51=COMPLETE"
+echo "CACHE_VERSION=4.9.2"
+echo "DEPLOY=COMPLETE"

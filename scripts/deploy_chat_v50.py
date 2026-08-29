@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
-"""Deploy Chat V5 (typing + presence + dedupe) on production."""
+"""Post-pull production verify for ResursMap (git pull is the source of truth)."""
 
 from __future__ import annotations
 
 import datetime
 import pathlib
-import shutil
 import subprocess
 import sys
 
 ROOT = pathlib.Path("/root/resursmap")
-BUNDLE = pathlib.Path(__file__).resolve().parent / "chat_v50_bundle"
-CACHE_VERSION = "4.9.1"
+REPO = pathlib.Path(__file__).resolve().parent.parent
+CACHE_VERSION = "4.9.2"
 
 FILES = [
     "src/state/app_state.rs",
@@ -20,9 +19,11 @@ FILES = [
     "src/web/handlers.rs",
     "src/web/routes/communication.rs",
     "src/web/templates/communication.rs",
+    "src/web/templates/common.rs",
     "static/chat-v2.js",
     "static/chat-v2.css",
     "static/chat-sounds.js",
+    "static/inbox.js",
 ]
 
 
@@ -50,8 +51,11 @@ def main() -> None:
     if not ROOT.is_dir():
         fail(f"missing project root {ROOT}")
 
-    if not BUNDLE.is_dir():
-        fail(f"missing bundle directory {BUNDLE}")
+    for relative in FILES:
+        if not (ROOT / relative).is_file():
+            fail(f"missing deployed file: {relative}")
+        if not (REPO / relative).is_file():
+            fail(f"missing repo file: {relative}")
 
     head = run(["git", "rev-parse", "--short", "HEAD"]).stdout.strip()
     marker("HEAD_BEFORE", head)
@@ -61,24 +65,11 @@ def main() -> None:
         fail(f"worktree is dirty:\n{status}")
 
     backup_dir = pathlib.Path(
-        f"/root/resursmap-backups/chat-v50-before-{datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%SZ')}"
+        f"/root/resursmap-backups/verify-before-{datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%SZ')}"
     )
     backup_dir.mkdir(parents=True, exist_ok=True)
-
-    for relative in FILES:
-        source = BUNDLE / relative
-        target = ROOT / relative
-        if not source.is_file():
-            fail(f"bundle file missing: {source}")
-        if not target.is_file():
-            fail(f"target file missing: {target}")
-        shutil.copy2(target, backup_dir / relative.replace("/", "__"))
-        shutil.copy2(source, target)
-        print("UPDATED", relative)
-
     marker("BACKUP_DIR", str(backup_dir))
 
-    run(["cargo", "fmt"])
     run(["cargo", "fmt", "--", "--check"])
     run(["cargo", "check"])
     run(["cargo", "test"])
@@ -96,13 +87,6 @@ def main() -> None:
     run(["cargo", "build", "--release"])
     run(["git", "diff", "--check"])
 
-    node = shutil.which("node")
-    if node:
-        run([node, "--check", "static/chat-v2.js"])
-        run([node, "--check", "static/chat-sounds.js"])
-    else:
-        print("NODE_CHECK=SKIPPED")
-
     run(["sqlite3", "data/votes.db", "PRAGMA integrity_check;"])
     run(["sqlite3", "data/votes.db", "PRAGMA foreign_key_check;"])
 
@@ -119,26 +103,9 @@ def main() -> None:
     if not health_ok:
         fail("health check did not return ok within 30 seconds")
 
-    service = run(["systemctl", "is-active", "resursmap"]).stdout.strip()
-    marker("SERVICE", service)
+    marker("SERVICE", run(["systemctl", "is-active", "resursmap"]).stdout.strip())
     marker("HEALTH", "ok")
     marker("CACHE_VERSION", CACHE_VERSION)
-
-    run(["git", "add", *FILES])
-    run(["git", "diff", "--cached", "--check"])
-    run(
-        [
-            "git",
-            "commit",
-            "-m",
-            "chat-v5.1: premium chat UX with sounds, haptics and visual polish",
-        ]
-    )
-    run(["git", "push", "origin", "main"])
-
-    head_after = run(["git", "rev-parse", "--short", "HEAD"]).stdout.strip()
-    marker("HEAD_AFTER", head_after)
-    marker("PUSH", "YES")
     marker("DEPLOY", "COMPLETE")
 
 
