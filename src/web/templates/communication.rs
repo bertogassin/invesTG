@@ -634,6 +634,12 @@ pub fn render_chat(
             "Между этими пользователями ещё нет подтверждённого контакта.",
         )
     } else {
+        let first_message_id = messages.first().map(|message| message.0).unwrap_or(0);
+
+        let last_message_id = messages.last().map(|message| message.0).unwrap_or(0);
+
+        let may_have_older = if messages.len() >= 100 { "1" } else { "0" };
+
         let message_cards = if messages.is_empty() {
             r#"
 <div style="
@@ -654,10 +660,11 @@ pub fn render_chat(
             messages
                 .iter()
                 .map(
-                    |(_message_id, sender_user_id, message, is_read, created_at)| {
+                    |(message_id, sender_user_id, message, is_read, created_at)| {
                         let safe_message = escape_html(message);
 
                         let mine = *sender_user_id != other_user_id;
+                        let mine_attribute = if mine { "1" } else { "0" };
 
                         let align = if mine { "flex-end" } else { "flex-start" };
 
@@ -748,12 +755,15 @@ pub fn render_chat(
                             r#"
 {date_separator}
 
-<div style="
-    width:100%;
-    display:flex;
-    justify-content:{align};
-    margin-bottom:10px;
-">
+<div class="chat-message-row"
+     data-message-id="{message_id}"
+     data-mine="{mine_attribute}"
+     style="
+         width:100%;
+         display:flex;
+         justify-content:{align};
+         margin-bottom:10px;
+     ">
 
     <div style="
         max-width:82%;
@@ -782,13 +792,15 @@ pub fn render_chat(
             color:var(--muted);
         ">
             <span>{chat_time}</span>
-            <span>{status}</span>
+            <span class="chat-message-status">{status}</span>
         </div>
 
     </div>
 
 </div>
 "#,
+                            message_id = message_id,
+                            mine_attribute = mine_attribute,
                             align = align,
                             bubble_bg = bubble_bg,
                             border = border,
@@ -805,82 +817,96 @@ pub fn render_chat(
 
         format!(
             r#"
-<section class="card"
+<link rel="stylesheet"
+      href="/static/chat-v2.css">
+
+<section class="card chat-shell"
          style="
              display:block;
              padding:14px;
              margin-bottom:14px;
          ">
 
+    <div class="chat-history-toolbar">
+        <button id="chat-load-older"
+                type="button"
+                class="chat-secondary-button"
+                hidden>
+            Загрузить предыдущие сообщения
+        </button>
+
+        <span id="chat-connection-state"
+              class="chat-connection-state">
+            Подключение…
+        </span>
+    </div>
+
     <div id="chat-messages"
+         data-other-user-id="{other_user_id}"
+         data-first-message-id="{first_message_id}"
+         data-last-message-id="{last_message_id}"
+         data-may-have-older="{may_have_older}"
+         aria-live="polite"
          style="
              max-height:58vh;
              overflow-y:auto;
              padding:4px 1px;
          ">
+        <div id="chat-history-start"></div>
         {message_cards}
         <div id="chat-end"></div>
     </div>
 
 </section>
 
-<form method="post"
+<form id="chat-form"
+      method="post"
       action="/app/chat/{other_user_id}/send"
-      style="
-          position:sticky;
-          bottom:10px;
-          display:flex;
-          gap:9px;
-          align-items:flex-end;
-          padding:10px;
-          border-radius:18px;
-          background:var(--card);
-          border:1px solid rgba(0,0,0,.08);
-          backdrop-filter:blur(14px);
-      " class="ui-form">
+      class="ui-form chat-composer">
+    <div class="chat-composer-main">
+        <textarea
+            id="chat-input"
+            name="message"
+            rows="1"
+            maxlength="2000"
+            required
+            autocomplete="off"
+            enterkeyhint="send"
+            aria-label="Текст сообщения"
+            placeholder="Сообщение…"
+            class="ui-textarea chat-input"></textarea>
 
-    <textarea
-        name="message"
-        rows="1"
-        maxlength="2000"
-        required
-        placeholder="Сообщение..."
-        style="
-            flex:1;
-            min-height:46px;
-            max-height:130px;
-            resize:vertical;
-            box-sizing:border-box;
-            border-radius:14px;
-            border:1px solid var(--line);
-            background:rgba(0,0,0,.04);
-            color:var(--text);
-            padding:12px 13px;
-            font:inherit;
-            line-height:1.4;
-            outline:none;
-        "
-     class="ui-textarea"></textarea>
+        <button id="chat-clear"
+                type="button"
+                class="chat-clear-button"
+                aria-label="Очистить сообщение"
+                hidden>
+            ×
+        </button>
+    </div>
 
-    <button type="submit"
-            style="
-                width:48px;
-                height:48px;
-                border-radius:14px;
-                border:1px solid rgba(214,183,122,.40);
-                background:rgba(214,183,122,.12);
-                color:var(--text);
-                font-size:20px;
-                font-weight:900;
-                cursor:pointer;
-                flex:0 0 auto;
-            " class="ui-button">
+    <button id="chat-send"
+            type="submit"
+            class="ui-button chat-send-button"
+            aria-label="Отправить сообщение">
         ➤
     </button>
 
+    <div class="chat-composer-footer">
+        <span id="chat-send-state">
+            Enter — отправить · Shift+Enter — новая строка
+        </span>
+        <span id="chat-counter">0 / 2000</span>
+    </div>
 </form>
+
+<script src="/static/chat-v2.js" defer></script>
+
 "#,
             other_user_id = other_user_id,
+            first_message_id = first_message_id,
+            last_message_id = last_message_id,
+            may_have_older = may_have_older,
             message_cards = message_cards,
         )
     };
