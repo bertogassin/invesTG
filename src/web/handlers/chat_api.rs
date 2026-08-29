@@ -1,3 +1,4 @@
+use super::chat::load_user_conversations;
 use super::auth::verify_user_session;
 use super::common::{input_text_is_valid, rate_limit_retry_after, request_is_cross_site};
 use crate::state::app_state::AppState;
@@ -1066,6 +1067,84 @@ pub async fn api_chat_peer(
             "online": online,
             "last_seen_at": last_seen_at,
             "open_contact": open_contact == 1
+        })),
+    )
+        .into_response()
+}
+
+pub async fn api_chat_conversations(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Response {
+    let user_id = match verify_user_session(&state, &headers) {
+        Some(user_id) => user_id,
+        None => {
+            return (
+                StatusCode::UNAUTHORIZED,
+                Json(json!({
+                    "ok": false,
+                    "error": "login_required"
+                })),
+            )
+                .into_response();
+        }
+    };
+
+    let db = match crate::db::pool::get_connection(&state.db_pool) {
+        Ok(db) => db,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({
+                    "ok": false,
+                    "error": "database_unavailable"
+                })),
+            )
+                .into_response();
+        }
+    };
+
+    let conversations = load_user_conversations(&db, user_id);
+    let total_unread: i64 = conversations.iter().map(|row| row.unread_count).sum();
+
+    let items: Vec<serde_json::Value> = conversations
+        .iter()
+        .map(|conversation| {
+            let display_name = crate::web::templates::communication::conversation_display_name(
+                conversation.other_user_id,
+                &conversation.username,
+                &conversation.first_name,
+                &conversation.last_name,
+            );
+            let last_message = if conversation.last_message.is_empty() {
+                "Чат открыт. Сообщений пока нет.".to_string()
+            } else {
+                conversation.last_message.clone()
+            };
+            let last_time = if conversation.last_message.is_empty() {
+                String::new()
+            } else {
+                crate::web::templates::communication::format_inbox_time(conversation.updated_at)
+            };
+
+            json!({
+                "other_user_id": conversation.other_user_id,
+                "display_name": display_name,
+                "username": conversation.username,
+                "last_message": last_message,
+                "last_time": last_time,
+                "unread_count": conversation.unread_count,
+                "updated_at": conversation.updated_at,
+            })
+        })
+        .collect();
+
+    (
+        StatusCode::OK,
+        Json(json!({
+            "ok": true,
+            "total_unread": total_unread,
+            "conversations": items,
         })),
     )
         .into_response()

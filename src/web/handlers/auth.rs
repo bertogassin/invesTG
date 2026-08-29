@@ -11,7 +11,9 @@ use axum::{
 use hmac::{Hmac, Mac};
 use serde::Deserialize;
 use serde_json::json;
-use sha2::Sha256;
+use sha2::{Digest, Sha256};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 pub(super) fn verify_telegram_init_data(init_data: &str, bot_token: &str) -> Option<i64> {
     let mut hash_from_telegram = String::new();
@@ -134,6 +136,9 @@ const EMAIL_CODE_MAX_ATTEMPTS: i64 = 5;
 // with existing/future Telegram numeric IDs while the compatibility
 // migration is active.
 const EMAIL_USER_ID_BASE: i64 = 4_000_000_000_000_000_000;
+
+const USER_SESSION_TTL_SECONDS: i64 = 2_592_000;
+static USER_SESSION_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Debug, Deserialize)]
 pub struct EmailCodeRequest {
@@ -837,7 +842,19 @@ pub async fn email_auth_verify(
             .into_response();
     }
 
-    let session = create_user_session(&state, user_id);
+    let session = match create_user_session(&state, user_id, &headers) {
+        Ok(session) => session,
+        Err(error) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({
+                    "ok": false,
+                    "error": error
+                })),
+            )
+                .into_response();
+        }
+    };
 
     let mut response = (
         StatusCode::OK,
@@ -853,55 +870,158 @@ pub async fn email_auth_verify(
     response
 }
 
-fn create_user_session(state: &AppState, user_id: i64) -> String {
+fn hash_user_session_token(token: &str) -> String {
+    hex::encode(Sha256::digest(token.as_bytes()))
+}
+
+fn extract_user_session_token(headers: &HeaderMap) -> Option<String> {
+    let cookie_header = headers.get(header::COOKIE)?.to_str().ok()?;
+
+    let token = cookie_header
+        .split(';')
+        .map(|value| value.trim())
+        .find_map(|value| value.strip_prefix("resursmap_user="))?;
+
+    let (public_id, secret) = token.split_once('.')?;
+
+    if public_id.len() != 32
+        || secret.len() != 64
+        || !public_id.bytes().all(|byte| byte.is_ascii_hexdigit())
+        || !secret.bytes().all(|byte| byte.is_ascii_hexdigit())
+    {
+        return None;
+    }
+
+    Some(token.to_string())
+}
+
+fn revoke_user_session(state: &AppState, headers: &HeaderMap) {
+    let Some(token) = extract_user_session_token(headers) else {
+        return;
+    };
+
+    let Some((public_id, _)) = token.split_once('.') else {
+        return;
+    };
+
+    let Ok(db) = crate::db::pool::get_connection(&state.db_pool) else {
+        return;
+    };
+
+    let _ = db.execute(
+        "UPDATE user_sessions
+         SET revoked_at = ?2
+         WHERE session_public_id = ?1
+           AND revoked_at IS NULL",
+        rusqlite::params![public_id, unix_now()],
+    );
+}
+
+fn create_user_session(
+    state: &AppState,
+    user_id: i64,
+    headers: &HeaderMap,
+) -> Result<String, &'static str> {
     type HmacSha256 = Hmac<Sha256>;
 
-    // Пользовательская сессия на 30 дней.
-    let expires = unix_now() + 2_592_000;
-    let payload = format!("user:{}:{}", user_id, expires);
+    let now = unix_now();
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| "system_time_error")?
+        .as_nanos();
 
-    let mut mac = HmacSha256::new_from_slice(state.admin_key.as_bytes()).expect("HMAC key");
+    let sequence = USER_SESSION_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+    let payload = format!("user-v1:{user_id}:{now}:{nanos}:{sequence}");
+
+    let mut mac = HmacSha256::new_from_slice(state.admin_key.as_bytes())
+        .map_err(|_| "session_key_error")?;
 
     mac.update(payload.as_bytes());
 
-    let signature = hex::encode(mac.finalize().into_bytes());
+    let secret = hex::encode(mac.finalize().into_bytes());
+    let public_digest = Sha256::digest(format!("{payload}:{secret}").as_bytes());
+    let public_id = hex::encode(public_digest)[..32].to_string();
+    let token = format!("{public_id}.{secret}");
+    let session_hash = hash_user_session_token(&token);
+    let expires_at = now + USER_SESSION_TTL_SECONDS;
 
-    format!("{}:{}:{}", user_id, expires, signature)
+    let ip_address = headers
+        .get("x-forwarded-for")
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.split(',').next())
+        .map(str::trim)
+        .unwrap_or("")
+        .chars()
+        .take(64)
+        .collect::<String>();
+
+    let user_agent = headers
+        .get(header::USER_AGENT)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or("")
+        .chars()
+        .take(255)
+        .collect::<String>();
+
+    let db = crate::db::pool::get_connection(&state.db_pool).map_err(|_| "database_unavailable")?;
+
+    db.execute(
+        "INSERT INTO user_sessions (
+            session_public_id,
+            user_id,
+            session_hash,
+            ip_address,
+            user_agent,
+            created_at,
+            last_seen_at,
+            expires_at
+         )
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6, ?7)",
+        rusqlite::params![
+            public_id,
+            user_id,
+            session_hash,
+            ip_address,
+            user_agent,
+            now,
+            expires_at
+        ],
+    )
+    .map_err(|_| "session_store_failed")?;
+
+    let _ = db.execute(
+        "DELETE FROM user_sessions
+         WHERE expires_at <= ?1
+            OR (
+                revoked_at IS NOT NULL
+                AND revoked_at <= ?1 - 86400
+            )",
+        rusqlite::params![now],
+    );
+
+    Ok(token)
 }
 
 pub(super) fn verify_user_session(state: &AppState, headers: &HeaderMap) -> Option<i64> {
-    type HmacSha256 = Hmac<Sha256>;
-
-    let cookie_header = headers.get(header::COOKIE)?.to_str().ok()?;
-
-    let session = cookie_header
-        .split(';')
-        .map(|v| v.trim())
-        .find_map(|v| v.strip_prefix("resursmap_user="))?;
-
-    let mut parts = session.split(':');
-
-    let user_id: i64 = parts.next()?.parse().ok()?;
-    let expires: i64 = parts.next()?.parse().ok()?;
-    let signature_hex = parts.next()?;
-
-    if parts.next().is_some() || expires < unix_now() {
-        return None;
-    }
-
-    let signature = hex::decode(signature_hex).ok()?;
-
-    let payload = format!("user:{}:{}", user_id, expires);
-
-    let mut mac = HmacSha256::new_from_slice(state.admin_key.as_bytes()).ok()?;
-
-    mac.update(payload.as_bytes());
-
-    if mac.verify_slice(&signature).is_err() {
-        return None;
-    }
+    let token = extract_user_session_token(headers)?;
+    let (public_id, _) = token.split_once('.')?;
+    let session_hash = hash_user_session_token(&token);
+    let now = unix_now();
 
     let db = crate::db::pool::get_connection(&state.db_pool).ok()?;
+
+    let user_id: i64 = db
+        .query_row(
+            "SELECT user_id
+             FROM user_sessions
+             WHERE session_public_id = ?1
+               AND session_hash = ?2
+               AND revoked_at IS NULL
+               AND expires_at > ?3",
+            rusqlite::params![public_id, session_hash, now],
+            |row| row.get(0),
+        )
+        .ok()?;
 
     let is_active: i64 = db
         .query_row(
@@ -913,7 +1033,18 @@ pub(super) fn verify_user_session(state: &AppState, headers: &HeaderMap) -> Opti
         )
         .ok()?;
 
-    (is_active == 1).then_some(user_id)
+    if is_active != 1 {
+        return None;
+    }
+
+    let _ = db.execute(
+        "UPDATE user_sessions
+         SET last_seen_at = ?2
+         WHERE session_public_id = ?1",
+        rusqlite::params![public_id, now],
+    );
+
+    Some(user_id)
 }
 
 #[derive(Debug, Clone)]
@@ -1675,10 +1806,12 @@ pub async fn app_auth_page() -> Html<String> {
     ))
 }
 
-pub async fn app_logout(headers: HeaderMap) -> Response {
+pub async fn app_logout(State(state): State<AppState>, headers: HeaderMap) -> Response {
     if request_is_cross_site(&headers) {
         return csrf_rejected_response();
     }
+
+    revoke_user_session(&state, &headers);
 
     let mut response = (StatusCode::SEE_OTHER, [(header::LOCATION, "/app")]).into_response();
 
@@ -1773,7 +1906,19 @@ pub async fn app_auth(
         }
     };
 
-    let session = create_user_session(&state, account_user_id);
+    let session = match create_user_session(&state, account_user_id, &headers) {
+        Ok(session) => session,
+        Err(error) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({
+                    "ok": false,
+                    "error": error
+                })),
+            )
+                .into_response();
+        }
+    };
 
     let mut response = Json(json!({
         "ok": true,

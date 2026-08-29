@@ -1064,6 +1064,56 @@
     color:var(--text);
 }
 
+#inbox-section-head {
+    align-items:flex-start;
+    gap:12px;
+}
+
+.inbox-live-badge {
+    flex:0 0 auto;
+    margin-top:4px;
+    padding:4px 8px;
+    border-radius:999px;
+    border:1px solid rgba(255,255,255,.10);
+    background:rgba(255,255,255,.04);
+    color:var(--muted);
+    font-size:10px;
+    font-weight:800;
+    letter-spacing:.12em;
+    text-transform:uppercase;
+}
+
+.inbox-live-badge[data-state="online"] {
+    color:#8fd8a8;
+    border-color:rgba(143,216,168,.28);
+    background:rgba(143,216,168,.08);
+}
+
+.inbox-card-icon,
+.inbox-card-arrow {
+    position:relative;
+}
+
+.inbox-card-icon::before {
+    content:"";
+    display:block;
+    width:18px;
+    height:18px;
+    margin:auto;
+    border-radius:50%;
+    background:rgba(214,183,122,.22);
+    box-shadow:inset 0 0 0 1px rgba(214,183,122,.34);
+}
+
+.inbox-card-arrow::before {
+    content:"›";
+    display:block;
+    color:var(--muted);
+    font-size:18px;
+    line-height:1;
+    text-align:center;
+}
+
 .chat-empty-thread {
     padding:30px 14px;
     text-align:center;

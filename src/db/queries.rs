@@ -93,6 +93,36 @@ pub fn init_db() -> Result<Connection> {
     )?;
 
     conn.execute(
+        "CREATE TABLE IF NOT EXISTS user_sessions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_public_id TEXT NOT NULL UNIQUE,
+            user_id INTEGER NOT NULL,
+            session_hash TEXT NOT NULL UNIQUE,
+            ip_address TEXT NOT NULL DEFAULT '',
+            user_agent TEXT NOT NULL DEFAULT '',
+            created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+            last_seen_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+            expires_at INTEGER NOT NULL,
+            revoked_at INTEGER,
+            FOREIGN KEY(user_id) REFERENCES users(id),
+            CHECK(expires_at > created_at)
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_user_sessions_user_active
+         ON user_sessions(user_id, revoked_at, expires_at)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_user_sessions_lookup
+         ON user_sessions(session_public_id, session_hash)",
+        [],
+    )?;
+
+    conn.execute(
         "CREATE TABLE IF NOT EXISTS profiles (
             client_id TEXT PRIMARY KEY,
             username TEXT NOT NULL DEFAULT '',

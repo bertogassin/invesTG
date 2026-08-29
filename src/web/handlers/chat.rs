@@ -12,6 +12,84 @@ use axum::{
 };
 use teloxide::prelude::*;
 
+pub(super) fn load_user_conversations(
+    db: &rusqlite::Connection,
+    user_id: i64,
+) -> Vec<crate::web::view_models::ConversationRow> {
+    db.prepare(
+        "SELECT
+            c.id,
+
+            CASE
+                WHEN c.user1_id = ?1
+                THEN c.user2_id
+                ELSE c.user1_id
+            END AS other_user_id,
+
+            COALESCE(p.username, ''),
+            COALESCE(p.first_name, ''),
+            COALESCE(p.last_name, ''),
+
+            COALESCE((
+                SELECT CASE
+                    WHEN m.deleted_at > 0
+                    THEN 'Сообщение удалено'
+                    ELSE m.message
+                END
+                FROM messages m
+                WHERE m.conversation_id = c.id
+                ORDER BY
+                    m.created_at DESC,
+                    m.id DESC
+                LIMIT 1
+            ), ''),
+
+            (
+                SELECT COUNT(*)
+                FROM messages m
+                WHERE m.conversation_id = c.id
+                  AND m.sender_user_id <> ?1
+                  AND m.is_read = 0
+            ) AS unread_count,
+
+            c.updated_at
+
+         FROM conversations c
+
+         LEFT JOIN profiles p
+           ON p.user_id = CASE
+                WHEN c.user1_id = ?1
+                THEN c.user2_id
+                ELSE c.user1_id
+           END
+
+         WHERE c.user1_id = ?1
+            OR c.user2_id = ?1
+
+         ORDER BY
+            c.updated_at DESC,
+            c.id DESC
+
+         LIMIT 200",
+    )
+    .and_then(|mut stmt| {
+        stmt.query_map(rusqlite::params![user_id], |row| {
+            Ok(crate::web::view_models::ConversationRow {
+                id: row.get(0)?,
+                other_user_id: row.get(1)?,
+                username: row.get(2)?,
+                first_name: row.get(3)?,
+                last_name: row.get(4)?,
+                last_message: row.get(5)?,
+                unread_count: row.get(6)?,
+                updated_at: row.get(7)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()
+    })
+    .unwrap_or_else(|_| vec![])
+}
+
 pub async fn messages_page(State(state): State<AppState>, headers: HeaderMap) -> Html<String> {
     let user_id = match verify_user_session(&state, &headers) {
         Some(id) => id,
@@ -28,79 +106,7 @@ pub async fn messages_page(State(state): State<AppState>, headers: HeaderMap) ->
         }
     };
 
-    let conversations: Vec<crate::web::view_models::ConversationRow> = db
-        .prepare(
-            "SELECT
-                c.id,
-
-                CASE
-                    WHEN c.user1_id = ?1
-                    THEN c.user2_id
-                    ELSE c.user1_id
-                END AS other_user_id,
-
-                COALESCE(p.username, ''),
-                COALESCE(p.first_name, ''),
-                COALESCE(p.last_name, ''),
-
-                COALESCE((
-                    SELECT CASE
-                        WHEN m.deleted_at > 0
-                        THEN 'Сообщение удалено'
-                        ELSE m.message
-                    END
-                    FROM messages m
-                    WHERE m.conversation_id = c.id
-                    ORDER BY
-                        m.created_at DESC,
-                        m.id DESC
-                    LIMIT 1
-                ), ''),
-
-                (
-                    SELECT COUNT(*)
-                    FROM messages m
-                    WHERE m.conversation_id = c.id
-                      AND m.sender_user_id <> ?1
-                      AND m.is_read = 0
-                ) AS unread_count,
-
-                c.updated_at
-
-             FROM conversations c
-
-             LEFT JOIN profiles p
-               ON p.user_id = CASE
-                    WHEN c.user1_id = ?1
-                    THEN c.user2_id
-                    ELSE c.user1_id
-               END
-
-             WHERE c.user1_id = ?1
-                OR c.user2_id = ?1
-
-             ORDER BY
-                c.updated_at DESC,
-                c.id DESC
-
-             LIMIT 200",
-        )
-        .and_then(|mut stmt| {
-            stmt.query_map(rusqlite::params![user_id], |row| {
-                Ok(crate::web::view_models::ConversationRow {
-                    id: row.get(0)?,
-                    other_user_id: row.get(1)?,
-                    username: row.get(2)?,
-                    first_name: row.get(3)?,
-                    last_name: row.get(4)?,
-                    last_message: row.get(5)?,
-                    unread_count: row.get(6)?,
-                    updated_at: row.get(7)?,
-                })
-            })?
-            .collect::<Result<Vec<_>, _>>()
-        })
-        .unwrap_or_else(|_| vec![]);
+    let conversations = load_user_conversations(&db, user_id);
 
     drop(db);
 

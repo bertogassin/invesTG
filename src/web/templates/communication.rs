@@ -354,7 +354,30 @@ pub fn render_contact_requests(
 // TASK 7.22G-C — MESSAGES LIST
 // ============================================================
 
-fn format_inbox_time(updated_at: i64) -> String {
+pub(crate) fn conversation_display_name(
+    other_user_id: i64,
+    username: &str,
+    first_name: &str,
+    last_name: &str,
+) -> String {
+    let safe_username = escape_html(username);
+    let safe_first_name = escape_html(first_name);
+    let safe_last_name = escape_html(last_name);
+
+    let full_name = format!("{safe_first_name} {safe_last_name}")
+        .trim()
+        .to_string();
+
+    if !full_name.is_empty() {
+        full_name
+    } else if !safe_username.is_empty() {
+        format!("@{safe_username}")
+    } else {
+        format!("Участник · {:06}", other_user_id.rem_euclid(1_000_000))
+    }
+}
+
+pub(crate) fn format_inbox_time(updated_at: i64) -> String {
     if updated_at <= 0 {
         return String::new();
     }
@@ -410,23 +433,14 @@ pub fn render_messages(
                 let updated_at = conversation.updated_at;
                     let safe_username = escape_html(username);
 
-                    let safe_first_name = escape_html(first_name);
-
-                    let safe_last_name = escape_html(last_name);
+                    let display_name = conversation_display_name(
+                        other_user_id,
+                        username,
+                        first_name,
+                        last_name,
+                    );
 
                     let safe_last_message = escape_html(last_message);
-
-                    let full_name = format!("{} {}", safe_first_name, safe_last_name)
-                        .trim()
-                        .to_string();
-
-                    let display_name = if !full_name.is_empty() {
-                        full_name
-                    } else if !safe_username.is_empty() {
-                        format!("@{}", safe_username)
-                    } else {
-                        format!("Участник · {:06}", other_user_id.rem_euclid(1_000_000))
-                    };
 
                     let username_html = if !safe_username.is_empty() {
                         format!(
@@ -471,7 +485,8 @@ pub fn render_messages(
                     format!(
                         r#"
 <a href="/app/chat/{other_user_id}#chat-end"
-   class="card chat-dialog-card">
+   class="card chat-dialog-card"
+   data-other-user-id="{other_user_id}">
 
     <div class="card-icon">
         {chat_icon}
@@ -521,8 +536,35 @@ pub fn render_messages(
             .join("")
     };
 
-    let section_head_dialogs =
-        section_head("Диалоги", &format!("Непрочитанных: {}", total_unread), None);
+    let section_head_dialogs = if authenticated {
+        format!(
+            r#"<div class="section-head" id="inbox-section-head">
+    <div>
+        <h2 class="section-title">Диалоги</h2>
+        <p class="section-caption" id="inbox-unread-caption">Непрочитанных: {total_unread}</p>
+    </div>
+    <span class="inbox-live-badge" id="inbox-live-badge" hidden aria-hidden="true">live</span>
+</div>"#,
+            total_unread = total_unread,
+        )
+    } else {
+        section_head("Диалоги", &format!("Непрочитанных: {}", total_unread), None)
+    };
+
+    let list_attributes = if authenticated {
+        r#" id="chat-dialog-list" data-inbox-live="1""#
+    } else {
+        ""
+    };
+
+    let inbox_script = if authenticated {
+        format!(
+            r#"<script src="{inbox_js}" defer></script>"#,
+            inbox_js = static_asset("inbox.js"),
+        )
+    } else {
+        String::new()
+    };
 
     let content_html = format!(
         r####"<link rel="stylesheet"
@@ -531,14 +573,18 @@ pub fn render_messages(
 {section_head_dialogs}
 
 
-<section class="chat-dialog-list">
+<section class="chat-dialog-list"{list_attributes}>
 
     {content}
 
-</section>"####,
+</section>
+
+{inbox_script}"####,
         chat_css = static_asset("chat-v2.css"),
         section_head_dialogs = section_head_dialogs,
+        list_attributes = list_attributes,
         content = content,
+        inbox_script = inbox_script,
     );
 
     page_shell(
@@ -549,7 +595,7 @@ pub fn render_messages(
             "message-circle",
             "Внутренняя связь",
             "Сообщения",
-            "Ваши личные диалоги внутри ResursMap.",
+            "Ваши личные диалоги внутри ResursMap. Список обновляется автоматически.",
         ),
         &content_html,
         &bottom_nav("profile"),
