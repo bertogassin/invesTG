@@ -45,7 +45,7 @@ pub fn render_contact_requests(
                     } else if !safe_username.is_empty() {
                         format!("@{}", safe_username)
                     } else {
-                        format!("Участник #{}", sender_user_id)
+                        format!("Участник · {:06}", sender_user_id.rem_euclid(1_000_000))
                     };
 
                     let username_html = if !safe_username.is_empty() {
@@ -401,7 +401,7 @@ pub fn render_messages(
                     } else if !safe_username.is_empty() {
                         format!("@{}", safe_username)
                     } else {
-                        format!("Участник #{}", other_user_id)
+                        format!("Участник · {:06}", other_user_id.rem_euclid(1_000_000))
                     };
 
                     let username_html = if !safe_username.is_empty() {
@@ -470,7 +470,7 @@ pub fn render_messages(
                     format!(
                         r#"
 <a href="/app/chat/{other_user_id}#chat-end"
-   class="card"
+   class="card chat-dialog-card"
    style="
        text-decoration:none;
        color:inherit;
@@ -559,7 +559,7 @@ pub fn render_messages(
         r####"{section_head_dialogs}
 
 
-<section>
+<section class="chat-dialog-list">
 
     {content}
 
@@ -608,7 +608,7 @@ pub fn render_chat(
     } else if !safe_username.is_empty() {
         format!("@{}", safe_username)
     } else if other_user_id > 0 {
-        format!("Участник #{}", other_user_id)
+        format!("Участник · {:06}", other_user_id.rem_euclid(1_000_000))
     } else {
         "Чат ResursMap".to_string()
     };
@@ -818,7 +818,7 @@ pub fn render_chat(
         format!(
             r#"
 <link rel="stylesheet"
-      href="/static/chat-v2.css">
+      href="/static/chat-v2.css?v=3.1.0">
 
 <section class="card chat-shell"
          style="
@@ -900,7 +900,7 @@ pub fn render_chat(
     </div>
 </form>
 
-<script src="/static/chat-v2.js" defer></script>
+<script src="/static/chat-v2.js?v=3.1.0" defer></script>
 
 "#,
             other_user_id = other_user_id,

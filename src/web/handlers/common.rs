@@ -78,31 +78,40 @@ pub(super) async fn rate_limit_retry_after(
     None
 }
 
+fn trusted_request_origin(origin: &str) -> bool {
+    matches!(
+        origin.trim_end_matches('/'),
+        "https://resursmap.de"
+            | "https://www.resursmap.de"
+            | "http://127.0.0.1:3000"
+            | "https://t.me"
+            | "https://telegram.me"
+            | "https://telegram.org"
+            | "https://web.telegram.org"
+    )
+}
+
 pub(super) fn request_is_cross_site(headers: &HeaderMap) -> bool {
-    // Современные браузеры прямо сообщают происхождение запроса.
-    // Если они говорят cross-site — такой state-changing запрос
-    // с cookie-сессией нам не нужен.
-    if let Some(value) = headers.get("sec-fetch-site").and_then(|v| v.to_str().ok()) {
-        if value.eq_ignore_ascii_case("cross-site") {
-            return true;
-        }
+    let origin = headers
+        .get(header::ORIGIN)
+        .and_then(|value| value.to_str().ok())
+        .map(str::trim);
+
+    // Явно неизвестный Origin всегда отклоняем.
+    if origin.is_some_and(|value| !trusted_request_origin(value)) {
+        return true;
     }
 
-    // Дополнительная проверка Origin.
-    //
-    // Заголовок может отсутствовать у curl, некоторых WebView и
-    // старых клиентов — отсутствие Origin само по себе НЕ блокируем.
-    if let Some(origin) = headers.get(header::ORIGIN).and_then(|v| v.to_str().ok()) {
-        let origin = origin.trim_end_matches('/');
+    let fetch_site = headers
+        .get("sec-fetch-site")
+        .and_then(|value| value.to_str().ok());
 
-        if origin != "https://resursmap.de"
-            && origin != "https://www.resursmap.de"
-            && origin != "http://127.0.0.1:3000"
-            && !origin.starts_with("https://telegram.me")
-            && !origin.starts_with("https://web.telegram.org")
-        {
-            return true;
-        }
+    // Telegram Mini Apps и некоторые Android WebView могут
+    // обозначать запрос как cross-site, хотя Origin принадлежит
+    // доверенному контейнеру Telegram. Разрешаем только точный
+    // белый список Origin выше.
+    if fetch_site.is_some_and(|value| value.eq_ignore_ascii_case("cross-site")) {
+        return !origin.is_some_and(trusted_request_origin);
     }
 
     false
@@ -117,4 +126,18 @@ pub(super) fn csrf_rejected_response() -> Response {
         })),
     )
         .into_response()
+}
+
+#[cfg(test)]
+mod request_origin_tests {
+    use super::*;
+
+    #[test]
+    fn trusted_origins_are_strict() {
+        assert!(trusted_request_origin("https://resursmap.de"));
+        assert!(trusted_request_origin("https://t.me"));
+        assert!(trusted_request_origin("https://web.telegram.org"));
+        assert!(!trusted_request_origin("https://evil.example"));
+        assert!(!trusted_request_origin("https://resursmap.de.evil.example"));
+    }
 }

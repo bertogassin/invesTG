@@ -1348,3 +1348,63 @@
         );
     });
 })();
+
+(function () {
+    "use strict";
+
+    function installChatFallback() {
+        var form =
+            document.getElementById("chat-form");
+        var state =
+            document.getElementById(
+                "chat-connection-state"
+            );
+
+        if (!form) {
+            return;
+        }
+
+        // Запрещаем браузеру переходить на сырой JSON/текст
+        // при submit. Основной обработчик Chat V2 продолжает
+        // получать событие и отправляет сообщение через fetch.
+        form.addEventListener(
+            "submit",
+            function (event) {
+                event.preventDefault();
+            },
+            true
+        );
+
+        window.addEventListener(
+            "error",
+            function () {
+                if (state) {
+                    state.textContent =
+                        "Переподключение…";
+                    state.classList.add("is-error");
+                }
+            }
+        );
+
+        window.addEventListener(
+            "unhandledrejection",
+            function () {
+                if (state) {
+                    state.textContent =
+                        "Связь восстанавливается…";
+                    state.classList.add("is-error");
+                }
+            }
+        );
+    }
+
+    if (document.readyState === "loading") {
+        document.addEventListener(
+            "DOMContentLoaded",
+            installChatFallback,
+            { once:true }
+        );
+    } else {
+        installChatFallback();
+    }
+})();
