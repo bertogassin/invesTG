@@ -900,7 +900,7 @@ pub fn render_chat(
     </div>
 </form>
 
-<script src="/static/chat-v2.js?v=4.4.0" defer></script>
+<script src="/static/chat-v2.js?v=4.5.0" defer></script>
 
 "#,
             other_user_id = other_user_id,

@@ -1699,6 +1699,9 @@
                         renderMessage(selectedMessage);
                         closeDelete();
                     })
+                    .catch(function () {
+                        deleteApply.classList.add("is-error");
+                    })
                     .finally(function () {
                         deleteApply.disabled = false;
                         deleteApply.textContent =
