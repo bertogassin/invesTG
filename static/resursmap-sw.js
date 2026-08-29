@@ -1,12 +1,10 @@
 "use strict";
 
-const CACHE_VERSION = "resursmap-shell-v1";
+const CACHE_VERSION = "resursmap-shell-v4.9.0";
 
 const STATIC_ASSETS = [
     "/static/manifest.webmanifest",
-    "/static/icon-192.png",
-    "/static/icon-512.png",
-    "/static/apple-touch-icon.png"
+    "/static/app-icon.svg"
 ];
 
 self.addEventListener("install", function (event) {

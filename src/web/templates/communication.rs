@@ -334,7 +334,7 @@ pub fn render_contact_requests(
 
     page_shell(
         "Запросы · ResursMap",
-        &topbar("CONTACT REQUESTS", "user"),
+        &topbar("CONTACT REQUESTS", "users"),
         &back_hero(
             &back_link("/app/me", "Профиль", "arrow-left"),
             "user",
@@ -583,7 +583,7 @@ pub fn render_messages(
 
     page_shell(
         "Сообщения · ResursMap",
-        &topbar("MESSAGES", "search"),
+        &topbar("MESSAGES", "message-circle"),
         &back_hero(
             &back_link("/app/me", "Назад", "chevron-left"),
             "message-circle",
@@ -1000,7 +1000,7 @@ pub fn render_chat(
 
     page_shell(
         "Чат · ResursMap",
-        &topbar("CHAT", "search"),
+        &topbar("CHAT", "message-circle"),
         "",
         &content_html,
         &bottom_nav("profile"),

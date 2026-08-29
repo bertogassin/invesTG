@@ -34,13 +34,7 @@ pub fn render_continents(
     let section_head_countries = section_head("Страны", "Выберите страну для продолжения", None);
     let section_head_features = section_head("Возможности", "Всё необходимое в одном месте", None);
 
-    let head_extra = r####"<link rel="manifest" href="/static/manifest.webmanifest">
-<meta name="theme-color" content="rgb(17,17,17)">
-<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
-
-
-
-<style id="resursmap-home-layout-v1">
+    let head_extra = r####"<style id="resursmap-home-layout-v1">
     .rm-home-section {
         margin-top:18px;
     }
@@ -471,7 +465,10 @@ pub fn render_continents(
         message_icon = icon("message-circle"),
     );
 
-    let body_after = r####"<script src="/static/pwa-install.js?v=1.0.0" defer></script>"####;
+    let body_after = format!(
+        r####"<script src="{pwa_install_js}" defer></script>"####,
+        pwa_install_js = crate::web::templates::common::static_asset("pwa-install.js"),
+    );
 
     page_document(
         "ResursMap",

@@ -1007,7 +1007,7 @@ pub fn render_resource_profile(params: RenderResourceProfileParams<'_>) -> Strin
             ),
             content = main_html,
         ),
-        "",
+        &bottom_nav("map"),
         &body_after,
     )
 }
@@ -1514,7 +1514,7 @@ pub fn render_add_resource(ci: usize, si: usize, zi: usize, category: &str) -> S
         r####"<script src="https://telegram.org/js/telegram-web-app.js"></script>"####,
         "",
         &main_html,
-        "",
+        &bottom_nav("map"),
         body_after,
     )
 }

@@ -27,7 +27,7 @@
 
     // Логотип
     var logo = document.createElement('img');
-    logo.src = '/static/icon-192.png';
+    logo.src = "/static/app-icon.svg";
     logo.alt = 'ResursMap';
     logo.style.cssText = [
         'width:96px',

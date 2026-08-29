@@ -36,6 +36,24 @@
         );
     }
 
+    function assetVersion() {
+        var scripts = document.getElementsByTagName("script");
+
+        for (var i = 0; i < scripts.length; i++) {
+            var src = scripts[i].src || "";
+
+            if (src.indexOf("pwa-install.js") !== -1) {
+                var match = src.match(/[?&]v=([^&]+)/);
+
+                if (match) {
+                    return match[1];
+                }
+            }
+        }
+
+        return "4.9.0";
+    }
+
     function registerServiceWorker() {
         if (!("serviceWorker" in navigator)) {
             return;
@@ -45,7 +63,7 @@
             "load",
             function () {
                 navigator.serviceWorker.register(
-                    "/static/resursmap-sw.js?v=1.0.0",
+                    "/static/resursmap-sw.js?v=" + assetVersion(),
                     {
                         scope: "/"
                     }

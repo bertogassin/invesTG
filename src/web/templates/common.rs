@@ -7,7 +7,7 @@ pub fn escape_html(value: &str) -> String {
         .replace('\'', "&#39;")
 }
 
-pub const STATIC_ASSET_VERSION: &str = "4.8.4";
+pub const STATIC_ASSET_VERSION: &str = "4.9.0";
 
 pub fn static_asset(path: &str) -> String {
     let normalized = if path.starts_with("/static/") {
@@ -69,8 +69,55 @@ pub(crate) fn icon(name: &str) -> &'static str {
             r#"<svg class="icon" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>"#
         }
 
+        "logo" | "map-pin-brand" => {
+            r#"<svg class="icon brand-logo-icon" viewBox="0 0 24 24"><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></svg>"#
+        }
+
+        "arrow-left" => {
+            r#"<svg class="icon" viewBox="0 0 24 24"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>"#
+        }
+
+        "chevron-left" => {
+            r#"<svg class="icon small-icon" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg>"#
+        }
+
+        "shield" => {
+            r#"<svg class="icon" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></svg>"#
+        }
+
+        "users" => {
+            r#"<svg class="icon" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>"#
+        }
+
+        "bell" => {
+            r#"<svg class="icon" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>"#
+        }
+
+        "settings" => {
+            r#"<svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>"#
+        }
+
+        "alert-triangle" => {
+            r#"<svg class="icon" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>"#
+        }
+
         _ => "",
     }
+}
+
+pub(crate) fn brand_logo() -> &'static str {
+    icon("logo")
+}
+
+pub(crate) fn site_head_links() -> String {
+    format!(
+        r#"<meta name="theme-color" content="#080a0d">
+<link rel="icon" href="{icon}" type="image/svg+xml">
+<link rel="apple-touch-icon" href="{icon}">
+<link rel="manifest" href="{manifest}">"#,
+        icon = static_asset("app-icon.svg"),
+        manifest = static_asset("manifest.webmanifest"),
+    )
 }
 
 // ============================================================
@@ -82,9 +129,10 @@ pub(crate) fn base_style() -> &'static str {
 :root {
     --bg: #080a0d;
     --bg-soft: #0e1116;
+    --surface: #101319;
     --card: rgba(22, 25, 31, .78);
     --card-hover: rgba(29, 33, 40, .92);
-    --line: var(--line);
+    --line: rgba(214, 183, 122, .18);
 
     --text: #f3f0e9;
     --muted: #9298a3;
@@ -95,7 +143,15 @@ pub(crate) fn base_style() -> &'static str {
     --sea: #65b8c9;
     --sea-light: #8bd8e4;
 
+    --success: #62e0ad;
+    --warning: #f3a94f;
+    --danger: #ff7882;
+    --info: #7ab9ff;
+
     --radius: 22px;
+    --radius-sm: 14px;
+    --radius-lg: 26px;
+    --theme-color: #080a0d;
 }
 
 /* Светлая тема - активируется добавлением класса light-theme к body */
@@ -114,6 +170,11 @@ body.light-theme {
 
     --sea: #3d8b9c;
     --sea-light: #2d6e7d;
+
+    --success: #2f9b74;
+    --warning: #c47d1a;
+    --danger: #dc4b58;
+    --info: #3f7ec9;
 }
 
 body.light-theme::before {
@@ -273,6 +334,12 @@ body::before {
         inset 0 1px 0 var(--line);
 }
 
+.brand-mark .brand-logo-icon {
+    width: 24px;
+    height: 24px;
+    color: var(--gold-light);
+}
+
 .brand-name {
     font-size: 17px;
     font-weight: 700;
@@ -414,19 +481,11 @@ body::before {
 
 .section-head {
     display: flex;
-    align-items: end;
-    justify-content: space-between;
-
-    margin: 34px 4px 14px;
-}
-
-.section-head {
-    display: flex;
     align-items: flex-end;
     justify-content: space-between;
-    margin-bottom: 16px;
+    margin: 34px 4px 16px;
     padding-bottom: 12px;
-    border-bottom: 1px solid rgba(0,0,0,.06);
+    border-bottom: 1px solid var(--line);
 }
 
 .section-title {
@@ -1223,6 +1282,7 @@ pub(crate) fn page_document(
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+{site_head}
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;">
 <meta name="referrer" content="no-referrer">
 <meta http-equiv="X-Content-Type-Options" content="nosniff">
@@ -1253,6 +1313,7 @@ pub(crate) fn page_document(
 </body>
 </html>"#,
         title = escape_html(title),
+        site_head = site_head_links(),
         style = base_style(),
         head_extra = head_extra_html,
         body_before_main = body_before_main_html,
@@ -1342,14 +1403,14 @@ pub(crate) fn bottom_nav_with_badge(active: &str, unread_count: i64) -> String {
     )
 }
 
-pub(crate) fn topbar(subtitle: &str, icon_name: &str) -> String {
+pub(crate) fn topbar(subtitle: &str, _icon_name: &str) -> String {
     format!(
         r#"
 <header class="topbar">
     <a class="brand" href="/app">
         <div class="brand-mark">{logo}</div>
         <div>
-            <div class="brand-name">RESURSMAP</div>
+            <div class="brand-name">ResursMap</div>
             <div class="brand-sub">{subtitle}</div>
         </div>
     </a>
@@ -1366,7 +1427,7 @@ pub(crate) fn topbar(subtitle: &str, icon_name: &str) -> String {
     </a>
 </header>
 "#,
-        logo = icon(icon_name),
+        logo = brand_logo(),
         user_icon = icon("user"),
         subtitle = escape_html(subtitle),
     )

@@ -422,10 +422,10 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
             r#"
 <style id="resursmap-personal-center-v1">
 .rm-personal-center {{
-    --center-gold:#d6b77a;
-    --center-green:#62e0ad;
-    --center-blue:#7ab9ff;
-    --center-red:#ff7882;
+    --center-gold: var(--gold);
+    --center-green: var(--success);
+    --center-blue: var(--info);
+    --center-red: var(--danger);
     position:relative;
     overflow:hidden;
     margin-bottom:24px;
@@ -1240,7 +1240,7 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
 {notifications_card}</div>"####,
         account_header = account_header,
         statistics = statistics,
-        settings_icon = icon("user"),
+        settings_icon = icon("settings"),
         intent_status_text = intent_status_text,
         safe_intent_text = safe_intent_text,
         safe_category = safe_category,
@@ -1660,7 +1660,7 @@ pub fn render_notifications(
 
     page_shell(
         "Уведомления · ResursMap",
-        &topbar("NOTIFICATIONS", "user"),
+        &topbar("NOTIFICATIONS", "bell"),
         &back_hero(
             &back_link("/app/me", "Профиль", "arrow-left"),
             "user",
