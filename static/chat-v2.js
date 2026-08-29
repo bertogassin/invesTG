@@ -53,12 +53,13 @@
             return;
         }
 
-        var otherUserId = Number(
-            history.dataset.otherUserId || "0"
-        );
+        var otherUserId = String(
+            history.dataset.otherUserId || ""
+        ).trim();
 
-        if (!Number.isSafeInteger(otherUserId) ||
-            otherUserId <= 0) {
+        if (
+            !/^[1-9][0-9]{0,18}$/.test(otherUserId)
+        ) {
             return;
         }
 
@@ -95,9 +96,32 @@
                 ? viewport.height
                 : window.innerHeight;
 
+            var offsetTop = viewport
+                ? viewport.offsetTop
+                : 0;
+
+            var bottomInset = viewport
+                ? Math.max(
+                    0,
+                    window.innerHeight -
+                        viewport.height -
+                        viewport.offsetTop
+                )
+                : 0;
+
             document.documentElement.style.setProperty(
                 "--chat-viewport-height",
                 Math.round(height) + "px"
+            );
+
+            document.documentElement.style.setProperty(
+                "--chat-viewport-offset-top",
+                Math.round(offsetTop) + "px"
+            );
+
+            document.documentElement.style.setProperty(
+                "--chat-keyboard-inset",
+                Math.round(bottomInset) + "px"
             );
         }
 
@@ -700,12 +724,13 @@
             return;
         }
 
-        var otherUserId = Number(
-            history.dataset.otherUserId || "0"
-        );
+        var otherUserId = String(
+            history.dataset.otherUserId || ""
+        ).trim();
 
-        if (!Number.isSafeInteger(otherUserId) ||
-            otherUserId <= 0) {
+        if (
+            !/^[1-9][0-9]{0,18}$/.test(otherUserId)
+        ) {
             return;
         }
 
