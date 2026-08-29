@@ -687,7 +687,7 @@
 
         pollTimer = window.setInterval(
             pollMessages,
-            4000
+            2500
         );
 
         window.setTimeout(pollMessages, 500);
@@ -1379,7 +1379,7 @@
 
         refreshTimer = window.setInterval(
             refreshRecent,
-            15000
+            10000
         );
 
         window.addEventListener(

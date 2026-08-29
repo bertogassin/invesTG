@@ -1014,12 +1014,7 @@ body:has(#chat-form) main {
     flex:1 1 0!important;
     overflow-y:auto!important;
     overflow-x:hidden!important;
-    padding-bottom:
-        calc(
-            var(--chat-composer-height)
-            + 38px
-            + env(safe-area-inset-bottom)
-        )!important;
+    padding-bottom:12px!important;
     scroll-padding-bottom:
         calc(
             var(--chat-composer-height)
@@ -1037,7 +1032,7 @@ body:has(#chat-form) main {
     height:
         calc(
             var(--chat-composer-height)
-            + 28px
+            + 12px
             + env(safe-area-inset-bottom)
         );
     flex:0 0 auto;
@@ -1078,12 +1073,7 @@ body.chat-overlay-open #chat-form.chat-composer {
     }
 
     #chat-messages {
-        padding-bottom:
-            calc(
-                var(--chat-composer-height)
-                + 46px
-                + env(safe-area-inset-bottom)
-            )!important;
+        padding-bottom:10px!important;
         scroll-padding-bottom:
             calc(
                 var(--chat-composer-height)
@@ -1096,7 +1086,7 @@ body.chat-overlay-open #chat-form.chat-composer {
         height:
             calc(
                 var(--chat-composer-height)
-                + 38px
+                + 10px
                 + env(safe-area-inset-bottom)
             );
     }

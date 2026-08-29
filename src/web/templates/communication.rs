@@ -818,7 +818,7 @@ pub fn render_chat(
         format!(
             r#"
 <link rel="stylesheet"
-      href="/static/chat-v2.css?v=3.3.0">
+      href="/static/chat-v2.css?v=3.4.0">
 
 <section class="card chat-shell"
          style="
@@ -900,7 +900,7 @@ pub fn render_chat(
     </div>
 </form>
 
-<script src="/static/chat-v2.js?v=3.3.0" defer></script>
+<script src="/static/chat-v2.js?v=3.4.0" defer></script>
 
 "#,
             other_user_id = other_user_id,
