@@ -386,7 +386,7 @@
             );
             status.classList.add("is-pending");
 
-            if (item.state === "error") {
+            if (item.state === "error" || item.state === "failed") {
                 row.classList.add("is-send-error");
                 row.classList.remove("is-sending");
                 status.classList.add("is-error");
@@ -694,122 +694,138 @@
             }
         }
 
-        async function flushPendingQueue() {
-            if (
-                sending ||
-                pendingQueue.length === 0 ||
-                navigator.onLine === false
-            ) {
-                return;
+        var MAX_AUTO_RETRIES = 5;
+        var RETRY_BASE_DELAY_MS = 1000;
+        var RETRY_MAX_DELAY_MS = 20000;
+        var retryTimers = {};
+
+        function clearItemRetryTimer(clientMessageId) {
+            if (retryTimers[clientMessageId]) {
+                window.clearTimeout(retryTimers[clientMessageId]);
+                delete retryTimers[clientMessageId];
             }
+        }
 
-            sending = true;
-            updateComposer();
+        function isRecoverableError(error) {
+            if (!error || typeof error.status !== "number") {
+                return true;
+            }
+            if (error.status === 429) {
+                return true;
+            }
+            return error.status >= 500;
+        }
 
-            while (pendingQueue.length > 0) {
-                var item = pendingQueue[0];
+        function scheduleRetryWithDelay(item, delayMs) {
+            clearItemRetryTimer(item.clientMessageId);
+            item.state = "retrying";
+            savePendingQueue();
+            renderPendingItem(item);
+            retryTimers[item.clientMessageId] = window.setTimeout(function () {
+                delete retryTimers[item.clientMessageId];
+                item.state = "queued";
+                savePendingQueue();
+                renderPendingItem(item);
+                flushPendingQueue();
+            }, delayMs);
+        }
 
+        function scheduleRetry(item) {
+            var delay = Math.min(
+                RETRY_BASE_DELAY_MS * Math.pow(2, item.attempts),
+                RETRY_MAX_DELAY_MS
+            );
+            delay = delay + Math.floor(Math.random() * 300);
+            scheduleRetryWithDelay(item, delay);
+        }
+
+        async function flushPendingQueue() {
+        if (sending || navigator.onLine === false) {
+            return;
+        }
+        sending = true;
+        updateComposer();
+        try {
+            var index = 0;
+            while (index < pendingQueue.length) {
+                var item = pendingQueue[index];
+                if (item.state !== "queued") {
+                    index += 1;
+                    continue;
+                }
+                item.attempts = (item.attempts || 0) + 1;
                 item.state = "sending";
                 savePendingQueue();
                 renderPendingItem(item);
-
                 sendState.textContent =
                     pendingQueue.length > 1
-                        ? "Отправка · осталось " +
-                            pendingQueue.length
-                        : "Отправка…";
-
+                        ? "Отправка \u00b7 осталось " + pendingQueue.length
+                        : "Отправка\u2026";
                 try {
                     var data = await fetchJson(
-                        "/api/chat/" +
-                        otherUserId +
-                        "/send",
+                        "/api/chat/" + otherUserId + "/send",
                         {
                             method: "POST",
-                            headers: {
-                                "Content-Type":
-                                    "application/json"
-                            },
+                            headers: { "Content-Type": "application/json" },
                             body: JSON.stringify({
                                 message: item.message,
-                                reply_to_message_id:
-                                    item.replyToMessageId,
-                                client_message_id:
-                                    item.clientMessageId
+                                reply_to_message_id: item.replyToMessageId,
+                                client_message_id: item.clientMessageId
                             })
                         }
                     );
-
                     if (data.message) {
-                        data.message.reply_message =
-                            item.replyMessage || "";
-                        data.message
-                            .reply_sender_user_id =
-                            item.replySenderUserId ||
-                            null;
+                        data.message.reply_message = item.replyMessage || "";
+                        data.message.reply_sender_user_id = item.replySenderUserId || null;
                     }
-
-                    removePendingRow(
-                        item.clientMessageId
-                    );
-
-                    pendingQueue.shift();
+                    clearItemRetryTimer(item.clientMessageId);
+                    removePendingRow(item.clientMessageId);
+                    var sentIndex = pendingQueue.indexOf(item);
+                    if (sentIndex !== -1) {
+                        pendingQueue.splice(sentIndex, 1);
+                    }
                     savePendingQueue();
-
                     if (data.message) {
                         appendMessages([data.message]);
                     }
-
-                    window.dispatchEvent(
-                        new CustomEvent(
-                            "resursmap:chat-message-sent"
-                        )
-                    );
-
-                    setConnection(
-                        "В сети",
-                        "is-online"
-                    );
+                    window.dispatchEvent(new CustomEvent("resursmap:chat-message-sent"));
+                    setConnection("\u0412 \u0441\u0435\u0442\u0438", "is-online");
+                    index = 0;
                 } catch (error) {
-                    item.state = "error";
-                    savePendingQueue();
-                    renderPendingItem(item);
-
-                    if (
-                        error.status === 429 &&
-                        error.retryAfter > 0
-                    ) {
-                        sendState.textContent =
-                            "Лимит · повтор через " +
-                            error.retryAfter +
-                            " сек.";
-                    } else if (
-                        error.status === 401
-                    ) {
-                        sendState.textContent =
-                            "Сессия истекла";
+                    var recoverable = isRecoverableError(error);
+                    var exhausted = item.attempts >= MAX_AUTO_RETRIES;
+                    if (recoverable && !exhausted) {
+                        if (error.status === 429 && error.retryAfter > 0) {
+                            sendState.textContent =
+                                "\u041b\u0438\u043c\u0438\u0442 \u00b7 \u043f\u043e\u0432\u0442\u043e\u0440 \u0447\u0435\u0440\u0435\u0437 " + error.retryAfter + " \u0441\u0435\u043a.";
+                            scheduleRetryWithDelay(item, error.retryAfter * 1000);
+                        } else {
+                            sendState.textContent = "\u041f\u043e\u0432\u0442\u043e\u0440 \u0447\u0435\u0440\u0435\u0437 \u043d\u0435\u0441\u043a\u043e\u043b\u044c\u043a\u043e \u0441\u0435\u043a\u0443\u043d\u0434\u2026";
+                            scheduleRetry(item);
+                        }
+                        setConnection("\u041e\u0448\u0438\u0431\u043a\u0430 \u043e\u0442\u043f\u0440\u0430\u0432\u043a\u0438", "is-error");
                     } else {
-                        sendState.textContent =
-                            "Не отправлено · нажмите !";
+                        item.state = "failed";
+                        savePendingQueue();
+                        renderPendingItem(item);
+                        if (error.status === 401) {
+                            sendState.textContent = "\u0421\u0435\u0441\u0441\u0438\u044f \u0438\u0441\u0442\u0435\u043a\u043b\u0430";
+                        } else {
+                            sendState.textContent = "\u041d\u0435 \u043e\u0442\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u043e \u00b7 \u043d\u0430\u0436\u043c\u0438\u0442\u0435 !";
+                        }
+                        setConnection("\u041e\u0448\u0438\u0431\u043a\u0430 \u043e\u0442\u043f\u0440\u0430\u0432\u043a\u0438", "is-error");
                     }
-
-                    setConnection(
-                        "Ошибка отправки",
-                        "is-error"
-                    );
-
-                    break;
+                    index += 1;
                 }
             }
-
+            if (pendingQueue.length === 0) {
+                sendState.textContent = "\u041e\u0442\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u043e \u00b7 Enter \u2014 \u043e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c";
+            }
+        } finally {
             sending = false;
             updateComposer();
-
-            if (pendingQueue.length === 0) {
-                sendState.textContent =
-                    "Отправлено · Enter — отправить";
-            }
         }
+    }
 
         function sendMessage() {
             var message = input.value.trim();
@@ -833,7 +849,8 @@
                     reply ? reply.senderUserId : null,
                 createdAt:
                     Math.floor(Date.now() / 1000),
-                state: "queued"
+                state: "queued",
+            attempts: 0
             };
 
             pendingQueue.push(item);
@@ -991,7 +1008,7 @@
             }
 
             pendingQueue.forEach(function (item) {
-                if (item.state === "sending") {
+                if (item.state === "sending" || item.state === "retrying") {
                     item.state = "queued";
                 }
             });
