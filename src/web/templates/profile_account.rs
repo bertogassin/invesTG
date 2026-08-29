@@ -1791,7 +1791,7 @@ pub fn render_public_user_profile(params: RenderPublicUserProfileParams<'_>) -> 
         font-weight:800;
         margin-bottom:8px;
     ">
-        Связаться
+        Написать
     </div>
 
     <div class="card-meta"
@@ -1842,7 +1842,7 @@ pub fn render_public_user_profile(params: RenderPublicUserProfileParams<'_>) -> 
         font-weight:800;
         margin-bottom:8px;
     ">
-        Связаться
+        Написать
     </div>
 
     <div class="card-meta"
@@ -1866,7 +1866,7 @@ pub fn render_public_user_profile(params: RenderPublicUserProfileParams<'_>) -> 
             font-weight:850;
             cursor:pointer;
         " class="ui-button">
-        Связаться
+        Написать
     </button>
 
     <div id="contact-request-panel"
@@ -2234,7 +2234,7 @@ pub fn render_public_user_profile(params: RenderPublicUserProfileParams<'_>) -> 
                 ) {{
                     if (status) {{
                         status.textContent =
-                            "Запрос уже отправлен и ожидает ответа.";
+                            "Диалог уже создаётся.";
                     }}
 
                     sendButton.disabled = false;
@@ -2247,7 +2247,7 @@ pub fn render_public_user_profile(params: RenderPublicUserProfileParams<'_>) -> 
                 ) {{
                     if (status) {{
                         status.textContent =
-                            "Контакт уже установлен.";
+                            "Диалог уже открыт.";
                     }}
 
                     sendButton.disabled = false;
@@ -2266,16 +2266,22 @@ pub fn render_public_user_profile(params: RenderPublicUserProfileParams<'_>) -> 
 
                 if (status) {{
                     status.textContent =
-                        "✓ Запрос отправлен";
+                        "Открываем диалог…";
                 }}
 
                 if (message) {{
                     message.value = "";
                 }}
 
-                openButton.disabled = true;
+                openButton.disabled = false;
                 openButton.textContent =
-                    "Запрос отправлен";
+                    "Открыть чат";
+
+                if (data.chat_url) {{
+                    window.location.href =
+                        data.chat_url;
+                    return;
+                }}
 
             }} catch (_) {{
                 if (status) {{

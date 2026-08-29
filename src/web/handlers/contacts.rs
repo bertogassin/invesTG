@@ -341,6 +341,7 @@ pub async fn reject_contact_request(
         .into_response()
 }
 
+#[allow(dead_code)]
 pub async fn api_contact_request(
     State(state): State<AppState>,
     headers: HeaderMap,

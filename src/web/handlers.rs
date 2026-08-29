@@ -9,6 +9,7 @@ pub use contacts::*;
 
 mod chat;
 mod chat_api;
+mod direct_chat_start;
 pub use chat::*;
 pub use chat_api::{api_chat_delete, api_chat_edit, api_chat_messages, api_chat_send};
 
@@ -51,3 +52,5 @@ pub use admin_security::{admin_security_page, admin_step_up_request, admin_step_
 pub use admin_session_actions::revoke_admin_session;
 
 pub use admin_assignment_lifecycle::manage_admin_assignment;
+
+pub use direct_chat_start::api_start_direct_chat;

@@ -30,6 +30,7 @@ pub struct ReportResourcePayload {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct ContactRequestPayload {
     pub public_id: String,
     pub message: String,

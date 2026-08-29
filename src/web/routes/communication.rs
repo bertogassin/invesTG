@@ -1,6 +1,6 @@
 use super::super::handlers::{
     accept_contact_request, api_chat_delete, api_chat_edit, api_chat_messages, api_chat_send,
-    api_contact_request, chat_page, contact_requests_page, messages_page, reject_contact_request,
+    api_start_direct_chat, chat_page, contact_requests_page, messages_page, reject_contact_request,
     send_chat_message,
 };
 use crate::state::app_state::AppState;
@@ -33,5 +33,5 @@ pub(super) fn routes() -> Router<AppState> {
             "/api/chat/{other_user_id}/messages/{message_id}/delete",
             post(api_chat_delete),
         )
-        .route("/api/contact/request", post(api_contact_request))
+        .route("/api/contact/request", post(api_start_direct_chat))
 }
