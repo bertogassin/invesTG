@@ -26,6 +26,18 @@ pub struct ChatSendPayload {
     message: String,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct ChatEditPayload {
+    message: String,
+}
+
+fn message_can_be_edited(created_at: i64, deleted_at: i64, now: i64) -> bool {
+    deleted_at == 0
+        && created_at > 0
+        && now >= created_at
+        && now.saturating_sub(created_at) <= 86_400
+}
+
 #[derive(Debug, Serialize)]
 struct ChatApiMessage {
     id: i64,
@@ -501,6 +513,190 @@ pub async fn api_chat_send(
         .into_response()
 }
 
+pub async fn api_chat_edit(
+    State(state): State<AppState>,
+    Path((other_user_id, message_id)): Path<(i64, i64)>,
+    headers: HeaderMap,
+    Json(payload): Json<ChatEditPayload>,
+) -> Response {
+    if request_is_cross_site(&headers) {
+        return json_error(StatusCode::FORBIDDEN, "cross_site_request_rejected");
+    }
+
+    let user_id = match verify_user_session(&state, &headers) {
+        Some(user_id) => user_id,
+        None => {
+            return json_error(StatusCode::UNAUTHORIZED, "login_required");
+        }
+    };
+
+    if normalized_pair(user_id, other_user_id).is_none() || message_id <= 0 {
+        return json_error(StatusCode::BAD_REQUEST, "invalid_request");
+    }
+
+    let message = payload.message.trim();
+
+    if !message_is_valid(message) {
+        return json_error(StatusCode::BAD_REQUEST, "invalid_message");
+    }
+
+    if let Some(retry_after) = rate_limit_retry_after(&state, user_id, "chat_edit", 20, 60).await {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            [(header::RETRY_AFTER, retry_after.to_string())],
+            Json(json!({
+                "ok": false,
+                "error": "rate_limited",
+                "retry_after": retry_after
+            })),
+        )
+            .into_response();
+    }
+
+    let connection = match state.db_pool.get() {
+        Ok(connection) => connection,
+        Err(_) => {
+            return json_error(StatusCode::SERVICE_UNAVAILABLE, "database_unavailable");
+        }
+    };
+
+    let conversation_id = match conversation_id(&connection, user_id, other_user_id) {
+        Some(value) => value,
+        None => {
+            return json_error(StatusCode::FORBIDDEN, "conversation_not_open");
+        }
+    };
+
+    let row: Option<(i64, i64)> = connection
+        .query_row(
+            "SELECT created_at, deleted_at
+             FROM messages
+             WHERE id = ?1
+               AND conversation_id = ?2
+               AND sender_user_id = ?3",
+            rusqlite::params![message_id, conversation_id, user_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .ok();
+
+    let Some((created_at, deleted_at)) = row else {
+        return json_error(StatusCode::NOT_FOUND, "message_not_found");
+    };
+
+    let now = crate::web::handlers::common::unix_now();
+
+    if !message_can_be_edited(created_at, deleted_at, now) {
+        return json_error(StatusCode::CONFLICT, "message_not_editable");
+    }
+
+    let changed = connection
+        .execute(
+            "UPDATE messages
+             SET message = ?1,
+                 edited_at = ?2
+             WHERE id = ?3
+               AND conversation_id = ?4
+               AND sender_user_id = ?5
+               AND deleted_at = 0",
+            rusqlite::params![message, now, message_id, conversation_id, user_id],
+        )
+        .unwrap_or(0);
+
+    if changed != 1 {
+        return json_error(StatusCode::CONFLICT, "message_changed");
+    }
+
+    (
+        StatusCode::OK,
+        Json(json!({
+            "ok": true,
+            "message_id": message_id,
+            "message": message,
+            "edited_at": now
+        })),
+    )
+        .into_response()
+}
+
+pub async fn api_chat_delete(
+    State(state): State<AppState>,
+    Path((other_user_id, message_id)): Path<(i64, i64)>,
+    headers: HeaderMap,
+) -> Response {
+    if request_is_cross_site(&headers) {
+        return json_error(StatusCode::FORBIDDEN, "cross_site_request_rejected");
+    }
+
+    let user_id = match verify_user_session(&state, &headers) {
+        Some(user_id) => user_id,
+        None => {
+            return json_error(StatusCode::UNAUTHORIZED, "login_required");
+        }
+    };
+
+    if normalized_pair(user_id, other_user_id).is_none() || message_id <= 0 {
+        return json_error(StatusCode::BAD_REQUEST, "invalid_request");
+    }
+
+    if let Some(retry_after) = rate_limit_retry_after(&state, user_id, "chat_delete", 20, 60).await
+    {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            [(header::RETRY_AFTER, retry_after.to_string())],
+            Json(json!({
+                "ok": false,
+                "error": "rate_limited",
+                "retry_after": retry_after
+            })),
+        )
+            .into_response();
+    }
+
+    let connection = match state.db_pool.get() {
+        Ok(connection) => connection,
+        Err(_) => {
+            return json_error(StatusCode::SERVICE_UNAVAILABLE, "database_unavailable");
+        }
+    };
+
+    let conversation_id = match conversation_id(&connection, user_id, other_user_id) {
+        Some(value) => value,
+        None => {
+            return json_error(StatusCode::FORBIDDEN, "conversation_not_open");
+        }
+    };
+
+    let now = crate::web::handlers::common::unix_now();
+
+    let changed = connection
+        .execute(
+            "UPDATE messages
+             SET message = '',
+                 deleted_at = ?1,
+                 edited_at = 0
+             WHERE id = ?2
+               AND conversation_id = ?3
+               AND sender_user_id = ?4
+               AND deleted_at = 0",
+            rusqlite::params![now, message_id, conversation_id, user_id],
+        )
+        .unwrap_or(0);
+
+    if changed != 1 {
+        return json_error(StatusCode::NOT_FOUND, "message_not_found");
+    }
+
+    (
+        StatusCode::OK,
+        Json(json!({
+            "ok": true,
+            "message_id": message_id,
+            "deleted_at": now
+        })),
+    )
+        .into_response()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -530,6 +726,13 @@ mod tests {
         let long_message = "я".repeat(2001);
 
         assert!(!message_is_valid(&long_message));
+    }
+
+    #[test]
+    fn chat_edit_window_is_enforced() {
+        assert!(message_can_be_edited(1_000, 0, 1_000 + 86_400));
+        assert!(!message_can_be_edited(1_000, 0, 1_000 + 86_401));
+        assert!(!message_can_be_edited(1_000, 2_000, 1_001));
     }
 
     #[test]
