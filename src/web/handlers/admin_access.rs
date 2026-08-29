@@ -42,7 +42,7 @@ impl AdminLevel {
             Self::City => "Администратор города",
             Self::Country => "Администратор страны",
             Self::Continent => "Администратор континента",
-            Self::Owner => "Global Owner",
+            Self::Owner => "Владелец ResursMap",
         }
     }
 }
@@ -407,7 +407,7 @@ pub(super) fn create_admin_session(
              )
              VALUES (
                 ?1, ?2, ?3, ?4,
-                ?5, ?6, 'ResursMap Admin',
+                ?5, ?6, 'ResursMap · Модерация',
                 0, NULL, ?7, ?7, ?8
              )",
             params![

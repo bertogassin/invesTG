@@ -236,10 +236,9 @@ mod tests {
 
     #[test]
     fn client_frame_parses_typing() {
-        let frame: ClientFrame = serde_json::from_str(
-            r#"{"type":"typing.start","other_user_id":"18"}"#,
-        )
-        .expect("typing frame");
+        let frame: ClientFrame =
+            serde_json::from_str(r#"{"type":"typing.start","other_user_id":"18"}"#)
+                .expect("typing frame");
 
         assert_eq!(frame.frame_type, "typing.start");
         assert_eq!(frame.other_user_id.as_deref(), Some("18"));

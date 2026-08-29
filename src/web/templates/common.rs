@@ -7,7 +7,7 @@ pub fn escape_html(value: &str) -> String {
         .replace('\'', "&#39;")
 }
 
-pub const STATIC_ASSET_VERSION: &str = "4.9.2";
+pub const STATIC_ASSET_VERSION: &str = "4.9.4";
 
 pub fn static_asset(path: &str) -> String {
     let normalized = if path.starts_with("/static/") {
@@ -109,9 +109,7 @@ pub(crate) fn icon(name: &str) -> &'static str {
             r#"<svg class="icon" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>"#
         }
 
-        "check" => {
-            r#"<svg class="icon" viewBox="0 0 24 24"><path d="m20 6-11 11-5-5"/></svg>"#
-        }
+        "check" => r#"<svg class="icon" viewBox="0 0 24 24"><path d="m20 6-11 11-5-5"/></svg>"#,
 
         "x" => {
             r#"<svg class="icon" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>"#
@@ -127,10 +125,10 @@ pub fn brand_logo() -> &'static str {
 
 pub(crate) fn site_head_links() -> String {
     format!(
-        r#"<meta name="theme-color" content="#080a0d">
+        r##"<meta name="theme-color" content="#080a0d">
 <link rel="icon" href="{icon}" type="image/svg+xml">
 <link rel="apple-touch-icon" href="{icon}">
-<link rel="manifest" href="{manifest}">"#,
+<link rel="manifest" href="{manifest}">"##,
         icon = static_asset("app-icon.svg"),
         manifest = static_asset("manifest.webmanifest"),
     )
@@ -148,17 +146,18 @@ pub(crate) fn base_style() -> &'static str {
     --surface: #141922;
     --card: rgba(24, 28, 36, .86);
     --card-hover: rgba(32, 37, 46, .94);
-    --line: rgba(224, 196, 138, .22);
+    --line: rgba(232, 204, 150, .26);
 
     --text: #f8f5ef;
     --muted: #a3a9b4;
 
-    --gold: #e0c48a;
-    --gold-light: #f5dba8;
-    --gold-glow: rgba(224, 196, 138, .35);
+    --gold: #e8cc96;
+    --gold-light: #ffe4b8;
+    --gold-glow: rgba(232, 204, 150, .42);
 
-    --sea: #72c4d4;
-    --sea-light: #9adced;
+    --sea: #7ed4e4;
+    --sea-light: #a8e8f4;
+    --sea-glow: rgba(126, 212, 228, .28);
 
     --success: #6fe8b8;
     --warning: #ffb85c;
@@ -228,6 +227,26 @@ body.light-theme::before {
     }
 }
 
+@keyframes pulseGlow {
+    0%, 100% {
+        opacity: .55;
+        transform: scale(1);
+    }
+    50% {
+        opacity: .85;
+        transform: scale(1.04);
+    }
+}
+
+@keyframes shimmerSlide {
+    from {
+        transform: translateX(-120%);
+    }
+    to {
+        transform: translateX(120%);
+    }
+}
+
 html {
     background: var(--bg);
     color-scheme: dark;
@@ -248,19 +267,19 @@ body {
 
     background:
         radial-gradient(
-            circle at 15% 0%,
-            rgba(114, 196, 212, .16),
-            transparent 38%
+            circle at 12% 0%,
+            rgba(126, 212, 228, .20),
+            transparent 40%
         ),
         radial-gradient(
-            circle at 85% 12%,
-            rgba(224, 196, 138, .14),
-            transparent 34%
+            circle at 88% 8%,
+            rgba(232, 204, 150, .18),
+            transparent 36%
         ),
         radial-gradient(
             circle at 50% 100%,
-            rgba(111, 232, 184, .05),
-            transparent 40%
+            rgba(111, 232, 184, .07),
+            transparent 42%
         ),
         linear-gradient(
             145deg,
@@ -370,8 +389,12 @@ body::before {
 
 .brand-name {
     font-size: 17px;
-    font-weight: 700;
+    font-weight: 800;
     letter-spacing: .08em;
+    background: linear-gradient(135deg, var(--text) 0%, var(--gold-light) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
 }
 
 .brand-sub {
@@ -454,6 +477,7 @@ body::before {
     font-size: clamp(32px, 7vw, 56px);
     line-height: 1.02;
     letter-spacing: -.045em;
+    text-shadow: 0 0 48px rgba(232, 204, 150, .14);
 }
 
 .hero p {
@@ -518,9 +542,11 @@ body::before {
 
 .section-title {
     margin: 0;
-
+    padding-left: 12px;
+    border-left: 3px solid var(--gold-light);
     font-size: 18px;
     letter-spacing: -.02em;
+    box-shadow: -8px 0 24px rgba(232, 204, 150, .12);
 }
 
 .section-caption {
@@ -539,6 +565,13 @@ body::before {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 13px;
 }
+
+.grid .card:nth-child(1) { animation-delay: .04s; }
+.grid .card:nth-child(2) { animation-delay: .08s; }
+.grid .card:nth-child(3) { animation-delay: .12s; }
+.grid .card:nth-child(4) { animation-delay: .16s; }
+.grid .card:nth-child(5) { animation-delay: .20s; }
+.grid .card:nth-child(6) { animation-delay: .24s; }
 
 .card {
     position: relative;
@@ -604,15 +637,24 @@ body::before {
 
     color: var(--gold-light);
 
-    border: 1px solid rgba(214,183,122,.20);
+    border: 1px solid rgba(232, 204, 150, .28);
     border-radius: 16px;
 
     background:
+        radial-gradient(
+            circle at 30% 20%,
+            rgba(255, 228, 184, .18),
+            transparent 55%
+        ),
         linear-gradient(
             145deg,
-            rgba(214,183,122,.12),
-            rgba(214,183,122,.04)
+            rgba(232, 204, 150, .16),
+            rgba(126, 212, 228, .08)
         );
+
+    box-shadow:
+        0 8px 22px rgba(0, 0, 0, .22),
+        inset 0 1px 0 rgba(255, 255, 255, .08);
 }
 
 .card-content {
@@ -784,6 +826,17 @@ body::before {
 
 .nav-item.active .icon {
     stroke-width: 2.2;
+    filter: drop-shadow(0 0 12px rgba(232, 204, 150, .45));
+}
+
+.nav-item.active::after {
+    content: "";
+    width: 5px;
+    height: 5px;
+    margin-top: 1px;
+    border-radius: 50%;
+    background: var(--gold-light);
+    box-shadow: 0 0 12px var(--gold-glow);
 }
 
 /* -----------------------------------------------------------
@@ -969,27 +1022,29 @@ body::before {
 .hero::before {
     content: "";
     position: absolute;
-    width: 280px;
-    height: 280px;
-    top: -160px;
-    right: -100px;
+    width: 320px;
+    height: 320px;
+    top: -180px;
+    right: -120px;
     border-radius: 50%;
-    background: rgba(114, 196, 212, .16);
-    filter: blur(45px);
+    background: rgba(126, 212, 228, .20);
+    filter: blur(52px);
     pointer-events: none;
+    animation: pulseGlow 8s ease-in-out infinite;
 }
 
 .hero::after {
     content: "";
     position: absolute;
-    width: 220px;
-    height: 220px;
-    bottom: -150px;
-    left: -80px;
+    width: 260px;
+    height: 260px;
+    bottom: -160px;
+    left: -100px;
     border-radius: 50%;
-    background: rgba(224, 196, 138, .14);
-    filter: blur(45px);
+    background: rgba(232, 204, 150, .18);
+    filter: blur(52px);
     pointer-events: none;
+    animation: pulseGlow 10s ease-in-out infinite reverse;
 }
 
 .search {
@@ -1055,17 +1110,17 @@ body::before {
 
 .card:hover {
     transform: translateY(-4px);
-    border-color: rgba(224, 196, 138, .32);
+    border-color: rgba(232, 204, 150, .38);
     background:
         linear-gradient(
             145deg,
-            rgba(224, 196, 138, .08),
-            rgba(114, 196, 212, .04)
+            rgba(232, 204, 150, .11),
+            rgba(126, 212, 228, .06)
         );
     box-shadow:
-        0 20px 50px rgba(0,0,0,.30),
-        0 0 40px rgba(224, 196, 138, .08),
-        inset 0 1px 0 rgba(255,255,255,.06);
+        0 22px 56px rgba(0,0,0,.32),
+        0 0 48px rgba(232, 204, 150, .10),
+        inset 0 1px 0 rgba(255,255,255,.08);
 }
 
 .card:hover::before {
@@ -1252,6 +1307,17 @@ body::before {
 @media (hover:hover) {
     .ui-button:hover {
         opacity: .94;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .hero::before,
+    .hero::after {
+        animation: none;
+    }
+
+    .grid .card {
+        animation-delay: 0s !important;
     }
 }
 
@@ -1445,12 +1511,12 @@ pub(crate) fn topbar(subtitle: &str, _icon_name: &str) -> String {
 
     <a class="topbar-account"
        href="/app/me"
-       aria-label="Открыть аккаунт">
+       aria-label="Открыть профиль">
         <span class="topbar-account-icon">
             {user_icon}
         </span>
         <span class="topbar-account-label">
-            Аккаунт
+            Профиль
         </span>
     </a>
 </header>
@@ -2062,7 +2128,7 @@ mod public_entry_tests {
 
         assert!(html.contains("href=\"/app\""));
         assert!(html.contains("href=\"/app/me\""));
-        assert!(html.contains("Аккаунт"));
+        assert!(html.contains("Профиль"));
         assert!(html.contains("brand-logo-icon"));
         assert!(html.contains("ResursMap"));
         assert!(!html.contains("/app/auth"));

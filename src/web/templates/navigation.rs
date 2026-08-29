@@ -77,12 +77,103 @@ pub fn render_continents(
         display:flex;
         align-items:center;
         justify-content:center;
-        width:34px;
-        height:34px;
+        width:38px;
+        height:38px;
         margin-bottom:10px;
-        border-radius:11px;
-        background:rgba(214,183,122,.08);
-        border:1px solid rgba(214,183,122,.12);
+        border-radius:12px;
+        color:var(--gold-light);
+        background:
+            radial-gradient(circle at 30% 20%, rgba(255,228,184,.16), transparent 55%),
+            linear-gradient(145deg, rgba(232,204,150,.14), rgba(126,212,228,.08));
+        border:1px solid rgba(232,204,150,.24);
+        box-shadow:0 6px 18px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.06);
+    }
+
+    .rm-stats-row {
+        display:grid;
+        grid-template-columns:repeat(4,minmax(0,1fr));
+        gap:10px;
+        margin-top:22px;
+        position:relative;
+        z-index:2;
+    }
+
+    .rm-stat {
+        min-width:0;
+        padding:14px 10px;
+        border-radius:16px;
+        border:1px solid rgba(232,204,150,.24);
+        background:
+            linear-gradient(145deg, rgba(232,204,150,.12), rgba(126,212,228,.06));
+        box-shadow:
+            inset 0 1px 0 rgba(255,255,255,.07),
+            0 10px 28px rgba(0,0,0,.20);
+        text-align:center;
+    }
+
+    .rm-stat strong {
+        display:block;
+        font-size:clamp(18px,4vw,24px);
+        font-weight:850;
+        letter-spacing:-.03em;
+        color:var(--gold-light);
+        line-height:1;
+    }
+
+    .rm-stat-online strong {
+        color:var(--success);
+        text-shadow:0 0 20px rgba(111,232,184,.35);
+    }
+
+    .rm-stat span {
+        display:block;
+        margin-top:6px;
+        color:var(--muted);
+        font-size:10px;
+        font-weight:700;
+        letter-spacing:.04em;
+        text-transform:uppercase;
+    }
+
+    .rm-categories {
+        display:flex;
+        flex-wrap:wrap;
+        gap:8px;
+        margin-top:12px;
+        position:relative;
+        z-index:2;
+    }
+
+    .rm-category {
+        display:inline-flex;
+        align-items:center;
+        gap:6px;
+        padding:8px 13px;
+        border-radius:999px;
+        border:1px solid rgba(232,204,150,.24);
+        background:rgba(232,204,150,.07);
+        color:var(--text);
+        text-decoration:none;
+        font-size:12px;
+        font-weight:650;
+        transition:
+            transform .18s ease,
+            border-color .18s ease,
+            background .18s ease,
+            box-shadow .18s ease;
+    }
+
+    .rm-category:hover {
+        transform:translateY(-2px);
+        border-color:rgba(232,204,150,.42);
+        background:rgba(232,204,150,.13);
+        box-shadow:0 8px 24px rgba(0,0,0,.18), 0 0 24px rgba(232,204,150,.08);
+    }
+
+    .rm-category span {
+        color:var(--gold-light);
+        font-size:11px;
+        font-weight:850;
     }
 
     .rm-install-grid {
@@ -97,11 +188,22 @@ pub fn render_continents(
         padding:9px 10px;
         border-radius:14px;
         border:1px solid var(--line);
-        background:rgba(0,0,0,.035);
+        background:
+            linear-gradient(145deg, rgba(255,255,255,.04), rgba(255,255,255,.015));
         color:var(--text);
         cursor:pointer;
         font:inherit;
         text-align:left;
+        transition:
+            transform .18s ease,
+            border-color .18s ease,
+            box-shadow .18s ease;
+    }
+
+    .rm-install-button:hover {
+        transform:translateY(-2px);
+        border-color:rgba(232,204,150,.32);
+        box-shadow:0 10px 28px rgba(0,0,0,.22);
     }
 
     .rm-install-button strong {
@@ -170,22 +272,10 @@ pub fn render_continents(
     }
 
     @media (max-width: 620px) {
-        .rm-quick-grid {
-            grid-template-columns:1fr;
-            gap:8px;
+        .rm-stats-row {
+            grid-template-columns:repeat(2,minmax(0,1fr));
         }
 
-        .rm-quick-card {
-            padding:14px;
-        }
-
-        .rm-home-label {
-            font-size:10px;
-            letter-spacing:.06em;
-        }
-    }
-
-    @media (max-width: 620px) {
         .rm-quick-grid {
             grid-template-columns:1fr;
             gap:8px;
@@ -215,11 +305,7 @@ pub fn render_continents(
 
     let body_before_main = r####""####;
 
-    let guest_hint = if guest_mode {
-        guest_mode_hint()
-    } else {
-        ""
-    };
+    let guest_hint = if guest_mode { guest_mode_hint() } else { "" };
 
     let hero = format!(
         r#"<section class="hero">
@@ -239,8 +325,8 @@ pub fn render_continents(
             <strong>{users_count}</strong>
             <span>людей</span>
         </div>
-        <div class="rm-stat">
-            <strong style="color:#22c55e;">{online_count}</strong>
+        <div class="rm-stat rm-stat-online">
+            <strong>{online_count}</strong>
             <span>онлайн</span>
         </div>
         <div class="rm-stat">
@@ -458,7 +544,7 @@ pub fn render_continents(
     </div>
 
 </section>"####,
-        topbar = topbar("RESOURCE NETWORK", "globe"),
+        topbar = topbar("Карта", "globe"),
         hero = hero,
         cards = cards,
         map_icon = icon("map"),
@@ -477,7 +563,7 @@ pub fn render_continents(
         body_before_main,
         &main_html,
         &bottom_nav("map"),
-        body_after,
+        &body_after,
     )
 }
 
@@ -517,7 +603,7 @@ pub fn render_continent(ci: usize) -> String {
 
         return page_shell(
             name,
-            &topbar("RESOURCE NETWORK", "globe"),
+            &topbar("Карта", "globe"),
             &simple_hero(
                 "map",
                 "Регион",
@@ -569,7 +655,7 @@ pub fn render_country(ci: usize, si: usize) -> String {
 
             return page_shell(
                 country,
-                &topbar("RESOURCE NETWORK", "globe"),
+                &topbar("Карта", "globe"),
                 &simple_hero(
                     "map-pin",
                     cname,
@@ -642,7 +728,7 @@ pub fn render_city(ci: usize, si: usize, zi: usize) -> String {
 
                 return page_shell(
                     city,
-                    &topbar("RESOURCE NETWORK", "globe"),
+                    &topbar("Карта", "globe"),
                     &simple_hero(
                         "map-pin",
                         country,
@@ -983,7 +1069,7 @@ pub fn render_search(
 
     page_shell(
         "Поиск · ResursMap",
-        &topbar("SEARCH", "search"),
+        &topbar("Поиск", "search"),
         &search_form_hero(
             "Поиск",
             "Найти ресурс",
@@ -1061,7 +1147,7 @@ pub fn render_menu() -> String {
 
     page_shell(
         "Меню · ResursMap",
-        &topbar("MENU", "menu"),
+        &topbar("Меню", "menu"),
         &simple_hero(
             "settings",
             "ResursMap",

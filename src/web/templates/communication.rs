@@ -334,7 +334,7 @@ pub fn render_contact_requests(
 
     page_shell(
         "Запросы · ResursMap",
-        &topbar("CONTACT REQUESTS", "users"),
+        &topbar("Запросы контактов", "users"),
         &back_hero(
             &back_link("/app/me", "Профиль", "arrow-left"),
             "user",
@@ -425,20 +425,16 @@ pub fn render_messages(
                 let last_message = &conversation.last_message;
                 let unread_count = conversation.unread_count;
                 let updated_at = conversation.updated_at;
-                    let safe_username = escape_html(username);
+                let safe_username = escape_html(username);
 
-                    let display_name = conversation_display_name(
-                        other_user_id,
-                        username,
-                        first_name,
-                        last_name,
-                    );
+                let display_name =
+                    conversation_display_name(other_user_id, username, first_name, last_name);
 
-                    let safe_last_message = escape_html(last_message);
+                let safe_last_message = escape_html(last_message);
 
-                    let username_html = if !safe_username.is_empty() {
-                        format!(
-                            r#"
+                let username_html = if !safe_username.is_empty() {
+                    format!(
+                        r#"
 <div class="card-meta"
      style="
          margin-top:3px;
@@ -447,37 +443,37 @@ pub fn render_messages(
     @{username}
 </div>
 "#,
-                            username = safe_username,
-                        )
-                    } else {
-                        String::new()
-                    };
+                        username = safe_username,
+                    )
+                } else {
+                    String::new()
+                };
 
-                    let has_last_message = !safe_last_message.is_empty();
+                let has_last_message = !safe_last_message.is_empty();
 
-                    let last_time = if has_last_message {
-                        format_inbox_time(updated_at)
-                    } else {
-                        String::new()
-                    };
+                let last_time = if has_last_message {
+                    format_inbox_time(updated_at)
+                } else {
+                    String::new()
+                };
 
-                    let last_message_html = if has_last_message {
-                        safe_last_message
-                    } else {
-                        "Чат открыт. Сообщений пока нет.".to_string()
-                    };
+                let last_message_html = if has_last_message {
+                    safe_last_message
+                } else {
+                    "Чат открыт. Сообщений пока нет.".to_string()
+                };
 
-                    let unread_html = if unread_count > 0 {
-                        format!(
-                            r#"<span class="chat-dialog-unread">{count}</span>"#,
-                            count = unread_count,
-                        )
-                    } else {
-                        String::new()
-                    };
-
+                let unread_html = if unread_count > 0 {
                     format!(
-                        r#"
+                        r#"<span class="chat-dialog-unread">{count}</span>"#,
+                        count = unread_count,
+                    )
+                } else {
+                    String::new()
+                };
+
+                format!(
+                    r#"
 <a href="/app/chat/{other_user_id}#chat-end"
    class="card chat-dialog-card"
    data-other-user-id="{other_user_id}">
@@ -516,15 +512,15 @@ pub fn render_messages(
 
 </a>
 "#,
-                        other_user_id = other_user_id,
-                        chat_icon = icon("message-circle"),
-                        display_name = display_name,
-                        username_html = username_html,
-                        last_message = last_message_html,
-                        last_time = last_time,
-                        unread_html = unread_html,
-                        arrow = icon("chevron"),
-                    )
+                    other_user_id = other_user_id,
+                    chat_icon = icon("message-circle"),
+                    display_name = display_name,
+                    username_html = username_html,
+                    last_message = last_message_html,
+                    last_time = last_time,
+                    unread_html = unread_html,
+                    arrow = icon("chevron"),
+                )
             })
             .collect::<Vec<_>>()
             .join("")
@@ -583,7 +579,7 @@ pub fn render_messages(
 
     page_shell(
         "Сообщения · ResursMap",
-        &topbar("MESSAGES", "message-circle"),
+        &topbar("Сообщения", "message-circle"),
         &back_hero(
             &back_link("/app/me", "Назад", "chevron-left"),
             "message-circle",
@@ -600,9 +596,7 @@ pub fn render_messages(
 // TASK 7.22F-E — CHAT
 // ============================================================
 
-fn chat_message_display_body(
-    message: &crate::web::view_models::ChatMessageRow,
-) -> String {
+fn chat_message_display_body(message: &crate::web::view_models::ChatMessageRow) -> String {
     if message.deleted_at > 0 {
         "Сообщение удалено".to_string()
     } else {
@@ -805,13 +799,13 @@ pub fn render_chat(
     } else if other_user_id > 0 {
         format!("Участник · {:06}", other_user_id.rem_euclid(1_000_000))
     } else {
-        "Чат ResursMap".to_string()
+        "Чат".to_string()
     };
 
     let subtitle = if !safe_username.is_empty() {
         format!("@{}", safe_username)
     } else {
-        "Внутренний чат ResursMap".to_string()
+        "Личный диалог".to_string()
     };
 
     let content = if !authenticated {
@@ -845,9 +839,7 @@ pub fn render_chat(
 
             messages
                 .iter()
-                .map(|message| {
-                    render_chat_message_row(message, other_user_id, &mut last_date_key)
-                })
+                .map(|message| render_chat_message_row(message, other_user_id, &mut last_date_key))
                 .collect::<Vec<_>>()
                 .join("")
         };
@@ -1000,7 +992,7 @@ pub fn render_chat(
 
     page_shell(
         "Чат · ResursMap",
-        &topbar("CHAT", "message-circle"),
+        &topbar("Чат", "message-circle"),
         "",
         &content_html,
         &bottom_nav("profile"),

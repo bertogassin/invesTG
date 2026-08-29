@@ -238,7 +238,7 @@ fn ensure_profile_public_id(
 }
 
 fn provision_telegram_account(
-    db: &rusqlite::Connection,
+    db: &mut rusqlite::Connection,
     telegram_id: i64,
     username: &str,
     first_name: &str,
@@ -252,9 +252,7 @@ fn provision_telegram_account(
     let client_id = format!("tg:{telegram_id}");
     let subject = telegram_id.to_string();
 
-    let transaction = db
-        .transaction()
-        .map_err(|_| "transaction_failed")?;
+    let transaction = db.transaction().map_err(|_| "transaction_failed")?;
 
     transaction
         .execute(
@@ -328,9 +326,7 @@ fn provision_telegram_account(
 
     ensure_profile_public_id(&transaction, telegram_id)?;
 
-    transaction
-        .commit()
-        .map_err(|_| "commit_failed")?;
+    transaction.commit().map_err(|_| "commit_failed")?;
 
     Ok(telegram_id)
 }
@@ -933,8 +929,8 @@ fn create_user_session(
     let sequence = USER_SESSION_SEQUENCE.fetch_add(1, Ordering::Relaxed);
     let payload = format!("user-v1:{user_id}:{now}:{nanos}:{sequence}");
 
-    let mut mac = HmacSha256::new_from_slice(state.admin_key.as_bytes())
-        .map_err(|_| "session_key_error")?;
+    let mut mac =
+        HmacSha256::new_from_slice(state.admin_key.as_bytes()).map_err(|_| "session_key_error")?;
 
     mac.update(payload.as_bytes());
 
@@ -1849,7 +1845,7 @@ pub async fn app_logout(State(state): State<AppState>, headers: HeaderMap) -> Re
         cookie_security_flags()
     );
 
-    if let Ok(value) = HeaderValue::from_str(cookie) {
+    if let Ok(value) = HeaderValue::from_str(&cookie) {
         response.headers_mut().append(header::SET_COOKIE, value);
     }
 
@@ -1901,7 +1897,7 @@ pub async fn app_auth(
     let (telegram_username, telegram_first_name, telegram_last_name) =
         telegram_profile_from_init_data(init_data);
 
-    let db = match crate::db::pool::get_connection(&state.db_pool) {
+    let mut db = match crate::db::pool::get_connection(&state.db_pool) {
         Ok(db) => db,
         Err(_) => {
             return (
@@ -1916,7 +1912,7 @@ pub async fn app_auth(
     };
 
     let account_user_id = match provision_telegram_account(
-        &db,
+        &mut db,
         user_id,
         &telegram_username,
         &telegram_first_name,

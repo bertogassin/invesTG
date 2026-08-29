@@ -54,7 +54,7 @@ fn level_title(level: i64) -> &'static str {
         2 => "Администратор города",
         3 => "Администратор страны",
         4 => "Администратор континента",
-        5 => "Global Owner",
+        5 => "Владелец ResursMap",
         _ => "Неизвестный уровень",
     }
 }
@@ -73,7 +73,7 @@ fn scope_title(scope_type: &str) -> &'static str {
 fn lifecycle_actions(administrator: &AdminAdministratorRow) -> String {
     if administrator.level == 5 {
         return r#"<div class="owner-lock">
-            Global Owner защищён от изменения и отзыва.
+            Владелец ResursMap защищён от изменения и отзыва.
         </div>"#
             .to_string();
     }
@@ -900,7 +900,7 @@ h1 {{
 
     <section class="hero">
         <div class="kicker">
-            RESURSMAP · ADMINISTRATOR CONTROL
+            ResursMap · Администраторы
         </div>
         <h1>Центр администраторов</h1>
         <p>

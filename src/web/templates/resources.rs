@@ -168,7 +168,7 @@ pub fn render_category(
 
     page_shell(
         &format!("{} · ResursMap", category),
-        &topbar("RESOURCE NETWORK", "globe"),
+        &topbar("Категория", "globe"),
         &back_hero(
             &back_link(&city_url, "Вернуться к городу", "chevron"),
             "map",
@@ -701,7 +701,7 @@ pub fn render_resource_profile(params: RenderResourceProfileParams<'_>) -> Strin
         letter-spacing:.08em;
         font-weight:700;
     ">
-        ResursMap ID
+        ID ресурса
     </div>
 
     <div style="font-size:18px;font-weight:700;">
@@ -997,7 +997,7 @@ pub fn render_resource_profile(params: RenderResourceProfileParams<'_>) -> Strin
         "",
         &format!(
             "{topbar}\n\n{hero}\n\n{content}",
-            topbar = topbar("RESOURCE NETWORK", "map"),
+            topbar = topbar("Ресурс", "map"),
             hero = back_hero(
                 &back_link("/app", "Вернуться к карте", "arrow-left"),
                 "map-pin",
@@ -1278,7 +1278,7 @@ pub fn render_my_resources(
 
     page_shell(
         "Мои ресурсы · ResursMap",
-        &topbar("MY RESOURCES", "map"),
+        &topbar("Мои ресурсы", "map"),
         &back_hero(
             &back_link("/app/me", "Профиль", "arrow-left"),
             "user",
@@ -1377,7 +1377,7 @@ pub fn render_edit_resource(
 
     page_shell(
         "Редактировать ресурс · ResursMap",
-        &topbar("EDIT RESOURCE", "map"),
+        &topbar("Редактирование", "map"),
         &back_hero(
             &back_link(
                 &format!("/app/resource/{}", id),
@@ -1475,7 +1475,7 @@ pub fn render_add_resource(ci: usize, si: usize, zi: usize, category: &str) -> S
 
     let main_html = format!(
         "{topbar}\n\n{hero}\n\n{content}",
-        topbar = topbar("ADD RESOURCE", "globe"),
+        topbar = topbar("Новый ресурс", "globe"),
         hero = back_hero(
             &back_link(&back_url, "Вернуться", "chevron"),
             "plus",

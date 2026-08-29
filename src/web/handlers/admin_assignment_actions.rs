@@ -470,11 +470,11 @@ button {{
 
     <section class="hero">
         <div class="kicker">
-            RESURSMAP · TRUSTED ASSIGNMENT
+            ResursMap · Назначения
         </div>
         <h1>Новое назначение</h1>
         <p>
-            Назначение создаётся только Global Owner.
+            Назначение создаётся только владельцем ResursMap.
             Уровень строго связан с территорией, действие
             записывается в защищённую цепочку аудита.
         </p>
@@ -554,7 +554,7 @@ button {{
 
         <p class="warning">
             Перед созданием назначения потребуется свежее
-            подтверждение Owner, выполненное не более
+            подтверждение владельца, выполненное не более
             15 минут назад.
         </p>
 
@@ -766,7 +766,7 @@ pub async fn create_admin_assignment(
                     ?1, ?2, ?3,
                     'admin_assignment_step_up_required',
                     'high',
-                    'Требуется свежее подтверждение Owner'
+                    'Требуется свежее подтверждение владельца'
                  )",
                 rusqlite::params![context.user_id, context.assignment_id, session_public_id],
             );
@@ -775,7 +775,7 @@ pub async fn create_admin_assignment(
         return (
             StatusCode::PRECONDITION_REQUIRED,
             [(header::LOCATION, "/app/center/security")],
-            "Требуется повторное подтверждение Owner",
+            "Требуется повторное подтверждение владельца",
         )
             .into_response();
     }
@@ -830,7 +830,11 @@ pub async fn create_admin_assignment(
         .unwrap_or(0);
 
     if target_is_owner != 0 {
-        return (StatusCode::FORBIDDEN, "Назначение Owner изменять нельзя").into_response();
+        return (
+            StatusCode::FORBIDDEN,
+            "Назначение владельца изменять нельзя",
+        )
+            .into_response();
     }
 
     let existing_active: i64 = transaction

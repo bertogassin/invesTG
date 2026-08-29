@@ -28,7 +28,7 @@ body {
 </style>"####;
 
     let main_html = r####"<div style="max-width:520px;margin:auto;">
-    <h1>ResursMap Admin</h1>
+    <h1>ResursMap · Модерация</h1>
     <p id="status">Проверяем Telegram…</p>
 </div>"####;
 
@@ -76,7 +76,7 @@ body {
 </script>"####;
 
     Html(templates::page_document(
-        "Admin Login · ResursMap",
+        "Вход администратора · ResursMap",
         head_extra,
         "",
         main_html,
@@ -454,7 +454,7 @@ pub async fn admin_reports(State(state): State<AppState>, headers: HeaderMap) ->
 
     <div class="eyebrow">
         {shield}
-        Администрирование
+        Модерация
     </div>
 
     <h1>Жалобы</h1>
@@ -1160,7 +1160,7 @@ pub async fn admin_resources(
 
     <div class="eyebrow">
         {shield}
-        Администрирование
+        Модерация
     </div>
 
     <h1>Модерация ресурсов</h1>
@@ -1392,7 +1392,7 @@ pub async fn admin_resources(
     );
 
     Html(templates::page_document(
-        "Moderation · ResursMap",
+        "Модерация · ResursMap",
         "",
         "",
         &main_html,

@@ -57,7 +57,8 @@ pub async fn start_handler(bot: Bot, msg: Message) -> ResponseResult<()> {
     bot.send_message(
         msg.chat.id,
         format!(
-            "Привет! Я бот Карта ресурсов.\n\n\
+            "Привет! Я бот ResursMap.\n\n\
+             Карта ресурсов, людей и возможностей.\n\n\
              Доступные команды:\n\
              /start — приветствие\n\
              /help — помощь\n\

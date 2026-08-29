@@ -73,7 +73,7 @@ fn context_and_session(
             state,
             authenticated.user_id,
             "admin_security_permission_denied",
-            "Недостаточно прав для Owner step-up",
+            "Недостаточно прав для подтверждения владельца",
         );
 
         return Err(Box::new(
@@ -193,10 +193,10 @@ async fn send_code(email: &str, code: &str) -> Result<(), String> {
         .json(&serde_json::json!({
             "from": from,
             "to": [email],
-            "subject": "Защищённая Owner-сессия ResursMap",
+            "subject": "Защищённая сессия владельца · ResursMap",
             "html": format!(
                 "<div style=\"font-family:Arial,sans-serif;max-width:520px;margin:auto;padding:32px\">\
-                 <h2>ResursMap · Global Owner</h2>\
+                 <h2>ResursMap · Владелец</h2>\
                  <p>Код подтверждения административной сессии:</p>\
                  <div style=\"font-size:34px;font-weight:800;letter-spacing:8px;margin:24px 0\">{code}</div>\
                  <p>Код действует 10 минут и только в текущей сессии.</p>\
@@ -265,7 +265,7 @@ pub async fn admin_security_page(
         None => {
             return (
                 StatusCode::PRECONDITION_FAILED,
-                "У Owner отсутствует подтверждённый email",
+                "У владельца отсутствует подтверждённый email",
             )
                 .into_response();
         }
@@ -308,7 +308,7 @@ pub async fn admin_security_page(
     let message = if query.sent == Some(1) {
         "Код отправлен. Проверьте почту."
     } else if query.verified == Some(1) {
-        "Owner-сессия успешно подтверждена."
+        "Сессия владельца успешно подтверждена."
     } else if query.error == Some(1) {
         "Код неверный, использован или истёк."
     } else {

@@ -190,7 +190,7 @@ pub async fn revoke_admin_session(
                 'session_revoke_step_up_required',
                 'high',
                 ?4, ?5,
-                'Требуется свежее подтверждение Owner'
+                'Требуется свежее подтверждение владельца'
              )",
             rusqlite::params![
                 context.user_id,
@@ -204,7 +204,7 @@ pub async fn revoke_admin_session(
         return (
             StatusCode::PRECONDITION_REQUIRED,
             [(header::LOCATION, "/app/center/security")],
-            "Требуется повторное подтверждение Owner",
+            "Требуется повторное подтверждение владельца",
         )
             .into_response();
     }

@@ -307,7 +307,7 @@ pub async fn manage_admin_assignment(
                     ?1, ?2, ?3,
                     'admin_lifecycle_step_up_required',
                     'high',
-                    'Требуется свежее подтверждение Owner'
+                    'Требуется свежее подтверждение владельца'
                  )",
                 rusqlite::params![context.user_id, context.assignment_id, session_public_id],
             );
@@ -316,7 +316,7 @@ pub async fn manage_admin_assignment(
         return (
             StatusCode::PRECONDITION_REQUIRED,
             [(header::LOCATION, "/app/center/security")],
-            "Требуется повторное подтверждение Owner",
+            "Требуется повторное подтверждение владельца",
         )
             .into_response();
     }
@@ -385,7 +385,7 @@ pub async fn manage_admin_assignment(
     if target.role_level == 5 || target.user_id == context.user_id {
         return (
             StatusCode::FORBIDDEN,
-            "Назначение Global Owner изменять нельзя",
+            "Назначение владельца изменять нельзя",
         )
             .into_response();
     }

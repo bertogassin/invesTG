@@ -515,7 +515,7 @@ pub(crate) fn render_admin_dashboard(data: AdminDashboardData<'_>) -> String {
     <section class="admin-owner-hero"
              id="global-overview">
         <div class="admin-owner-kicker">
-            RESURSMAP · GLOBAL COMMAND CENTER
+            ResursMap · Центр управления
         </div>
 
         <h1 class="admin-owner-title">
@@ -566,11 +566,11 @@ pub(crate) fn render_admin_dashboard(data: AdminDashboardData<'_>) -> String {
             </div>
 
             <div class="admin-visual-state">
-                ● GLOBAL NETWORK ONLINE
+                ● Сеть онлайн
             </div>
 
             <div class="admin-visual-label">
-                WORLD CONTROL SURFACE · OWNER ACCESS
+                Панель владельца
             </div>
         </div>
     </section>
@@ -604,11 +604,11 @@ pub(crate) fn render_admin_dashboard(data: AdminDashboardData<'_>) -> String {
 
         <article class="admin-command-card">
             <div class="admin-command-header">
-                <div class="admin-command-name">Owner-защита</div>
+                <div class="admin-command-name">Защита владельца</div>
                 <div class="admin-command-status">● ACTIVE</div>
             </div>
             <div class="admin-command-meta">
-                Единственный Global Owner · {owner_name}
+                Единственный владелец · {owner_name}
             </div>
         </article>
 
@@ -658,7 +658,7 @@ pub(crate) fn render_admin_dashboard(data: AdminDashboardData<'_>) -> String {
         level_rows = render_levels(data.level_counts),
     );
 
-    page_document("Global Command Center · ResursMap", head, "", &main, "", "")
+    page_document("Центр управления · ResursMap", head, "", &main, "", "")
 }
 
 fn render_stats(data: &AdminDashboardData<'_>) -> String {
@@ -695,7 +695,7 @@ fn render_levels(levels: [i64; 5]) -> String {
         "Администраторы городов",
         "Администраторы стран",
         "Администраторы континентов",
-        "Global Owner",
+        "Владелец ResursMap",
     ];
 
     names

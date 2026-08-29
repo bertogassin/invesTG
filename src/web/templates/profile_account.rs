@@ -125,7 +125,7 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
                 "background:linear-gradient(90deg,rgba(137,116,255,.12),rgba(214,183,122,.08));border:1px solid rgba(137,116,255,.42);color:#c2b7ff;",
             ),
             5 => (
-                "Уровень 5 · Global Owner",
+                "Уровень 5 · Владелец ResursMap",
                 "background:linear-gradient(90deg,rgba(214,183,122,.15),rgba(137,116,255,.10));border:1px solid rgba(214,183,122,.48);color:#f0d69c;box-shadow:0 0 24px rgba(214,183,122,.14);",
             ),
             _ => ("", ""),
@@ -169,7 +169,7 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
                 color:var(--muted);
                 letter-spacing:.04em;
             ">
-                USER ID · {}
+                ID аккаунта · {}
             </div>"#,
             user_id
         )
@@ -240,7 +240,12 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
         format!(
             "{}{}",
             guest_mode_panel("/app/me"),
-            navigation_card("/app/search", "search", "Сначала поиск", "Найдите людей и ресурсы"),
+            navigation_card(
+                "/app/search",
+                "search",
+                "Сначала поиск",
+                "Найдите людей и ресурсы"
+            ),
         )
     };
 
@@ -430,17 +435,19 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
     overflow:hidden;
     margin-bottom:24px;
     padding:24px;
-    border:1px solid rgba(214,183,122,.27);
+    border:1px solid rgba(232,204,150,.30);
     border-radius:26px;
     background:
         radial-gradient(circle at 100% 0%,
-            rgba(119,87,185,.18),transparent 34%),
+            rgba(126,212,228,.16),transparent 34%),
         radial-gradient(circle at 0% 100%,
-            rgba(38,123,91,.15),transparent 36%),
+            rgba(232,204,150,.14),transparent 36%),
         linear-gradient(145deg,
             rgba(20,23,30,.98),
             rgba(10,12,17,.98));
-    box-shadow:0 24px 68px rgba(0,0,0,.28);
+    box-shadow:
+        0 24px 68px rgba(0,0,0,.30),
+        0 0 48px rgba(232,204,150,.06);
 }}
 .rm-personal-center::after {{
     content:"";
@@ -527,14 +534,18 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
 .rm-center-metric {{
     min-width:0;
     padding:14px;
-    border:1px solid rgba(255,255,255,.07);
+    border:1px solid rgba(255,255,255,.09);
     border-radius:16px;
-    background:rgba(255,255,255,.025);
+    background:
+        linear-gradient(145deg, rgba(255,255,255,.04), rgba(255,255,255,.015));
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.05);
 }}
 .rm-center-metric strong {{
     display:block;
     font-size:23px;
     line-height:1;
+    color:var(--gold-light);
+    text-shadow:0 0 24px rgba(232,204,150,.12);
 }}
 .rm-center-metric span {{
     display:block;
@@ -588,18 +599,28 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
         border-color .18s ease;
 }}
 .rm-command-card:hover {{
-    transform:translateY(-2px);
-    border-color:rgba(214,183,122,.28);
+    transform:translateY(-3px);
+    border-color:rgba(232,204,150,.36);
+    background:
+        linear-gradient(145deg,
+            rgba(232,204,150,.10),
+            rgba(126,212,228,.05));
+    box-shadow:
+        0 14px 36px rgba(0,0,0,.24),
+        0 0 32px rgba(232,204,150,.08);
 }}
 .rm-command-icon {{
     flex:0 0 43px;
     height:43px;
     display:grid;
     place-items:center;
-    border:1px solid rgba(214,183,122,.22);
+    border:1px solid rgba(232,204,150,.28);
     border-radius:14px;
     color:var(--center-gold);
-    background:rgba(214,183,122,.07);
+    background:
+        radial-gradient(circle at 30% 20%, rgba(255,228,184,.14), transparent 55%),
+        rgba(232,204,150,.09);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.06);
 }}
 .rm-command-icon svg {{
     width:20px;
@@ -696,12 +717,8 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
 </style>
 
 <section class="rm-personal-center">
-    <div class="rm-center-kicker">
-        RESURSMAP · PERSONAL COMMAND
-    </div>
-
     <h1 class="rm-center-heading">
-        Мой центр
+        Обзор
     </h1>
 
     <p class="rm-center-subtitle">
@@ -772,7 +789,7 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
             <span class="rm-command-copy">
                 <strong>Сообщения</strong>
                 <small>
-                    Личные диалоги внутри ResursMap
+                    Личные диалоги
                 </small>
             </span>
             {messages_badge}
@@ -1446,11 +1463,11 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
 
     let main_html = format!(
         "{topbar}\n\n{hero}\n\n{content}",
-        topbar = topbar("PROFILE", "user"),
+        topbar = topbar("Профиль", "user"),
         hero = simple_hero(
             "user",
-            "Личный кабинет",
-            "Мой профиль",
+            "ResursMap",
+            "Профиль",
             "Ваши ресурсы, сохранённые места и активность.",
         ),
         content = content_html,
@@ -1660,7 +1677,7 @@ pub fn render_notifications(
 
     page_shell(
         "Уведомления · ResursMap",
-        &topbar("NOTIFICATIONS", "bell"),
+        &topbar("Уведомления", "bell"),
         &back_hero(
             &back_link("/app/me", "Профиль", "arrow-left"),
             "user",
@@ -2319,7 +2336,7 @@ pub fn render_public_user_profile(params: RenderPublicUserProfileParams<'_>) -> 
         "",
         &format!(
             "{topbar}\n\n{hero}\n\n{content}",
-            topbar = topbar("MEMBER", "user"),
+            topbar = topbar("Участник", "user"),
             hero = back_hero(
                 &back_link("javascript:history.back()", "Назад", "arrow-left",),
                 "user",
@@ -2427,7 +2444,7 @@ pub fn render_favorites(
 
     page_shell(
         "Избранное · ResursMap",
-        &topbar("FAVORITES", "heart"),
+        &topbar("Избранное", "heart"),
         &back_hero(
             &back_link("/app/me", "Профиль", "arrow-left"),
             "heart",
@@ -2471,7 +2488,7 @@ mod personal_center_tests {
     fn personal_center_is_rendered_for_authenticated_user() {
         let html = render_me(params(true));
 
-        assert!(html.contains("Мой центр"));
+        assert!(html.contains("Обзор"));
         assert!(html.contains("/app/my-resources"));
         assert!(html.contains("/app/messages"));
         assert!(html.contains("/app/contact-requests"));

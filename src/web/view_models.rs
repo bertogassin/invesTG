@@ -6,6 +6,7 @@ pub type NotificationRow = (i64, Option<i64>, String, String, String, i64, i64);
 pub type ContactRequestRow = (i64, i64, String, String, String, String, String, i64, i64);
 
 pub struct ConversationRow {
+    #[allow(dead_code)]
     pub id: i64,
     pub other_user_id: i64,
     pub username: String,

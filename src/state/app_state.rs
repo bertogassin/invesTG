@@ -141,12 +141,7 @@ impl AppState {
         });
     }
 
-    pub fn publish_typing_event(
-        &self,
-        kind: &str,
-        actor_user_id: i64,
-        other_user_id: i64,
-    ) -> bool {
+    pub fn publish_typing_event(&self, kind: &str, actor_user_id: i64, other_user_id: i64) -> bool {
         if actor_user_id <= 0
             || other_user_id <= 0
             || actor_user_id == other_user_id

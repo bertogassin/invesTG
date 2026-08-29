@@ -1,5 +1,5 @@
-use super::chat::load_user_conversations;
 use super::auth::verify_user_session;
+use super::chat::load_user_conversations;
 use super::common::{input_text_is_valid, rate_limit_retry_after, request_is_cross_site};
 use crate::state::app_state::AppState;
 use axum::{
@@ -1072,10 +1072,7 @@ pub async fn api_chat_peer(
         .into_response()
 }
 
-pub async fn api_chat_conversations(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-) -> Response {
+pub async fn api_chat_conversations(State(state): State<AppState>, headers: HeaderMap) -> Response {
     let user_id = match verify_user_session(&state, &headers) {
         Some(user_id) => user_id,
         None => {
@@ -1110,7 +1107,7 @@ pub async fn api_chat_conversations(
     let items: Vec<serde_json::Value> = conversations
         .iter()
         .map(|conversation| {
-            let display_name = crate::web::templates::communication::conversation_display_name(
+            let display_name = crate::web::templates::conversation_display_name(
                 conversation.other_user_id,
                 &conversation.username,
                 &conversation.first_name,
@@ -1124,7 +1121,7 @@ pub async fn api_chat_conversations(
             let last_time = if conversation.last_message.is_empty() {
                 String::new()
             } else {
-                crate::web::templates::communication::format_inbox_time(conversation.updated_at)
+                crate::web::templates::format_inbox_time(conversation.updated_at)
             };
 
             json!({
@@ -1213,6 +1210,8 @@ mod tests {
             before_id: Some(10),
             after_id: None,
             limit: Some(50),
+            mark_read: None,
+            read_through_id: None,
         };
 
         assert_eq!(query.before_id, Some(10));

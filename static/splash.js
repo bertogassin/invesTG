@@ -9,17 +9,15 @@
             return meta.content;
         }
 
-        return "4.9.2";
+        return "4.9.4";
     }
 
-    // Проверим, была ли заставка показана
     try {
         if (localStorage.getItem('resursmap-splash-shown') === '1') {
             return;
         }
     } catch(e) {}
 
-    // Создадим заставку
     var splash = document.createElement('div');
     splash.id = 'resursmap-splash';
     splash.style.cssText = [
@@ -31,44 +29,49 @@
         'align-items:center',
         'justify-content:center',
         'gap:18px',
-        'background:linear-gradient(160deg,#080a0d,#0e1116)',
+        'background:',
+        'radial-gradient(circle at 20% 0%, rgba(126,212,228,.18), transparent 42%),',
+        'radial-gradient(circle at 80% 10%, rgba(232,204,150,.16), transparent 38%),',
+        'linear-gradient(160deg,#080a0d,#0e1116)',
         'transition:opacity .5s ease,visibility .5s ease',
         'opacity:1',
         'visibility:visible'
     ].join(';');
 
-    // Логотип
     var logo = document.createElement('img');
     logo.src = "/static/app-icon.svg?v=" + assetVersion();
     logo.alt = 'ResursMap';
     logo.style.cssText = [
-        'width:96px',
-        'height:96px',
-        'border-radius:24px',
-        'box-shadow:0 12px 40px rgba(0,0,0,.5)',
-        'animation:fadeInUp .6s ease both'
+        'width:104px',
+        'height:104px',
+        'border-radius:26px',
+        'box-shadow:',
+        '0 16px 48px rgba(0,0,0,.55),',
+        '0 0 60px rgba(232,204,150,.18)',
+        'animation:fadeInUp .6s ease both, pulseGlow 2.4s ease-in-out .6s infinite'
     ].join(';');
 
-    // Название
     var name = document.createElement('div');
     name.textContent = 'ResursMap';
     name.style.cssText = [
-        'font-size:28px',
+        'font-size:30px',
         'font-weight:900',
-        'letter-spacing:.05em',
-        'color:#f3f0e9',
+        'letter-spacing:.06em',
+        'background:linear-gradient(135deg,#f8f5ef,#ffe4b8)',
+        '-webkit-background-clip:text',
+        'background-clip:text',
+        '-webkit-text-fill-color:transparent',
         'animation:fadeInUp .6s ease .2s both'
     ].join(';');
 
-    // Подпись
     var subtitle = document.createElement('div');
-    subtitle.textContent = 'Resource Network';
+    subtitle.textContent = 'Карта ресурсов';
     subtitle.style.cssText = [
         'font-size:11px',
         'font-weight:800',
-        'letter-spacing:.15em',
+        'letter-spacing:.14em',
         'text-transform:uppercase',
-        'color:#d6b77a',
+        'color:#e8cc96',
         'animation:fadeInUp .6s ease .3s both'
     ].join(';');
 
@@ -77,7 +80,6 @@
     splash.appendChild(subtitle);
     document.body.appendChild(splash);
 
-    // Мягкий звук через Web Audio API
     function playSoftSound() {
         try {
             var AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -103,7 +105,6 @@
         } catch(e) {}
     }
 
-    // Покажем заставку 1.5 секунды
     setTimeout(function() {
         splash.style.opacity = '0';
         splash.style.visibility = 'hidden';
@@ -119,13 +120,5 @@
         }, 500);
     }, 1500);
 
-    // Звук после клика пользователя (браузеры блокируют autoplay)
-    document.addEventListener('click', function() {
-        playSoftSound();
-    }, { once: true });
-
-    // Если пользователь уже кликал — играем сразу
-    if (document.readyState === 'complete') {
-        playSoftSound();
-    }
+    setTimeout(playSoftSound, 200);
 })();

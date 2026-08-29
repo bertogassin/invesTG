@@ -49,7 +49,7 @@ pub fn render_admin_security(data: AdminSecurityData) -> String {
 <meta name="viewport"
  content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="dark">
-<title>Безопасность Owner · ResursMap</title>
+<title>Безопасность владельца · ResursMap</title>
 <style>
 :root {{
  --gold:#dfc07f;--green:#62e0ad;--orange:#f3a94f;
@@ -136,7 +136,7 @@ input{{
 <a class="back" href="/app/center">← Центр управления</a>
 
 <section class="hero">
- <div class="kicker">RESURSMAP · OWNER SECURITY</div>
+ <div class="kicker">ResursMap · Безопасность</div>
  <h1>Защищённая сессия</h1>
  <p>
   Повторное подтверждение личности перед управлением
@@ -151,7 +151,7 @@ input{{
 
 <section class="card">
  <h2>Получить одноразовый код</h2>
- <p>Код будет отправлен на подтверждённый адрес Owner.</p>
+ <p>Код будет отправлен на подтверждённый адрес владельца.</p>
  <div class="email">{masked_email}</div>
  <form method="post" action="/app/center/security/request">
   <button type="submit">Отправить защищённый код</button>
@@ -165,7 +165,7 @@ input{{
   <input name="code" inputmode="numeric"
    autocomplete="one-time-code" pattern="[0-9]{{6}}"
    maxlength="6" required aria-label="Шестизначный код">
-  <button type="submit">Подтвердить Owner-сессию</button>
+  <button type="submit">Подтвердить сессию</button>
  </form>
  <div class="notice">
   Код действует 10 минут и привязан только к текущей
