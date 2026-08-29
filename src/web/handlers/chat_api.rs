@@ -579,6 +579,14 @@ pub async fn api_chat_send(
         return json_error(StatusCode::INTERNAL_SERVER_ERROR, "transaction_failed");
     }
 
+    state.publish_chat_event(
+        "message.created",
+        conversation_id,
+        message_id,
+        user_id,
+        other_user_id,
+    );
+
     let telegram_id: Option<i64> = if should_notify_telegram {
         connection
             .query_row(
@@ -730,6 +738,14 @@ pub async fn api_chat_edit(
         return json_error(StatusCode::CONFLICT, "message_changed");
     }
 
+    state.publish_chat_event(
+        "message.edited",
+        conversation_id,
+        message_id,
+        user_id,
+        other_user_id,
+    );
+
     (
         StatusCode::OK,
         Json(json!({
@@ -809,6 +825,14 @@ pub async fn api_chat_delete(
     if changed != 1 {
         return json_error(StatusCode::NOT_FOUND, "message_not_found");
     }
+
+    state.publish_chat_event(
+        "message.deleted",
+        conversation_id,
+        message_id,
+        user_id,
+        other_user_id,
+    );
 
     (
         StatusCode::OK,

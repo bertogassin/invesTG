@@ -659,6 +659,11 @@
             pollMessages
         );
 
+        document.addEventListener(
+            "resursmap:chat-realtime-sync",
+            pollMessages
+        );
+
         if (window.visualViewport) {
             window.visualViewport.addEventListener(
                 "resize",
@@ -1484,4 +1489,212 @@
     } else {
         installChatFallback();
     }
+})();
+
+(function () {
+    "use strict";
+
+    function ready(callback) {
+        if (document.readyState === "loading") {
+            document.addEventListener(
+                "DOMContentLoaded",
+                callback,
+                { once: true }
+            );
+        } else {
+            callback();
+        }
+    }
+
+    ready(function () {
+        var history =
+            document.getElementById("chat-messages");
+
+        if (!history || !window.WebSocket) {
+            return;
+        }
+
+        var socket = null;
+        var retryTimer = null;
+        var heartbeatTimer = null;
+        var stopped = false;
+        var retryAttempt = 0;
+
+        function websocketUrl() {
+            var scheme =
+                window.location.protocol === "https:"
+                    ? "wss:"
+                    : "ws:";
+
+            return (
+                scheme +
+                "//" +
+                window.location.host +
+                "/api/chat/realtime"
+            );
+        }
+
+        function clearTimers() {
+            window.clearTimeout(retryTimer);
+            window.clearInterval(heartbeatTimer);
+            retryTimer = null;
+            heartbeatTimer = null;
+        }
+
+        function requestSync() {
+            document.dispatchEvent(
+                new CustomEvent(
+                    "resursmap:chat-realtime-sync"
+                )
+            );
+        }
+
+        function scheduleReconnect() {
+            if (stopped || retryTimer) {
+                return;
+            }
+
+            var delay = Math.min(
+                1000 * Math.pow(2, retryAttempt),
+                15000
+            );
+
+            retryAttempt = Math.min(
+                retryAttempt + 1,
+                4
+            );
+
+            retryTimer = window.setTimeout(
+                function () {
+                    retryTimer = null;
+                    connect();
+                },
+                delay
+            );
+        }
+
+        function connect() {
+            if (
+                stopped ||
+                document.visibilityState === "hidden" ||
+                (
+                    socket &&
+                    (
+                        socket.readyState ===
+                            WebSocket.OPEN ||
+                        socket.readyState ===
+                            WebSocket.CONNECTING
+                    )
+                )
+            ) {
+                return;
+            }
+
+            try {
+                socket = new WebSocket(websocketUrl());
+            } catch (_) {
+                scheduleReconnect();
+                return;
+            }
+
+            socket.addEventListener(
+                "open",
+                function () {
+                    retryAttempt = 0;
+                    requestSync();
+
+                    heartbeatTimer =
+                        window.setInterval(
+                            function () {
+                                if (
+                                    socket &&
+                                    socket.readyState ===
+                                        WebSocket.OPEN
+                                ) {
+                                    socket.send(
+                                        JSON.stringify({
+                                            type: "ping"
+                                        })
+                                    );
+                                }
+                            },
+                            20000
+                        );
+                }
+            );
+
+            socket.addEventListener(
+                "message",
+                function (event) {
+                    var payload;
+
+                    try {
+                        payload = JSON.parse(event.data);
+                    } catch (_) {
+                        return;
+                    }
+
+                    if (
+                        payload.type === "chat_event" ||
+                        payload.type === "sync_required" ||
+                        payload.type === "ready"
+                    ) {
+                        requestSync();
+                    }
+                }
+            );
+
+            socket.addEventListener(
+                "close",
+                function () {
+                    clearTimers();
+                    socket = null;
+                    scheduleReconnect();
+                }
+            );
+
+            socket.addEventListener(
+                "error",
+                function () {
+                    if (socket) {
+                        socket.close();
+                    }
+                }
+            );
+        }
+
+        document.addEventListener(
+            "visibilitychange",
+            function () {
+                if (
+                    document.visibilityState === "visible"
+                ) {
+                    connect();
+                    requestSync();
+                } else if (socket) {
+                    socket.close();
+                }
+            }
+        );
+
+        window.addEventListener(
+            "online",
+            connect
+        );
+
+        window.addEventListener(
+            "pagehide",
+            function () {
+                stopped = true;
+                clearTimers();
+
+                if (socket) {
+                    socket.close();
+                }
+            },
+            { once: true }
+        );
+
+        connect();
+    });
 })();
