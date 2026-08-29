@@ -1,73 +1,237 @@
-(() => {
-  let deferredPrompt = null;
+(function () {
+    "use strict";
 
-  const ready = () => {
-    const androidButton =
-      document.getElementById("resursmap-install-android");
+    var deferredPrompt = null;
 
-    const iosButton =
-      document.getElementById("resursmap-install-ios");
-
-    const hint =
-      document.getElementById("resursmap-install-hint");
-
-    const isIOS =
-      /iphone|ipad|ipod/i.test(navigator.userAgent);
-
-    const isStandalone =
-      window.matchMedia("(display-mode: standalone)").matches ||
-      window.navigator.standalone === true;
-
-    if (isStandalone) {
-      if (hint) {
-        hint.textContent = "ResursMap уже установлен на этом устройстве.";
-      }
-
-      if (androidButton) androidButton.disabled = true;
-      if (iosButton) iosButton.disabled = true;
+    function ready(callback) {
+        if (document.readyState === "loading") {
+            document.addEventListener(
+                "DOMContentLoaded",
+                callback,
+                { once: true }
+            );
+        } else {
+            callback();
+        }
     }
 
-    window.addEventListener("beforeinstallprompt", (event) => {
-      event.preventDefault();
-      deferredPrompt = event;
-    });
-
-
-    if (iosButton) {
-      iosButton.addEventListener("click", () => {
-        if (isStandalone) return;
-
-        alert(
-          "На iPhone откройте ResursMap в Safari.\n\n" +
-          "1. Нажмите «Поделиться».\n" +
-          "2. Выберите «На экран Домой».\n" +
-          "3. Нажмите «Добавить»."
+    function isStandaloneMode() {
+        return (
+            window.matchMedia(
+                "(display-mode: standalone)"
+            ).matches ||
+            window.navigator.standalone === true
         );
-      });
     }
 
-    if (isIOS && hint && !isStandalone) {
-      hint.textContent =
-        "Android — установка приложения. iPhone — через Safari.";
+    function isIOSDevice() {
+        return /iphone|ipad|ipod/i.test(
+            navigator.userAgent
+        );
     }
 
-    const splash = document.getElementById("resursmap-splash");
-
-    if (splash) {
-      window.setTimeout(() => {
-        splash.style.opacity = "0";
-        splash.style.visibility = "hidden";
-
-        window.setTimeout(() => {
-          splash.remove();
-        }, 500);
-      }, 900);
+    function isTelegramBrowser() {
+        return /telegram/i.test(
+            navigator.userAgent
+        );
     }
-  };
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", ready);
-  } else {
-    ready();
-  }
+    function registerServiceWorker() {
+        if (!("serviceWorker" in navigator)) {
+            return;
+        }
+
+        window.addEventListener(
+            "load",
+            function () {
+                navigator.serviceWorker.register(
+                    "/static/resursmap-sw.js?v=1.0.0",
+                    {
+                        scope: "/"
+                    }
+                ).catch(function () {
+                    // Installation UI provides fallback guidance.
+                });
+            },
+            { once: true }
+        );
+    }
+
+    registerServiceWorker();
+
+    window.addEventListener(
+        "beforeinstallprompt",
+        function (event) {
+            event.preventDefault();
+            deferredPrompt = event;
+
+            document.dispatchEvent(
+                new CustomEvent(
+                    "resursmap:pwa-install-ready"
+                )
+            );
+        }
+    );
+
+    window.addEventListener(
+        "appinstalled",
+        function () {
+            deferredPrompt = null;
+
+            document.dispatchEvent(
+                new CustomEvent(
+                    "resursmap:pwa-installed"
+                )
+            );
+        }
+    );
+
+    ready(function () {
+        var androidButton =
+            document.getElementById(
+                "resursmap-install-android"
+            );
+
+        var iosButton =
+            document.getElementById(
+                "resursmap-install-ios"
+            );
+
+        var hint =
+            document.getElementById(
+                "resursmap-install-hint"
+            );
+
+        if (
+            !androidButton &&
+            !iosButton &&
+            !hint
+        ) {
+            return;
+        }
+
+        function setHint(text) {
+            if (hint) {
+                hint.textContent = text;
+            }
+        }
+
+        function markInstalled() {
+            setHint(
+                "ResursMap уже установлен на этом устройстве."
+            );
+
+            if (androidButton) {
+                androidButton.disabled = true;
+                androidButton.setAttribute(
+                    "aria-disabled",
+                    "true"
+                );
+            }
+
+            if (iosButton) {
+                iosButton.disabled = true;
+                iosButton.setAttribute(
+                    "aria-disabled",
+                    "true"
+                );
+            }
+        }
+
+        if (isStandaloneMode()) {
+            markInstalled();
+            return;
+        }
+
+        if (isIOSDevice()) {
+            setHint(
+                "На iPhone установка выполняется через Safari."
+            );
+        } else if (isTelegramBrowser()) {
+            setHint(
+                "Для установки откройте эту страницу в Chrome."
+            );
+        } else {
+            setHint(
+                "Установите ResursMap на главный экран телефона."
+            );
+        }
+
+        document.addEventListener(
+            "resursmap:pwa-install-ready",
+            function () {
+                if (!isIOSDevice()) {
+                    setHint(
+                        "Приложение готово к установке."
+                    );
+                }
+            }
+        );
+
+        document.addEventListener(
+            "resursmap:pwa-installed",
+            markInstalled
+        );
+
+        if (androidButton) {
+            androidButton.addEventListener(
+                "click",
+                async function () {
+                    if (isStandaloneMode()) {
+                        markInstalled();
+                        return;
+                    }
+
+                    if (deferredPrompt) {
+                        androidButton.disabled = true;
+
+                        try {
+                            await deferredPrompt.prompt();
+                            await deferredPrompt.userChoice;
+                        } finally {
+                            deferredPrompt = null;
+                            androidButton.disabled = false;
+                        }
+
+                        return;
+                    }
+
+                    if (isTelegramBrowser()) {
+                        alert(
+                            "Откройте меню Telegram и выберите " +
+                            "«Открыть в Chrome». Затем снова " +
+                            "нажмите «Установить»."
+                        );
+                        return;
+                    }
+
+                    alert(
+                        "Если окно установки не появилось:\n\n" +
+                        "1. Откройте меню браузера ⋮.\n" +
+                        "2. Выберите «Установить приложение» " +
+                        "или «Добавить на главный экран»."
+                    );
+                }
+            );
+        }
+
+        if (iosButton) {
+            iosButton.addEventListener(
+                "click",
+                function () {
+                    if (isStandaloneMode()) {
+                        markInstalled();
+                        return;
+                    }
+
+                    alert(
+                        "На iPhone откройте ResursMap в Safari.\n\n" +
+                        "1. Нажмите «Поделиться».\n" +
+                        "2. Выберите «На экран Домой».\n" +
+                        "3. Нажмите «Добавить»."
+                    );
+                }
+            );
+        }
+    });
 })();

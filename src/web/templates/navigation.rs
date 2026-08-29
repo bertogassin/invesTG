@@ -285,14 +285,12 @@ pub fn render_continents(
 
     <div class="rm-install-grid">
 
-        <a id="resursmap-install-android"
-           href="/static/downloads/ResursMap.apk"
-           download="ResursMap.apk"
-           class="rm-install-button rm-install-android"
-           style="display:block;text-decoration:none;">
+        <button id="resursmap-install-android"
+                type="button"
+                class="rm-install-button rm-install-android">
             <span>Android</span>
-            <strong>↓ Скачать APK</strong>
-        </a>
+            <strong>＋ Установить</strong>
+        </button>
 
         <button id="resursmap-install-ios"
                 type="button"
@@ -440,7 +438,7 @@ pub fn render_continents(
         message_icon = icon("message-circle"),
     );
 
-    let body_after = r####"<script src="/static/pwa-install.js" defer></script>"####;
+    let body_after = r####"<script src="/static/pwa-install.js?v=1.0.0" defer></script>"####;
 
     page_document(
         "ResursMap",
