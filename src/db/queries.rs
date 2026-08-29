@@ -448,6 +448,40 @@ pub fn init_db() -> Result<Connection> {
         [],
     )?;
 
+    // Chat V2 delivery/read timestamps.
+    //
+    // ALTER TABLE remains idempotent for existing production
+    // databases: duplicate-column errors are intentionally ignored.
+    let _ = conn.execute(
+        "ALTER TABLE messages
+         ADD COLUMN delivered_at INTEGER NOT NULL DEFAULT 0",
+        [],
+    );
+
+    let _ = conn.execute(
+        "ALTER TABLE messages
+         ADD COLUMN read_at INTEGER NOT NULL DEFAULT 0",
+        [],
+    );
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_messages_chat_v2_page
+         ON messages(conversation_id, id DESC)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_messages_chat_v2_delivery
+         ON messages(
+             conversation_id,
+             sender_user_id,
+             delivered_at,
+             read_at,
+             id
+         )",
+        [],
+    )?;
+
     // BOT B3.5A — additive persistent security storage.
     crate::db::security::init_security_schema(&conn)?;
 

@@ -8,7 +8,9 @@ mod contacts;
 pub use contacts::*;
 
 mod chat;
+mod chat_api;
 pub use chat::*;
+pub use chat_api::{api_chat_messages, api_chat_send};
 
 mod profiles;
 pub use profiles::*;

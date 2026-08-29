@@ -197,17 +197,24 @@ pub async fn chat_page(
     let messages: Vec<(i64, i64, String, i64, i64)> = db
         .prepare(
             "SELECT
-                id,
-                sender_user_id,
-                message,
-                is_read,
-                created_at
-             FROM messages
-             WHERE conversation_id = ?1
-             ORDER BY
-                created_at ASC,
-                id ASC
-             LIMIT 500",
+                recent.id,
+                recent.sender_user_id,
+                recent.message,
+                recent.is_read,
+                recent.created_at
+             FROM (
+                SELECT
+                    id,
+                    sender_user_id,
+                    message,
+                    is_read,
+                    created_at
+                FROM messages
+                WHERE conversation_id = ?1
+                ORDER BY id DESC
+                LIMIT 100
+             ) AS recent
+             ORDER BY recent.id ASC",
         )
         .and_then(|mut stmt| {
             stmt.query_map(rusqlite::params![conversation_id], |row| {
@@ -225,7 +232,17 @@ pub async fn chat_page(
 
     let _ = db.execute(
         "UPDATE messages
-         SET is_read = 1
+         SET is_read = 1,
+             delivered_at = CASE
+                 WHEN delivered_at = 0
+                 THEN strftime('%s','now')
+                 ELSE delivered_at
+             END,
+             read_at = CASE
+                 WHEN read_at = 0
+                 THEN strftime('%s','now')
+                 ELSE read_at
+             END
          WHERE conversation_id = ?1
            AND sender_user_id = ?2
            AND is_read = 0",
