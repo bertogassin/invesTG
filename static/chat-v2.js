@@ -645,6 +645,21 @@
             });
         }
 
+        function notifyMessagesRendered(messages) {
+            if (!messages || !messages.length) {
+                return;
+            }
+
+            document.dispatchEvent(
+                new CustomEvent(
+                    "resursmap:chat-messages-render",
+                    {
+                        detail: { messages: messages }
+                    }
+                )
+            );
+        }
+
         function appendMessages(messages) {
             var shouldStick = nearBottom();
             var incomingCount = 0;
@@ -702,6 +717,7 @@
             }
 
             updateScrollBottomButton();
+            notifyMessagesRendered(messages);
         }
 
         function prependMessages(messages) {
@@ -741,6 +757,8 @@
 
             history.scrollTop +=
                 history.scrollHeight - previousHeight;
+
+            notifyMessagesRendered(messages);
         }
 
         async function fetchJson(url, options) {
@@ -831,6 +849,7 @@
                 }
             } finally {
                 polling = false;
+                window.__resursmapChatLastPollAt = Date.now();
             }
         }
 
@@ -1339,7 +1358,8 @@
 
         var messageCache = new Map();
         var selectedMessage = null;
-        var refreshTimer = null;
+        var refreshDebounceTimer = null;
+        var refreshFallbackTimer = null;
 
         var replyBar = document.createElement("div");
         replyBar.id = "chat-reply-bar";
@@ -1647,6 +1667,107 @@
             }
         }
 
+        function messageFromRow(row) {
+            var id = Number(row.dataset.messageId);
+
+            if (!Number.isSafeInteger(id) || id <= 0) {
+                return null;
+            }
+
+            var cached = messageCache.get(id);
+
+            if (cached) {
+                return cached;
+            }
+
+            var body = row.querySelector(".chat-message-body");
+
+            return {
+                id: id,
+                sender_user_id:
+                    row.dataset.mine === "1"
+                        ? 0
+                        : Number(otherUserId),
+                message:
+                    row.dataset.messageText ||
+                    (body ? body.textContent : ""),
+                is_mine: row.dataset.mine === "1",
+                deleted_at:
+                    row.dataset.deleted === "1" ? 1 : 0,
+                edited_at:
+                    Number(row.dataset.editedAt || 0),
+                reply_to_message_id:
+                    Number(row.dataset.replyTo || 0) || null,
+                reply_message:
+                    row.dataset.replyMessage || "",
+                reply_sender_user_id:
+                    Number(row.dataset.replySender || 0) ||
+                    null,
+                read_at:
+                    Number(row.dataset.readAt || 0),
+                delivered_at:
+                    Number(row.dataset.deliveredAt || 0),
+                created_at:
+                    Number(row.dataset.createdAt || 0)
+            };
+        }
+
+        function refreshRecentDebounced() {
+            if (refreshDebounceTimer) {
+                window.clearTimeout(refreshDebounceTimer);
+            }
+
+            refreshDebounceTimer = window.setTimeout(
+                refreshRecent,
+                350
+            );
+        }
+
+        function hydrateSsrMessages() {
+            history.querySelectorAll(
+                ".chat-message-row[data-message-id]"
+            ).forEach(function (row) {
+                var id = Number(row.dataset.messageId);
+
+                if (!Number.isSafeInteger(id) || id <= 0) {
+                    return;
+                }
+
+                var body = row.querySelector(".chat-message-body");
+                var message = {
+                    id: id,
+                    sender_user_id:
+                        row.dataset.mine === "1"
+                            ? 0
+                            : Number(otherUserId),
+                    message:
+                        row.dataset.messageText ||
+                        (body ? body.textContent : ""),
+                    is_mine: row.dataset.mine === "1",
+                    deleted_at:
+                        row.dataset.deleted === "1" ? 1 : 0,
+                    edited_at:
+                        Number(row.dataset.editedAt || 0),
+                    reply_to_message_id:
+                        Number(row.dataset.replyTo || 0) || null,
+                    reply_message:
+                        row.dataset.replyMessage || "",
+                    reply_sender_user_id:
+                        Number(row.dataset.replySender || 0) ||
+                        null,
+                    read_at:
+                        Number(row.dataset.readAt || 0),
+                    delivered_at:
+                        Number(row.dataset.deliveredAt || 0),
+                    created_at:
+                        Number(row.dataset.createdAt || 0)
+                };
+
+                messageCache.set(id, message);
+                renderMessage(message);
+            });
+        }
+
         function refreshRecent() {
             return requestJson(
                 "/api/chat/" +
@@ -1800,7 +1921,7 @@
                 }
 
                 var id = Number(row.dataset.messageId);
-                var message = messageCache.get(id);
+                var message = messageFromRow(row);
 
                 if (message) {
                     openSheet(message);
@@ -1974,27 +2095,59 @@
         );
 
         document.addEventListener(
+            "resursmap:chat-messages-render",
+            function (event) {
+                var messages =
+                    event.detail && event.detail.messages
+                        ? event.detail.messages
+                        : [];
+
+                messages.forEach(renderMessage);
+            }
+        );
+
+        document.addEventListener(
+            "resursmap:chat-realtime-sync",
+            function () {
+                var lastPoll =
+                    Number(window.__resursmapChatLastPollAt || 0);
+
+                if (Date.now() - lastPoll < 900) {
+                    return;
+                }
+
+                refreshRecentDebounced();
+            }
+        );
+
+        document.addEventListener(
             "visibilitychange",
             function () {
                 if (
                     document.visibilityState === "visible"
                 ) {
-                    refreshRecent();
+                    refreshRecentDebounced();
                 }
             }
         );
 
-        refreshRecent();
+        hydrateSsrMessages();
 
-        refreshTimer = window.setInterval(
+        refreshFallbackTimer = window.setInterval(
             refreshRecent,
-            30000
+            300000
         );
 
         window.addEventListener(
             "pagehide",
             function () {
-                window.clearInterval(refreshTimer);
+                if (refreshDebounceTimer) {
+                    window.clearTimeout(refreshDebounceTimer);
+                }
+
+                if (refreshFallbackTimer) {
+                    window.clearInterval(refreshFallbackTimer);
+                }
             },
             { once: true }
         );

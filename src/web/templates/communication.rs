@@ -1,6 +1,6 @@
 use super::common::{
     back_hero, back_link, bottom_nav, empty_state_card, escape_html, icon, page_shell,
-    section_head, topbar,
+    section_head, static_asset, topbar,
 };
 
 pub fn render_contact_requests(
@@ -358,7 +358,7 @@ pub fn render_messages(
     authenticated: bool,
     conversations: Vec<crate::web::view_models::ConversationRow>,
 ) -> String {
-    let total_unread: i64 = conversations.iter().map(|c| c.6).sum();
+    let total_unread: i64 = conversations.iter().map(|c| c.unread_count).sum();
 
     let content = if !authenticated {
         empty_state_card(
@@ -373,17 +373,14 @@ pub fn render_messages(
     } else {
         conversations
             .iter()
-            .map(
-                |(
-                    _conversation_id,
-                    other_user_id,
-                    username,
-                    first_name,
-                    last_name,
-                    last_message,
-                    unread_count,
-                    updated_at,
-                )| {
+            .map(|conversation| {
+                let other_user_id = conversation.other_user_id;
+                let username = &conversation.username;
+                let first_name = &conversation.first_name;
+                let last_name = &conversation.last_name;
+                let last_message = &conversation.last_message;
+                let unread_count = conversation.unread_count;
+                let updated_at = conversation.updated_at;
                     let safe_username = escape_html(username);
 
                     let safe_first_name = escape_html(first_name);
@@ -424,7 +421,7 @@ pub fn render_messages(
                     let has_last_message = !safe_last_message.is_empty();
 
                     let last_time = if has_last_message {
-                        chrono::DateTime::<chrono::Utc>::from_timestamp(*updated_at, 0)
+                        chrono::DateTime::<chrono::Utc>::from_timestamp(updated_at, 0)
                             .map(|dt| {
                                 dt.with_timezone(&chrono_tz::Europe::Paris)
                                     .format("%H:%M")
@@ -441,26 +438,9 @@ pub fn render_messages(
                         "Чат открыт. Сообщений пока нет.".to_string()
                     };
 
-                    let unread_html = if *unread_count > 0 {
+                    let unread_html = if unread_count > 0 {
                         format!(
-                            r#"
-<div style="
-    min-width:28px;
-    height:28px;
-    padding:0 8px;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    border-radius:999px;
-    box-sizing:border-box;
-    background:rgba(214,183,122,.16);
-    border:1px solid rgba(214,183,122,.38);
-    font-size:11px;
-    font-weight:900;
-">
-    {count}
-</div>
-"#,
+                            r#"<span class="chat-dialog-unread">{count}</span>"#,
                             count = unread_count,
                         )
                     } else {
@@ -470,60 +450,29 @@ pub fn render_messages(
                     format!(
                         r#"
 <a href="/app/chat/{other_user_id}#chat-end"
-   class="card chat-dialog-card"
-   style="
-       text-decoration:none;
-       color:inherit;
-       margin-bottom:12px;
-       align-items:flex-start;
-   ">
+   class="card chat-dialog-card">
 
     <div class="card-icon">
         {chat_icon}
     </div>
 
-    <div class="card-content"
-         style="
-             min-width:0;
-             flex:1;
-         ">
+    <div class="card-content">
 
-        <div class="card-title"
-             style="
-                 font-size:16px;
-                 overflow-wrap:anywhere;
-             ">
+        <div class="card-title">
             {display_name}
         </div>
 
         {username_html}
 
-        <div class="card-meta"
-             style="
-                 margin-top:8px;
-                 line-height:1.45;
-                 overflow:hidden;
-                 display:-webkit-box;
-                 -webkit-line-clamp:2;
-                 -webkit-box-orient:vertical;
-             ">
+        <div class="card-meta">
             {last_message}
         </div>
 
     </div>
 
-    <div style="
-        display:flex;
-        align-items:center;
-        gap:9px;
-        flex:0 0 auto;
-    ">
+    <div class="chat-dialog-side">
 
-        <div style="
-            font-size:10px;
-            color:var(--muted);
-            white-space:nowrap;
-        ">
+        <div class="chat-dialog-time">
             {last_time}
         </div>
 
@@ -546,8 +495,7 @@ pub fn render_messages(
                         unread_html = unread_html,
                         arrow = icon("chevron"),
                     )
-                },
-            )
+            })
             .collect::<Vec<_>>()
             .join("")
     };
@@ -556,7 +504,10 @@ pub fn render_messages(
         section_head("Диалоги", &format!("Непрочитанных: {}", total_unread), None);
 
     let content_html = format!(
-        r####"{section_head_dialogs}
+        r####"<link rel="stylesheet"
+      href="{chat_css}">
+
+{section_head_dialogs}
 
 
 <section class="chat-dialog-list">
@@ -564,6 +515,7 @@ pub fn render_messages(
     {content}
 
 </section>"####,
+        chat_css = static_asset("chat-v2.css"),
         section_head_dialogs = section_head_dialogs,
         content = content,
     );
@@ -579,7 +531,7 @@ pub fn render_messages(
             "Ваши личные диалоги внутри ResursMap.",
         ),
         &content_html,
-        "",
+        &bottom_nav("profile"),
     )
 }
 
@@ -587,13 +539,187 @@ pub fn render_messages(
 // TASK 7.22F-E — CHAT
 // ============================================================
 
+fn chat_message_display_body(
+    message: &crate::web::view_models::ChatMessageRow,
+) -> String {
+    if message.deleted_at > 0 {
+        "Сообщение удалено".to_string()
+    } else {
+        escape_html(&message.message)
+    }
+}
+
+fn render_chat_message_row(
+    message: &crate::web::view_models::ChatMessageRow,
+    other_user_id: i64,
+    last_date_key: &mut String,
+) -> String {
+    let mine = message.sender_user_id != other_user_id;
+    let mine_attribute = if mine { "1" } else { "0" };
+    let deleted = message.deleted_at > 0;
+
+    let status = if mine {
+        if message.read_at > 0 {
+            ("✓✓", " is-read")
+        } else if message.delivered_at > 0 {
+            ("✓✓", "")
+        } else if message.is_read != 0 {
+            ("✓✓", " is-read")
+        } else {
+            ("✓", "")
+        }
+    } else {
+        ("", "")
+    };
+
+    let paris = chrono_tz::Europe::Paris;
+    let datetime = chrono::DateTime::<chrono::Utc>::from_timestamp(message.created_at, 0)
+        .map(|dt| dt.with_timezone(&paris));
+
+    let chat_time = datetime
+        .as_ref()
+        .map(|dt| dt.format("%H:%M").to_string())
+        .unwrap_or_default();
+
+    let date_key = datetime
+        .as_ref()
+        .map(|dt| dt.format("%Y-%m-%d").to_string())
+        .unwrap_or_default();
+
+    let date_label = if let Some(dt) = datetime.as_ref() {
+        let date = dt.date_naive();
+        let today = chrono::Utc::now().with_timezone(&paris).date_naive();
+
+        if date == today {
+            "Сегодня".to_string()
+        } else if date == today - chrono::Duration::days(1) {
+            "Вчера".to_string()
+        } else {
+            dt.format("%d.%m.%Y").to_string()
+        }
+    } else {
+        String::new()
+    };
+
+    let date_separator = if !date_key.is_empty() && date_key != *last_date_key {
+        *last_date_key = date_key.clone();
+
+        format!(
+            r#"
+<div class="chat-date-chip-wrap">
+    <span class="chat-date-chip">{date_label}</span>
+</div>
+"#
+        )
+    } else {
+        String::new()
+    };
+
+    let row_class = if mine {
+        "chat-message-row is-mine"
+    } else {
+        "chat-message-row is-theirs"
+    };
+
+    let bubble_class = if deleted {
+        "chat-bubble is-deleted"
+    } else {
+        "chat-bubble"
+    };
+
+    let body_class = if deleted {
+        "chat-message-body is-deleted"
+    } else {
+        "chat-message-body"
+    };
+
+    let reply_html = if message.reply_to_message_id > 0 {
+        let reply_preview = escape_html(&message.reply_message);
+
+        format!(
+            r#"
+        <button type="button"
+                class="chat-reply-quote"
+                data-target-message-id="{reply_to}">
+            <strong>Ответ</strong>
+            <span>{reply_preview}</span>
+        </button>"#,
+            reply_to = message.reply_to_message_id,
+            reply_preview = reply_preview,
+        )
+    } else {
+        String::new()
+    };
+
+    let edited_html = if message.edited_at > 0 && !deleted {
+        r#"<span class="chat-edited-label">изменено</span>"#.to_string()
+    } else {
+        String::new()
+    };
+
+    let display_body = chat_message_display_body(message);
+    let safe_message_text = escape_html(&message.message);
+
+    format!(
+        r#"
+{date_separator}
+
+<div class="{row_class}"
+     data-message-id="{message_id}"
+     data-mine="{mine_attribute}"
+     data-deleted="{deleted_flag}"
+     data-edited-at="{edited_at}"
+     data-reply-to="{reply_to}"
+     data-reply-message="{reply_message}"
+     data-reply-sender="{reply_sender}"
+     data-read-at="{read_at}"
+     data-delivered-at="{delivered_at}"
+     data-created-at="{created_at}"
+     data-message-text="{message_text}">
+
+    <div class="{bubble_class}">
+        {reply_html}
+        <div class="{body_class}">{display_body}</div>
+        {edited_html}
+        <div class="chat-message-meta">
+            <span>{chat_time}</span>
+            <span class="chat-message-status{status_class}">{status_mark}</span>
+        </div>
+    </div>
+
+</div>
+"#,
+        row_class = row_class,
+        message_id = message.id,
+        mine_attribute = mine_attribute,
+        deleted_flag = if deleted { "1" } else { "0" },
+        edited_at = message.edited_at,
+        reply_to = message.reply_to_message_id,
+        reply_message = escape_html(&message.reply_message),
+        reply_sender = message.reply_sender_user_id,
+        read_at = message.read_at,
+        delivered_at = message.delivered_at,
+        created_at = message.created_at,
+        message_text = safe_message_text,
+        bubble_class = bubble_class,
+        reply_html = reply_html,
+        body_class = body_class,
+        display_body = display_body,
+        edited_html = edited_html,
+        chat_time = chat_time,
+        status_class = status.1,
+        status_mark = status.0,
+        date_separator = date_separator,
+    )
+}
+
 pub fn render_chat(
     authenticated: bool,
     other_user_id: i64,
     username: &str,
     first_name: &str,
     last_name: &str,
-    messages: Vec<(i64, i64, String, i64, i64)>,
+    messages: Vec<crate::web::view_models::ChatMessageRow>,
 ) -> String {
     let safe_username = escape_html(username);
     let safe_first_name = escape_html(first_name);
@@ -634,21 +760,15 @@ pub fn render_chat(
             "Между этими пользователями ещё нет подтверждённого контакта.",
         )
     } else {
-        let first_message_id = messages.first().map(|message| message.0).unwrap_or(0);
+        let first_message_id = messages.first().map(|message| message.id).unwrap_or(0);
 
-        let last_message_id = messages.last().map(|message| message.0).unwrap_or(0);
+        let last_message_id = messages.last().map(|message| message.id).unwrap_or(0);
 
         let may_have_older = if messages.len() >= 100 { "1" } else { "0" };
 
         let message_cards = if messages.is_empty() {
             r#"
-<div style="
-    padding:30px 14px;
-    text-align:center;
-    color:var(--muted);
-    font-size:13px;
-    line-height:1.5;
-">
+<div class="chat-empty-thread">
     Чат открыт.<br>
     Напишите первое сообщение.
 </div>
@@ -659,107 +779,9 @@ pub fn render_chat(
 
             messages
                 .iter()
-                .map(
-                    |(message_id, sender_user_id, message, is_read, created_at)| {
-                        let safe_message = escape_html(message);
-
-                        let mine = *sender_user_id != other_user_id;
-                        let mine_attribute = if mine { "1" } else { "0" };
-
-                        let status = if mine && *is_read != 0 {
-                            "✓✓"
-                        } else if mine {
-                            "✓"
-                        } else {
-                            ""
-                        };
-
-                        // Время и дата полностью формируются Rust.
-                        // Часовой пояс: Europe/Paris.
-                        let paris = chrono_tz::Europe::Paris;
-
-                        let datetime =
-                            chrono::DateTime::<chrono::Utc>::from_timestamp(*created_at, 0)
-                                .map(|dt| dt.with_timezone(&paris));
-
-                        let chat_time = datetime
-                            .as_ref()
-                            .map(|dt| dt.format("%H:%M").to_string())
-                            .unwrap_or_default();
-
-                        let date_key = datetime
-                            .as_ref()
-                            .map(|dt| dt.format("%Y-%m-%d").to_string())
-                            .unwrap_or_default();
-
-                        let date_label = if let Some(dt) = datetime.as_ref() {
-                            let date = dt.date_naive();
-
-                            let today = chrono::Utc::now().with_timezone(&paris).date_naive();
-
-                            if date == today {
-                                "Сегодня".to_string()
-                            } else if date == today - chrono::Duration::days(1) {
-                                "Вчера".to_string()
-                            } else {
-                                dt.format("%d.%m.%Y").to_string()
-                            }
-                        } else {
-                            String::new()
-                        };
-
-                        let date_separator = if !date_key.is_empty() && date_key != last_date_key {
-                            last_date_key = date_key.clone();
-
-                            format!(
-                                r#"
-<div class="chat-date-chip-wrap">
-    <span class="chat-date-chip">{}</span>
-</div>
-"#,
-                                date_label
-                            )
-                        } else {
-                            String::new()
-                        };
-
-                        let row_class = if mine {
-                            "chat-message-row is-mine"
-                        } else {
-                            "chat-message-row is-theirs"
-                        };
-
-                        format!(
-                            r#"
-{date_separator}
-
-<div class="{row_class}"
-     data-message-id="{message_id}"
-     data-mine="{mine_attribute}">
-
-    <div class="chat-bubble">
-
-        <div class="chat-message-body">{message}</div>
-
-        <div class="chat-message-meta">
-            <span>{chat_time}</span>
-            <span class="chat-message-status">{status}</span>
-        </div>
-
-    </div>
-
-</div>
-"#,
-                            row_class = row_class,
-                            message_id = message_id,
-                            mine_attribute = mine_attribute,
-                            message = safe_message,
-                            date_separator = date_separator,
-                            chat_time = chat_time,
-                            status = status,
-                        )
-                    },
-                )
+                .map(|message| {
+                    render_chat_message_row(message, other_user_id, &mut last_date_key)
+                })
                 .collect::<Vec<_>>()
                 .join("")
         };
@@ -767,7 +789,7 @@ pub fn render_chat(
         format!(
             r#"
 <link rel="stylesheet"
-      href="/static/chat-v2.css?v=4.7.0">
+      href="{chat_css}">
 
 <section class="card chat-shell">
 
@@ -854,10 +876,13 @@ pub fn render_chat(
     </div>
 </form>
 
-<script src="/static/chat-sounds.js?v=4.7.0" defer></script>
-<script src="/static/chat-v2.js?v=4.7.0" defer></script>
+<script src="{chat_sounds_js}" defer></script>
+<script src="{chat_js}" defer></script>
 
 "#,
+            chat_css = static_asset("chat-v2.css"),
+            chat_sounds_js = static_asset("chat-sounds.js"),
+            chat_js = static_asset("chat-v2.js"),
             other_user_id = other_user_id,
             first_message_id = first_message_id,
             last_message_id = last_message_id,
@@ -912,7 +937,7 @@ pub fn render_chat(
         &topbar("CHAT", "search"),
         "",
         &content_html,
-        "",
+        &bottom_nav("profile"),
     )
 }
 

@@ -7,6 +7,18 @@ pub fn escape_html(value: &str) -> String {
         .replace('\'', "&#39;")
 }
 
+pub const STATIC_ASSET_VERSION: &str = "4.8.0";
+
+pub fn static_asset(path: &str) -> String {
+    let normalized = if path.starts_with("/static/") {
+        path.to_string()
+    } else {
+        format!("/static/{}", path.trim_start_matches('/'))
+    };
+
+    format!("{}?v={}", normalized, STATIC_ASSET_VERSION)
+}
+
 pub(crate) fn icon(name: &str) -> &'static str {
     match name {
         "globe" => {
@@ -1234,9 +1246,9 @@ pub(crate) fn page_document(
 
 {body_after}
 
-<script src="/static/splash.js" defer></script>
-<script src="/static/notification-sound.js" defer></script>
-<script src="/static/theme-toggle.js" defer></script>
+<script src="{splash_js}" defer></script>
+<script src="{notification_sound_js}" defer></script>
+<script src="{theme_toggle_js}" defer></script>
 
 </body>
 </html>"#,
@@ -1247,6 +1259,9 @@ pub(crate) fn page_document(
         main = main_html,
         bottom_nav = bottom_nav_html,
         body_after = body_after_html,
+        splash_js = static_asset("splash.js"),
+        notification_sound_js = static_asset("notification-sound.js"),
+        theme_toggle_js = static_asset("theme-toggle.js"),
     )
 }
 

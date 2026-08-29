@@ -4,7 +4,33 @@ pub type CategoryResourceRow = (i64, String, String, String, String, f64, i64, i
 pub type FavoriteResourceRow = (i64, String, String, String, String, f64, i64, i64, i64);
 pub type NotificationRow = (i64, Option<i64>, String, String, String, i64, i64);
 pub type ContactRequestRow = (i64, i64, String, String, String, String, String, i64, i64);
-pub type ConversationRow = (i64, i64, String, String, String, String, i64, i64);
+
+pub struct ConversationRow {
+    pub id: i64,
+    pub other_user_id: i64,
+    pub username: String,
+    pub first_name: String,
+    pub last_name: String,
+    pub last_message: String,
+    pub unread_count: i64,
+    pub updated_at: i64,
+}
+
+pub struct ChatMessageRow {
+    pub id: i64,
+    pub sender_user_id: i64,
+    pub message: String,
+    pub is_read: i64,
+    pub created_at: i64,
+    pub delivered_at: i64,
+    pub read_at: i64,
+    pub reply_to_message_id: i64,
+    pub reply_sender_user_id: i64,
+    pub reply_message: String,
+    pub edited_at: i64,
+    pub deleted_at: i64,
+}
+
 pub type PublicProfileResourceRow = (i64, String, String, String, f64, i64, i64, i64);
 pub type MyResourceRow = (
     i64,

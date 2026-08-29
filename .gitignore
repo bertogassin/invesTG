@@ -19,6 +19,8 @@ backups/
 *luxury-backup*
 # Local audit files
 RESURSMAP_AUDIT.txt
+$root/
+scripts/chat_v50_bundle.tar.gz
 # Rust build
 target/
 # Environment / secrets
