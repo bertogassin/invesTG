@@ -4,7 +4,7 @@ use teloxide::types::{
 };
 
 const COMMUNITY_CHANNEL_URL: &str = "https://t.me/omnixiuschannel";
-const RESURSMAP_URL: &str = "https://resursmap.de/app/auth";
+const RESURSMAP_URL: &str = "https://resursmap.de/app?entry=telegram&v=public-1";
 
 pub async fn welcome_chat_member(bot: Bot, update: ChatMemberUpdated) -> ResponseResult<()> {
     let was_outside = matches!(

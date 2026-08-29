@@ -688,6 +688,70 @@ body::before {
 ----------------------------------------------------------- */
 
 
+
+.topbar-account {
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:7px;
+    min-height:42px;
+    padding:0 13px;
+    border:1px solid rgba(214,183,122,.24);
+    border-radius:14px;
+    background:
+        linear-gradient(
+            145deg,
+            rgba(214,183,122,.12),
+            rgba(214,183,122,.04)
+        );
+    color:var(--text);
+    text-decoration:none;
+    font-size:12px;
+    font-weight:850;
+    transition:
+        border-color .16s ease,
+        background .16s ease,
+        transform .16s ease;
+}
+
+.topbar-account:hover {
+    border-color:rgba(214,183,122,.48);
+    background:rgba(214,183,122,.14);
+}
+
+.topbar-account:active {
+    transform:scale(.97);
+}
+
+.topbar-account-icon {
+    display:grid;
+    place-items:center;
+    width:18px;
+    height:18px;
+    color:var(--gold);
+}
+
+.topbar-account-icon .icon {
+    width:18px;
+    height:18px;
+}
+
+@media (max-width:420px) {
+    .topbar-account {
+        width:42px;
+        padding:0;
+    }
+
+    .topbar-account-label {
+        position:absolute;
+        width:1px;
+        height:1px;
+        overflow:hidden;
+        clip:rect(0 0 0 0);
+        white-space:nowrap;
+    }
+}
+
 /* ============================================================
    RESURSMAP LUXURY LAYER
    ============================================================ */
@@ -1275,9 +1339,20 @@ pub(crate) fn topbar(subtitle: &str, icon_name: &str) -> String {
         </div>
     </a>
 
+    <a class="topbar-account"
+       href="/app/me"
+       aria-label="Открыть аккаунт">
+        <span class="topbar-account-icon">
+            {user_icon}
+        </span>
+        <span class="topbar-account-label">
+            Аккаунт
+        </span>
+    </a>
 </header>
 "#,
         logo = icon(icon_name),
+        user_icon = icon("user"),
         subtitle = escape_html(subtitle),
     )
 }
@@ -1780,4 +1855,19 @@ pub(crate) fn back_hero(
         title = escape_html(title),
         description = description_html,
     )
+}
+
+#[cfg(test)]
+mod public_entry_tests {
+    use super::*;
+
+    #[test]
+    fn topbar_exposes_account_inside_site() {
+        let html = topbar("Карта", "map");
+
+        assert!(html.contains("href=\"/app\""));
+        assert!(html.contains("href=\"/app/me\""));
+        assert!(html.contains("Аккаунт"));
+        assert!(!html.contains("/app/auth"));
+    }
 }

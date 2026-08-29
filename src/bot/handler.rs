@@ -13,7 +13,10 @@ pub async fn send_notification(bot: &Bot, telegram_id: i64, text: &str) -> Respo
 
 pub async fn start_handler(bot: Bot, msg: Message) -> ResponseResult<()> {
     let map_web_app = WebAppInfo {
-        url: "https://resursmap.de/app/auth".to_string().parse().unwrap(),
+        url: "https://resursmap.de/app?entry=telegram&v=public-1"
+            .to_string()
+            .parse()
+            .unwrap(),
     };
 
     let mut keyboard_rows = vec![vec![InlineKeyboardButton::web_app(
