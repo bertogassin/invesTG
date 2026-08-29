@@ -78,8 +78,10 @@
         var draftKey =
             "resursmap-chat-draft:" + otherUserId;
         var pendingSendKey =
+            "resursmap-chat-outbox:" + otherUserId;
+        var legacyPendingSendKey =
             "resursmap-chat-pending:" + otherUserId;
-        var pendingSend = null;
+        var pendingQueue = [];
 
         function createClientMessageId() {
             if (
@@ -100,20 +102,22 @@
             );
         }
 
-        function savePendingSend(value) {
-            pendingSend = value;
-
+        function savePendingQueue() {
             try {
-                if (value) {
+                if (pendingQueue.length > 0) {
                     localStorage.setItem(
                         pendingSendKey,
-                        JSON.stringify(value)
+                        JSON.stringify(pendingQueue)
                     );
                 } else {
                     localStorage.removeItem(
                         pendingSendKey
                     );
                 }
+
+                localStorage.removeItem(
+                    legacyPendingSendKey
+                );
             } catch (_) {
                 // Storage may be disabled.
             }
@@ -192,7 +196,6 @@
 
             clear.hidden = length === 0;
             send.disabled =
-                sending ||
                 input.value.trim().length === 0 ||
                 length > 2000;
 
@@ -315,6 +318,126 @@
             row.appendChild(bubble);
 
             return row;
+        }
+
+        function pendingRow(clientMessageId) {
+            var found = null;
+
+            history.querySelectorAll(
+                ".chat-message-row[data-client-message-id]"
+            ).forEach(function (row) {
+                if (
+                    row.dataset.clientMessageId ===
+                    clientMessageId
+                ) {
+                    found = row;
+                }
+            });
+
+            return found;
+        }
+
+        function removePendingRow(clientMessageId) {
+            var row = pendingRow(clientMessageId);
+
+            if (row) {
+                row.remove();
+            }
+        }
+
+        function renderPendingItem(item) {
+            var row = pendingRow(
+                item.clientMessageId
+            );
+
+            if (!row) {
+                row = createMessageRow(
+                    {
+                        id:
+                            "pending-" +
+                            item.clientMessageId,
+                        message: item.message,
+                        is_mine: true,
+                        delivered_at: 0,
+                        read_at: 0,
+                        created_at: item.createdAt
+                    },
+                    true
+                );
+
+                row.dataset.clientMessageId =
+                    item.clientMessageId;
+                row.classList.add("is-pending");
+
+                history.insertBefore(row, historyEnd);
+            }
+
+            var status = row.querySelector(
+                ".chat-message-status"
+            );
+
+            if (!status) {
+                return;
+            }
+
+            status.classList.remove(
+                "is-read",
+                "is-error"
+            );
+            status.classList.add("is-pending");
+
+            if (item.state === "error") {
+                row.classList.add("is-send-error");
+                row.classList.remove("is-sending");
+                status.classList.add("is-error");
+                status.textContent = "!";
+                status.title =
+                    "Не отправлено · нажмите повторить";
+                status.setAttribute(
+                    "role",
+                    "button"
+                );
+                status.tabIndex = 0;
+
+                status.onclick = function (event) {
+                    event.stopPropagation();
+                    item.state = "queued";
+                    savePendingQueue();
+                    renderPendingItem(item);
+                    flushPendingQueue();
+                };
+
+                status.onkeydown = function (event) {
+                    if (
+                        event.key === "Enter" ||
+                        event.key === " "
+                    ) {
+                        event.preventDefault();
+                        status.click();
+                    }
+                };
+            } else {
+                row.classList.remove(
+                    "is-send-error"
+                );
+                row.classList.add("is-sending");
+                status.textContent = "…";
+                status.title = "Отправляется";
+                status.removeAttribute("role");
+                status.removeAttribute("tabindex");
+                status.onclick = null;
+                status.onkeydown = null;
+            }
+        }
+
+        function renderPendingQueue() {
+            pendingQueue.forEach(
+                renderPendingItem
+            );
+
+            if (pendingQueue.length > 0) {
+                scrollToBottom("auto");
+            }
         }
 
         function messageExists(id) {
@@ -571,103 +694,164 @@
             }
         }
 
-        async function sendMessage() {
-            var message = input.value.trim();
-
-            if (!message || sending) {
+        async function flushPendingQueue() {
+            if (
+                sending ||
+                pendingQueue.length === 0 ||
+                navigator.onLine === false
+            ) {
                 return;
             }
 
-            if (
-                !pendingSend ||
-                pendingSend.message !== message
-            ) {
-                savePendingSend({
-                    clientMessageId:
-                        createClientMessageId(),
-                    message: message,
-                    replyToMessageId:
-                        window.ResursMapChatReply
-                            ? window.ResursMapChatReply.id
-                            : null
-                });
-            }
-
             sending = true;
-            sendState.textContent = "Отправка…";
             updateComposer();
 
-            try {
-                var data = await fetchJson(
-                    "/api/chat/" +
-                    otherUserId +
-                    "/send",
-                    {
-                        method: "POST",
-                        headers: {
-                            "Content-Type":
-                                "application/json"
-                        },
-                        body: JSON.stringify({
-                            message: pendingSend.message,
-                            reply_to_message_id:
-                                pendingSend.replyToMessageId,
-                            client_message_id:
-                                pendingSend.clientMessageId
-                        })
+            while (pendingQueue.length > 0) {
+                var item = pendingQueue[0];
+
+                item.state = "sending";
+                savePendingQueue();
+                renderPendingItem(item);
+
+                sendState.textContent =
+                    pendingQueue.length > 1
+                        ? "Отправка · осталось " +
+                            pendingQueue.length
+                        : "Отправка…";
+
+                try {
+                    var data = await fetchJson(
+                        "/api/chat/" +
+                        otherUserId +
+                        "/send",
+                        {
+                            method: "POST",
+                            headers: {
+                                "Content-Type":
+                                    "application/json"
+                            },
+                            body: JSON.stringify({
+                                message: item.message,
+                                reply_to_message_id:
+                                    item.replyToMessageId,
+                                client_message_id:
+                                    item.clientMessageId
+                            })
+                        }
+                    );
+
+                    if (data.message) {
+                        data.message.reply_message =
+                            item.replyMessage || "";
+                        data.message
+                            .reply_sender_user_id =
+                            item.replySenderUserId ||
+                            null;
                     }
-                );
 
-                if (
-                    window.ResursMapChatReply &&
-                    data.message
-                ) {
-                    data.message.reply_message =
-                        window.ResursMapChatReply.message;
-                    data.message.reply_sender_user_id =
-                        window.ResursMapChatReply.senderUserId;
+                    removePendingRow(
+                        item.clientMessageId
+                    );
+
+                    pendingQueue.shift();
+                    savePendingQueue();
+
+                    if (data.message) {
+                        appendMessages([data.message]);
+                    }
+
+                    window.dispatchEvent(
+                        new CustomEvent(
+                            "resursmap:chat-message-sent"
+                        )
+                    );
+
+                    setConnection(
+                        "В сети",
+                        "is-online"
+                    );
+                } catch (error) {
+                    item.state = "error";
+                    savePendingQueue();
+                    renderPendingItem(item);
+
+                    if (
+                        error.status === 429 &&
+                        error.retryAfter > 0
+                    ) {
+                        sendState.textContent =
+                            "Лимит · повтор через " +
+                            error.retryAfter +
+                            " сек.";
+                    } else if (
+                        error.status === 401
+                    ) {
+                        sendState.textContent =
+                            "Сессия истекла";
+                    } else {
+                        sendState.textContent =
+                            "Не отправлено · нажмите !";
+                    }
+
+                    setConnection(
+                        "Ошибка отправки",
+                        "is-error"
+                    );
+
+                    break;
                 }
+            }
 
-                appendMessages([data.message]);
+            sending = false;
+            updateComposer();
 
-                window.dispatchEvent(
-                    new CustomEvent(
-                        "resursmap:chat-message-sent"
-                    )
-                );
-
-                savePendingSend(null);
-                input.value = "";
-                updateComposer();
-                input.focus();
+            if (pendingQueue.length === 0) {
                 sendState.textContent =
                     "Отправлено · Enter — отправить";
-                setConnection("В сети", "is-online");
-            } catch (error) {
-                if (
-                    error.status === 429 &&
-                    error.retryAfter > 0
-                ) {
-                    sendState.textContent =
-                        "Лимит сообщений · повторите через " +
-                        error.retryAfter +
-                        " сек.";
-                } else if (error.status === 401) {
-                    sendState.textContent =
-                        "Сессия истекла · войдите снова";
-                } else {
-                    sendState.textContent =
-                        "Не отправлено · проверьте соединение";
-                }
-
-                setConnection(
-                    "Ошибка отправки",
-                    "is-error"
-                );
-            } finally {
-                sending = false;
-                updateComposer();
             }
+        }
+
+        function sendMessage() {
+            var message = input.value.trim();
+
+            if (!message) {
+                return;
+            }
+
+            var reply =
+                window.ResursMapChatReply || null;
+
+            var item = {
+                clientMessageId:
+                    createClientMessageId(),
+                message: message,
+                replyToMessageId:
+                    reply ? reply.id : null,
+                replyMessage:
+                    reply ? reply.message : "",
+                replySenderUserId:
+                    reply ? reply.senderUserId : null,
+                createdAt:
+                    Math.floor(Date.now() / 1000),
+                state: "queued"
+            };
+
+            pendingQueue.push(item);
+            savePendingQueue();
+            renderPendingItem(item);
+
+            input.value = "";
+            updateComposer();
+            input.focus();
+
+            window.dispatchEvent(
+                new CustomEvent(
+                    "resursmap:chat-message-queued"
+                )
+            );
+
+            scrollToBottom("smooth");
+            flushPendingQueue();
         }
 
         form.addEventListener(
@@ -720,10 +904,7 @@
             "online",
             function () {
                 pollMessages();
-
-                if (pendingSend && !sending) {
-                    sendMessage();
-                }
+                flushPendingQueue();
             }
         );
 
@@ -751,28 +932,73 @@
             input.value =
                 localStorage.getItem(draftKey) || "";
 
-            var storedPending =
+            var storedQueue =
                 localStorage.getItem(pendingSendKey);
+            var legacyPending =
+                localStorage.getItem(
+                    legacyPendingSendKey
+                );
 
-            if (storedPending) {
-                var parsedPending =
-                    JSON.parse(storedPending);
+            if (storedQueue) {
+                var parsedQueue =
+                    JSON.parse(storedQueue);
+
+                if (Array.isArray(parsedQueue)) {
+                    pendingQueue =
+                        parsedQueue.filter(
+                            function (item) {
+                                return Boolean(
+                                    item &&
+                                    typeof item.message ===
+                                        "string" &&
+                                    typeof item
+                                        .clientMessageId ===
+                                        "string"
+                                );
+                            }
+                        );
+                }
+            } else if (legacyPending) {
+                var parsedLegacy =
+                    JSON.parse(legacyPending);
 
                 if (
-                    parsedPending &&
-                    typeof parsedPending.message ===
+                    parsedLegacy &&
+                    typeof parsedLegacy.message ===
                         "string" &&
-                    typeof parsedPending
+                    typeof parsedLegacy
                         .clientMessageId === "string"
                 ) {
-                    pendingSend = parsedPending;
-                    input.value =
-                        parsedPending.message;
+                    pendingQueue = [{
+                        clientMessageId:
+                            parsedLegacy
+                                .clientMessageId,
+                        message:
+                            parsedLegacy.message,
+                        replyToMessageId:
+                            parsedLegacy
+                                .replyToMessageId ||
+                            null,
+                        replyMessage: "",
+                        replySenderUserId: null,
+                        createdAt:
+                            Math.floor(
+                                Date.now() / 1000
+                            ),
+                        state: "queued"
+                    }];
                 }
             }
+
+            pendingQueue.forEach(function (item) {
+                if (item.state === "sending") {
+                    item.state = "queued";
+                }
+            });
+
+            savePendingQueue();
         } catch (_) {
-            input.value = "";
-            pendingSend = null;
+            pendingQueue = [];
         }
 
         loadOlder.hidden = !mayHaveOlder;
@@ -788,11 +1014,16 @@
 
         window.setTimeout(pollMessages, 500);
 
+        renderPendingQueue();
+
         if (
-            pendingSend &&
+            pendingQueue.length > 0 &&
             navigator.onLine !== false
         ) {
-            window.setTimeout(sendMessage, 700);
+            window.setTimeout(
+                flushPendingQueue,
+                700
+            );
         }
     });
 })();
