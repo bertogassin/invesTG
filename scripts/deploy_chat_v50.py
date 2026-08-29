@@ -11,7 +11,7 @@ import sys
 
 ROOT = pathlib.Path("/root/resursmap")
 BUNDLE = pathlib.Path(__file__).resolve().parent / "chat_v50_bundle"
-CACHE_VERSION = "4.8.1"
+CACHE_VERSION = "4.8.2"
 
 FILES = [
     "src/state/app_state.rs",

@@ -12,7 +12,6 @@ use hmac::{Hmac, Mac};
 use serde::Deserialize;
 use serde_json::json;
 use sha2::Sha256;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 pub(super) fn verify_telegram_init_data(init_data: &str, bot_token: &str) -> Option<i64> {
     let mut hash_from_telegram = String::new();
@@ -189,25 +188,146 @@ fn email_rate_limit_id(state: &AppState, email: &str) -> i64 {
     i64::from_be_bytes(bytes) & i64::MAX
 }
 
-fn generate_email_code(state: &AppState, email: &str) -> String {
-    type HmacSha256 = Hmac<Sha256>;
+fn generate_email_code() -> String {
+    let mut bytes = [0u8; 4];
+    getrandom::getrandom(&mut bytes).expect("secure random");
 
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos();
-
-    let payload = format!("email-code:{}:{}:{}", email, unix_now(), nanos);
-
-    let mut mac = HmacSha256::new_from_slice(state.admin_key.as_bytes()).expect("HMAC key");
-
-    mac.update(payload.as_bytes());
-
-    let digest = mac.finalize().into_bytes();
-
-    let value = u32::from_be_bytes([digest[0], digest[1], digest[2], digest[3]]) % 1_000_000;
+    let value = u32::from_be_bytes(bytes) % 1_000_000;
 
     format!("{value:06}")
+}
+
+fn cookie_security_flags() -> &'static str {
+    match std::env::var("RESURSMAP_COOKIE_SECURE").as_deref() {
+        Ok("0") | Ok("false") | Ok("False") => "HttpOnly; SameSite=Lax",
+        _ => "HttpOnly; Secure; SameSite=Lax",
+    }
+}
+
+fn append_user_session_cookie(response: &mut Response, session: &str) {
+    let cookie = format!(
+        "resursmap_user={session}; Path=/; {}; Max-Age=2592000",
+        cookie_security_flags()
+    );
+
+    if let Ok(value) = HeaderValue::from_str(&cookie) {
+        response.headers_mut().append(header::SET_COOKIE, value);
+    }
+}
+
+fn ensure_profile_public_id(
+    transaction: &rusqlite::Transaction<'_>,
+    user_id: i64,
+) -> Result<(), &'static str> {
+    transaction
+        .execute(
+            "UPDATE profiles
+             SET public_id = lower(hex(randomblob(16)))
+             WHERE user_id = ?1
+               AND (public_id IS NULL OR public_id = '')",
+            rusqlite::params![user_id],
+        )
+        .map_err(|_| "profile_update_failed")?;
+
+    Ok(())
+}
+
+fn provision_telegram_account(
+    db: &rusqlite::Connection,
+    telegram_id: i64,
+    username: &str,
+    first_name: &str,
+    last_name: &str,
+) -> Result<i64, &'static str> {
+    if telegram_id <= 0 {
+        return Err("invalid_telegram_id");
+    }
+
+    let now = unix_now();
+    let client_id = format!("tg:{telegram_id}");
+    let subject = telegram_id.to_string();
+
+    let transaction = db
+        .transaction()
+        .map_err(|_| "transaction_failed")?;
+
+    transaction
+        .execute(
+            "INSERT OR IGNORE INTO users (
+                id,
+                created_at,
+                updated_at,
+                is_active
+             )
+             VALUES (?1, ?2, ?2, 1)",
+            rusqlite::params![telegram_id, now],
+        )
+        .map_err(|_| "user_create_failed")?;
+
+    transaction
+        .execute(
+            "INSERT OR IGNORE INTO auth_identities (
+                user_id,
+                provider,
+                provider_subject,
+                verified_at,
+                created_at,
+                updated_at
+             )
+             VALUES (?1, 'telegram', ?2, ?3, ?3, ?3)",
+            rusqlite::params![telegram_id, &subject, now],
+        )
+        .map_err(|_| "identity_create_failed")?;
+
+    transaction
+        .execute(
+            "INSERT INTO profiles (
+                client_id,
+                user_id,
+                username,
+                first_name,
+                last_name,
+                public_id,
+                updated_at
+             )
+             VALUES (
+                ?1,
+                ?2,
+                ?3,
+                ?4,
+                ?5,
+                lower(hex(randomblob(16))),
+                ?6
+             )
+             ON CONFLICT(client_id) DO UPDATE SET
+                user_id = excluded.user_id,
+                username = excluded.username,
+                first_name = excluded.first_name,
+                last_name = excluded.last_name,
+                updated_at = excluded.updated_at,
+                public_id = CASE
+                    WHEN profiles.public_id IS NULL OR profiles.public_id = ''
+                    THEN lower(hex(randomblob(16)))
+                    ELSE profiles.public_id
+                END",
+            rusqlite::params![
+                &client_id,
+                telegram_id,
+                username,
+                first_name,
+                last_name,
+                now,
+            ],
+        )
+        .map_err(|_| "profile_create_failed")?;
+
+    ensure_profile_public_id(&transaction, telegram_id)?;
+
+    transaction
+        .commit()
+        .map_err(|_| "commit_failed")?;
+
+    Ok(telegram_id)
 }
 
 fn hash_email_code(state: &AppState, email: &str, code: &str, expires_at: i64) -> String {
@@ -301,24 +421,9 @@ pub async fn email_auth_request(
             .into_response();
     }
 
-    let code = generate_email_code(&state, &email);
+    let code = generate_email_code();
     let expires_at = unix_now() + EMAIL_CODE_TTL_SECONDS;
     let code_hash = hash_email_code(&state, &email, &code, expires_at);
-
-    // Сначала отправляем письмо. Если почтовый сервис не работает,
-    // не создаём бесполезный код в БД.
-    if let Err(error) = send_email_code(&email, &code).await {
-        eprintln!("email auth send failed: {error}");
-
-        return (
-            StatusCode::SERVICE_UNAVAILABLE,
-            Json(json!({
-                "ok": false,
-                "error": "mail_unavailable"
-            })),
-        )
-            .into_response();
-    }
 
     let db = match crate::db::pool::get_connection(&state.db_pool) {
         Ok(db) => db,
@@ -335,7 +440,6 @@ pub async fn email_auth_request(
         }
     };
 
-    // Все предыдущие неиспользованные коды для адреса инвалидируем.
     let _ = db.execute(
         "UPDATE email_login_codes
          SET consumed_at = ?2
@@ -363,6 +467,27 @@ pub async fn email_auth_request(
             Json(json!({
                 "ok": false,
                 "error": "code_store_failed"
+            })),
+        )
+            .into_response();
+    }
+
+    if let Err(error) = send_email_code(&email, &code).await {
+        eprintln!("email auth send failed: {error}");
+
+        let _ = db.execute(
+            "UPDATE email_login_codes
+             SET consumed_at = ?2
+             WHERE email = ?1
+               AND consumed_at = 0",
+            rusqlite::params![&email, unix_now()],
+        );
+
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({
+                "ok": false,
+                "error": "mail_unavailable"
             })),
         )
             .into_response();
@@ -643,9 +768,15 @@ pub async fn email_auth_verify(
                 "INSERT OR IGNORE INTO profiles (
                     client_id,
                     user_id,
+                    public_id,
                     updated_at
                  )
-                 VALUES (?1, ?2, ?3)",
+                 VALUES (
+                    ?1,
+                    ?2,
+                    lower(hex(randomblob(16))),
+                    ?3
+                 )",
                 rusqlite::params![&client_id, next_id, unix_now(),],
             )
             .is_err()
@@ -662,6 +793,17 @@ pub async fn email_auth_verify(
 
         next_id
     };
+
+    if ensure_profile_public_id(&transaction, user_id).is_err() {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({
+                "ok": false,
+                "error": "profile_update_failed"
+            })),
+        )
+            .into_response();
+    }
 
     if transaction
         .execute(
@@ -697,10 +839,6 @@ pub async fn email_auth_verify(
 
     let session = create_user_session(&state, user_id);
 
-    let cookie = format!(
-        "resursmap_user={session}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=2592000"
-    );
-
     let mut response = (
         StatusCode::OK,
         Json(json!({
@@ -710,9 +848,7 @@ pub async fn email_auth_verify(
     )
         .into_response();
 
-    if let Ok(value) = HeaderValue::from_str(&cookie) {
-        response.headers_mut().append(header::SET_COOKIE, value);
-    }
+    append_user_session_cookie(&mut response, &session);
 
     response
 }
@@ -953,9 +1089,75 @@ pub async fn app_auth_page() -> Html<String> {
             font-size:16px;
             line-height:1.58;
         ">
-            Введите email — мы отправим шестизначный код.
-            Пароль не нужен.
+            В Telegram — вход в один клик.
+            В браузере — код на email, без пароля.
         </p>
+
+        <div id="telegram-section"
+             style="margin-bottom:22px;">
+            <button id="telegram-login-button"
+                    type="button"
+                    class="ui-button"
+                    style="
+                        width:100%;
+                        min-height:52px;
+                        padding:0 18px;
+                        border:1px solid rgba(88,166,255,.38);
+                        border-radius:14px;
+                        color:#f5fbff;
+                        background:
+                            linear-gradient(
+                                135deg,
+                                rgba(42,140,255,.92),
+                                rgba(26,102,210,.96)
+                            );
+                        box-shadow:
+                            0 14px 34px rgba(42,140,255,.18),
+                            inset 0 1px 0 rgba(255,255,255,.18);
+                        font-size:16px;
+                        font-weight:850;
+                        cursor:pointer;
+                    ">
+                Войти через Telegram
+            </button>
+
+            <p id="telegram-status"
+               class="ui-status"
+               role="status"
+               aria-live="polite"
+               style="
+                   min-height:22px;
+                   margin:12px 0 0;
+                   color:var(--muted);
+                   font-size:14px;
+                   line-height:1.5;
+               ">
+            </p>
+        </div>
+
+        <div style="
+            display:flex;
+            align-items:center;
+            gap:12px;
+            margin:0 0 22px;
+            color:rgba(255,255,255,.34);
+            font-size:12px;
+            font-weight:700;
+            letter-spacing:.12em;
+            text-transform:uppercase;
+        ">
+            <span style="
+                flex:1;
+                height:1px;
+                background:rgba(255,255,255,.08);
+            "></span>
+            или email
+            <span style="
+                flex:1;
+                height:1px;
+                background:rgba(255,255,255,.08);
+            "></span>
+        </div>
 
         <label for="email-input"
                style="
@@ -1155,9 +1357,24 @@ pub async fn app_auth_page() -> Html<String> {
     const emailStatus =
         document.getElementById("email-status");
 
+    const telegramButton =
+        document.getElementById("telegram-login-button");
+
+    const telegramStatus =
+        document.getElementById("telegram-status");
+
+    const telegramSection =
+        document.getElementById("telegram-section");
+
     function setEmailStatus(message, isError) {
         emailStatus.textContent = message;
         emailStatus.style.color =
+            isError ? "#ef6b72" : "var(--muted)";
+    }
+
+    function setTelegramStatus(message, isError) {
+        telegramStatus.textContent = message;
+        telegramStatus.style.color =
             isError ? "#ef6b72" : "var(--muted)";
     }
 
@@ -1178,11 +1395,29 @@ pub async fn app_auth_page() -> Html<String> {
             user_create_failed: "Не удалось создать аккаунт.",
             identity_create_failed: "Не удалось создать способ входа.",
             profile_create_failed: "Не удалось создать профиль.",
+            profile_update_failed: "Не удалось обновить профиль.",
+            transaction_failed: "Не удалось начать операцию.",
+            commit_failed: "Не удалось завершить вход.",
+            invalid_telegram_data: "Не удалось проверить Telegram."
+        };
+
+        return messages[error] || "Не удалось выполнить запрос.";
+    }
+
+    function telegramErrorMessage(error) {
+        const messages = {
+            invalid_telegram_data: "Не удалось проверить Telegram.",
+            rate_limited: "Слишком много попыток. Подождите немного.",
+            database_unavailable: "Сервис временно недоступен.",
+            user_create_failed: "Не удалось создать аккаунт.",
+            identity_create_failed: "Не удалось создать способ входа.",
+            profile_create_failed: "Не удалось создать профиль.",
+            profile_update_failed: "Не удалось обновить профиль.",
             transaction_failed: "Не удалось начать операцию.",
             commit_failed: "Не удалось завершить вход."
         };
 
-        return messages[error] || "Не удалось выполнить запрос.";
+        return messages[error] || emailErrorMessage(error);
     }
 
     async function readJson(response) {
@@ -1193,6 +1428,75 @@ pub async fn app_auth_page() -> Html<String> {
                 ok: false,
                 error: "invalid_response"
             };
+        }
+    }
+
+    function getTelegramWebApp() {
+        return window.Telegram && window.Telegram.WebApp
+            ? window.Telegram.WebApp
+            : null;
+    }
+
+    async function loginWithTelegram(options) {
+        const auto = options && options.auto;
+
+        const tg = getTelegramWebApp();
+
+        if (!tg || !tg.initData) {
+            if (!auto) {
+                setTelegramStatus(
+                    "Откройте ResursMap через Telegram Mini App или используйте email.",
+                    true
+                );
+            }
+            return false;
+        }
+
+        tg.ready();
+
+        if (telegramButton) {
+            telegramButton.disabled = true;
+        }
+
+        setTelegramStatus(
+            auto ? "Проверяем Telegram…" : "Входим…",
+            false
+        );
+
+        try {
+            const response = await fetch("/app/auth", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    init_data: tg.initData
+                })
+            });
+
+            const data = await readJson(response);
+
+            if (!response.ok || !data.ok) {
+                setTelegramStatus(
+                    telegramErrorMessage(data.error),
+                    true
+                );
+                return false;
+            }
+
+            setTelegramStatus("✓ Вход выполнен", false);
+            window.location.replace("/app/me");
+            return true;
+        } catch (_) {
+            setTelegramStatus(
+                "Ошибка соединения. Попробуйте ещё раз.",
+                true
+            );
+            return false;
+        } finally {
+            if (telegramButton) {
+                telegramButton.disabled = false;
+            }
         }
     }
 
@@ -1329,14 +1633,41 @@ pub async fn app_auth_page() -> Html<String> {
         }
     });
 
-    emailInput.focus();
+    if (telegramButton) {
+        telegramButton.addEventListener(
+            "click",
+            function () {
+                loginWithTelegram({ auto: false });
+            }
+        );
+    }
+
+    (async function () {
+        const tg = getTelegramWebApp();
+
+        if (tg && tg.initData) {
+            await loginWithTelegram({ auto: true });
+            return;
+        }
+
+        if (telegramSection) {
+            setTelegramStatus(
+                "Telegram-вход доступен в Mini App. Ниже — вход по email.",
+                false
+            );
+        }
+
+        emailInput.focus();
+    })();
 })();
 </script>
 "####;
 
+    let head_extra = r####"<script src="https://telegram.org/js/telegram-web-app.js"></script>"####;
+
     Html(crate::web::templates::page_document(
         "Вход · ResursMap",
-        "",
+        head_extra,
         "",
         main_html,
         "",
@@ -1351,7 +1682,10 @@ pub async fn app_logout(headers: HeaderMap) -> Response {
 
     let mut response = (StatusCode::SEE_OTHER, [(header::LOCATION, "/app")]).into_response();
 
-    let cookie = "resursmap_user=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0";
+    let cookie = format!(
+        "resursmap_user=; Path=/; {}; Max-Age=0",
+        cookie_security_flags()
+    );
 
     if let Ok(value) = HeaderValue::from_str(cookie) {
         response.headers_mut().append(header::SET_COOKIE, value);
@@ -1401,62 +1735,53 @@ pub async fn app_auth(
             .into_response();
     }
 
-    // TASK 7.16B PROFILE SYNC
+    // TASK 7.16B PROFILE SYNC + unified account model
     let (telegram_username, telegram_first_name, telegram_last_name) =
         telegram_profile_from_init_data(init_data);
 
-    let client_id = format!("tg:{}", user_id);
-
-    {
-        let db = crate::db::pool::get_connection(&state.db_pool).ok();
-
-        if let Some(db) = db {
-            let _ = db.execute(
-                "INSERT INTO profiles (
-                client_id,
-                username,
-                first_name,
-                last_name,
-                updated_at
-             )
-             VALUES (
-                ?1,
-                ?2,
-                ?3,
-                ?4,
-                strftime('%s','now')
-             )
-             ON CONFLICT(client_id)
-             DO UPDATE SET
-                username = excluded.username,
-                first_name = excluded.first_name,
-                last_name = excluded.last_name,
-                updated_at = strftime('%s','now')",
-                rusqlite::params![
-                    &client_id,
-                    &telegram_username,
-                    &telegram_first_name,
-                    &telegram_last_name,
-                ],
-            );
+    let db = match crate::db::pool::get_connection(&state.db_pool) {
+        Ok(db) => db,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({
+                    "ok": false,
+                    "error": "database_unavailable"
+                })),
+            )
+                .into_response();
         }
-    }
+    };
 
-    let session = create_user_session(&state, user_id);
+    let account_user_id = match provision_telegram_account(
+        &db,
+        user_id,
+        &telegram_username,
+        &telegram_first_name,
+        &telegram_last_name,
+    ) {
+        Ok(account_user_id) => account_user_id,
+        Err(error) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({
+                    "ok": false,
+                    "error": error
+                })),
+            )
+                .into_response();
+        }
+    };
 
-    let cookie = format!(
-        "resursmap_user={}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=2592000",
-        session
-    );
+    let session = create_user_session(&state, account_user_id);
 
     let mut response = Json(json!({
-        "ok": true
+        "ok": true,
+        "user_id": account_user_id
     }))
     .into_response();
 
-    if let Ok(value) = HeaderValue::from_str(&cookie) {
-        response.headers_mut().insert(header::SET_COOKIE, value);
-    }
+    append_user_session_cookie(&mut response, &session);
 
     response
 }
