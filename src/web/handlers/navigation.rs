@@ -1,4 +1,5 @@
 use super::auth::verify_authenticated_user;
+use super::auth::verify_user_session;
 use crate::state::app_state::AppState;
 use crate::web::templates;
 use axum::{
@@ -110,12 +111,15 @@ pub async fn app_root(State(state): State<AppState>, headers: HeaderMap) -> Html
         })
         .unwrap_or_default();
 
+    let guest_mode = verify_user_session(&state, &headers).is_none();
+
     Html(templates::render_continents(
         users_count,
         online_count,
         resources_count,
         categories,
         people_by_category,
+        guest_mode,
     ))
 }
 

@@ -1220,8 +1220,8 @@ pub async fn app_auth_page() -> Html<String> {
             font-size:16px;
             line-height:1.58;
         ">
-            В Telegram — вход в один клик.
-            В браузере — код на email, без пароля.
+            Карта и поиск работают без регистрации.
+            Вход нужен только для сообщений, избранного и публикаций.
         </p>
 
         <div id="telegram-section"
@@ -1470,6 +1470,35 @@ pub async fn app_auth_page() -> Html<String> {
     let body_after = r####"
 <script>
 (function () {
+    function authRedirectTarget() {
+        const params = new URLSearchParams(window.location.search);
+        const next = (params.get("next") || "").trim();
+
+        if (
+            next.startsWith("/app")
+            && !next.startsWith("//")
+            && !next.includes("://")
+        ) {
+            return next;
+        }
+
+        try {
+            const referrer = new URL(document.referrer);
+
+            if (
+                referrer.origin === window.location.origin
+                && referrer.pathname.startsWith("/app")
+                && referrer.pathname !== "/app/auth"
+            ) {
+                return referrer.pathname + referrer.search;
+            }
+        } catch (_) {}
+
+        return "/app";
+    }
+
+    const redirectTarget = authRedirectTarget();
+
     const emailInput =
         document.getElementById("email-input");
 
@@ -1616,7 +1645,7 @@ pub async fn app_auth_page() -> Html<String> {
             }
 
             setTelegramStatus("✓ Вход выполнен", false);
-            window.location.replace("/app/me");
+            window.location.replace(redirectTarget);
             return true;
         } catch (_) {
             setTelegramStatus(
@@ -1726,7 +1755,7 @@ pub async fn app_auth_page() -> Html<String> {
             }
 
             setEmailStatus("✓ Вход выполнен", false);
-            window.location.replace("/app/me");
+            window.location.replace(redirectTarget);
         } catch (_) {
             setEmailStatus(
                 "Ошибка соединения. Попробуйте ещё раз.",

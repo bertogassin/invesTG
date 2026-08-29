@@ -1,6 +1,7 @@
 use super::common::{
-    back_hero, back_link, bottom_nav, empty_state_card, escape_html, icon, navigation_card,
-    page_document, page_shell, profile_resource_card, section_head, simple_hero, topbar,
+    back_hero, back_link, bottom_nav, empty_state_card, escape_html, guest_locked_section,
+    guest_mode_panel, icon, navigation_card, page_document, page_shell, profile_resource_card,
+    section_head, simple_hero, topbar,
 };
 
 pub struct RenderMeParams<'a> {
@@ -238,11 +239,8 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
     } else {
         format!(
             "{}{}",
-            empty_state_card(
-                "Войдите в аккаунт",
-                "После входа здесь появятся ваш профиль, ресурсы, избранное и статистика.",
-            ),
-            navigation_card("/app/auth", "user", "Войти в аккаунт", "Telegram или email",),
+            guest_mode_panel("/app/me"),
+            navigation_card("/app/search", "search", "Сначала поиск", "Найдите людей и ресурсы"),
         )
     };
 
@@ -1477,10 +1475,7 @@ pub fn render_notifications(
     authenticated: bool,
 ) -> String {
     let cards = if !authenticated {
-        empty_state_card(
-            "Войдите в аккаунт",
-            "Уведомления доступны после входа в аккаунт.",
-        )
+        guest_locked_section("Уведомления")
     } else if notifications.is_empty() {
         empty_state_card(
             "🔔 Уведомлений пока нет",
@@ -2206,12 +2201,12 @@ pub fn render_public_user_profile(params: RenderPublicUserProfileParams<'_>) -> 
                     await response.json();
 
                 if (response.status === 401) {{
-                    if (status) {{
-                        status.textContent =
-                            "Войдите в аккаунт.";
-                    }}
-
-                    sendButton.disabled = false;
+                    window.location.href =
+                        "/app/auth?next="
+                        + encodeURIComponent(
+                            window.location.pathname
+                                + window.location.search
+                        );
                     return;
                 }}
 
@@ -2258,6 +2253,26 @@ pub fn render_public_user_profile(params: RenderPublicUserProfileParams<'_>) -> 
                     if (status) {{
                         status.textContent =
                             "Не удалось отправить запрос.";
+                    }}
+
+                    sendButton.disabled = false;
+                    return;
+                }}
+
+                if (data.status === "pending") {{
+                    if (status) {{
+                        status.textContent =
+                            "Запрос отправлен. Ждите ответа.";
+                    }}
+
+                    if (panel) {{
+                        panel.style.display = "none";
+                    }}
+
+                    if (openButton) {{
+                        openButton.disabled = false;
+                        openButton.textContent =
+                            "Запрос отправлен";
                     }}
 
                     sendButton.disabled = false;
@@ -2352,10 +2367,7 @@ pub fn render_favorites(
     authenticated: bool,
 ) -> String {
     let cards = if !authenticated {
-        empty_state_card(
-            "Войдите в аккаунт",
-            "Чтобы видеть избранное, войдите в аккаунт ResursMap.",
-        )
+        guest_locked_section("Избранное")
     } else if resources.is_empty() {
         empty_state_card(
             "Избранное пока пустое",

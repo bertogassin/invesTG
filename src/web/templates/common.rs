@@ -7,7 +7,7 @@ pub fn escape_html(value: &str) -> String {
         .replace('\'', "&#39;")
 }
 
-pub const STATIC_ASSET_VERSION: &str = "4.8.3";
+pub const STATIC_ASSET_VERSION: &str = "4.8.4";
 
 pub fn static_asset(path: &str) -> String {
     let normalized = if path.starts_with("/static/") {
@@ -1755,6 +1755,61 @@ pub(crate) fn empty_state_card(title: &str, description_html: &str) -> String {
 "#,
         title = escape_html(title),
         description = description_html,
+    )
+}
+
+pub(crate) fn guest_mode_hint() -> &'static str {
+    r#"<p class="rm-guest-hint">Гостевой режим — карта и поиск открыты. Вход по желанию.</p>"#
+}
+
+pub(crate) fn guest_mode_panel(next_path: &str) -> String {
+    let auth_href = if next_path.is_empty() {
+        "/app/auth".to_string()
+    } else {
+        format!("/app/auth?next={}", urlencoding::encode(next_path))
+    };
+
+    format!(
+        r#"
+<div class="rm-guest-panel card" style="display:block;padding:22px 20px;margin-bottom:18px;">
+    <div class="card-content">
+        <div class="card-title" style="font-size:18px;line-height:1.25;">
+            Вы в гостевом режиме
+        </div>
+        <div class="card-meta" style="margin-top:8px;line-height:1.55;">
+            Смотрите карту и ресурсы без регистрации.
+            Войдите, когда понадобятся сообщения, избранное или публикации.
+        </div>
+    </div>
+
+    <div class="rm-guest-actions" style="display:grid;gap:10px;margin-top:16px;">
+        {map_card}
+        {search_card}
+        {login_card}
+    </div>
+</div>"#,
+        map_card = navigation_card("/app", "globe", "Карта ресурсов", "Страны и города"),
+        search_card = navigation_card("/app/search", "search", "Поиск", "Люди и ресурсы"),
+        login_card = navigation_card(
+            &auth_href,
+            "user",
+            "Войти в аккаунт",
+            "Telegram или email · необязательно",
+        ),
+    )
+}
+
+pub(crate) fn guest_locked_section(feature: &str) -> String {
+    format!(
+        "{panel}{note}",
+        panel = guest_mode_panel("/app/me"),
+        note = empty_state_card(
+            "Нужен аккаунт",
+            &format!(
+                "Раздел «{feature}» доступен после входа. Карта и поиск работают без регистрации.",
+                feature = escape_html(feature),
+            ),
+        ),
     )
 }
 

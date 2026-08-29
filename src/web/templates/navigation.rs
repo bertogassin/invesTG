@@ -1,6 +1,7 @@
 use super::common::{
-    bottom_nav, empty_state_card, escape_html, icon, navigation_card, page_document, page_shell,
-    people_result_card, resource_result_card, search_form_hero, section_head, simple_hero, topbar,
+    bottom_nav, empty_state_card, escape_html, guest_mode_hint, icon, navigation_card,
+    page_document, page_shell, people_result_card, resource_result_card, search_form_hero,
+    section_head, simple_hero, topbar,
 };
 use crate::geography::world;
 
@@ -14,6 +15,7 @@ pub fn render_continents(
     resources_count: i64,
     _categories: Vec<(String, i64)>,
     people_by_category: Vec<(String, i64)>,
+    guest_mode: bool,
 ) -> String {
     let w = world();
     let mut cards = String::new();
@@ -41,6 +43,17 @@ pub fn render_continents(
 <style id="resursmap-home-layout-v1">
     .rm-home-section {
         margin-top:18px;
+    }
+
+    .rm-guest-hint {
+        margin-top:12px;
+        padding:10px 12px;
+        border-radius:14px;
+        border:1px solid rgba(214,183,122,.18);
+        background:rgba(214,183,122,.06);
+        color:var(--muted);
+        font-size:13px;
+        line-height:1.5;
     }
 
     .rm-home-label {
@@ -141,6 +154,17 @@ pub fn render_continents(
             align-items:start;
         }
 
+        .rm-guest-hint {
+            margin-top:12px;
+            padding:10px 12px;
+            border-radius:14px;
+            border:1px solid rgba(214,183,122,.18);
+            background:rgba(214,183,122,.06);
+            color:var(--muted);
+            font-size:13px;
+            line-height:1.5;
+        }
+
         .rm-quick-grid {
             grid-template-columns:repeat(3,minmax(0,1fr));
         }
@@ -196,6 +220,12 @@ pub fn render_continents(
 
     let body_before_main = r####""####;
 
+    let guest_hint = if guest_mode {
+        guest_mode_hint()
+    } else {
+        ""
+    };
+
     let hero = format!(
         r#"<section class="hero">
     <div class="eyebrow">
@@ -206,6 +236,8 @@ pub fn render_continents(
     <h1>Карта ресурсов</h1>
 
     <p>Люди, города, услуги и возможности — всё необходимое рядом с вами.</p>
+
+    {guest_hint}
 
     <div class="rm-stats-row">
         <div class="rm-stat">
@@ -239,6 +271,7 @@ pub fn render_continents(
     </div>
 </section>"#,
         globe_icon = icon("globe"),
+        guest_hint = guest_hint,
         users_count = users_count,
         online_count = online_count,
         resources_count = resources_count,
@@ -421,7 +454,7 @@ pub fn render_continents(
                     Свяжитесь
                 </div>
                 <div class="card-meta" style="margin-top:5px;">
-                    Отправьте запрос и продолжите общение.
+                    Отправьте запрос. Для личных сообщений нужен вход.
                 </div>
             </div>
 
@@ -498,7 +531,7 @@ pub fn render_continent(ci: usize) -> String {
         );
     }
 
-    render_continents(0, 0, 0, Vec::new(), Vec::new())
+    render_continents(0, 0, 0, Vec::new(), Vec::new(), false)
 }
 
 // ============================================================
@@ -551,7 +584,7 @@ pub fn render_country(ci: usize, si: usize) -> String {
         }
     }
 
-    render_continents(0, 0, 0, Vec::new(), Vec::new())
+    render_continents(0, 0, 0, Vec::new(), Vec::new(), false)
 }
 
 // ============================================================
@@ -629,7 +662,7 @@ pub fn render_city(ci: usize, si: usize, zi: usize) -> String {
         }
     }
 
-    render_continents(0, 0, 0, Vec::new(), Vec::new())
+    render_continents(0, 0, 0, Vec::new(), Vec::new(), false)
 }
 
 // ============================================================

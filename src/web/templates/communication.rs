@@ -1,6 +1,6 @@
 use super::common::{
-    back_hero, back_link, bottom_nav, empty_state_card, escape_html, icon, page_shell,
-    section_head, static_asset, topbar,
+    back_hero, back_link, bottom_nav, empty_state_card, escape_html, guest_locked_section, icon,
+    page_shell, section_head, static_asset, topbar,
 };
 
 pub fn render_contact_requests(
@@ -10,10 +10,7 @@ pub fn render_contact_requests(
     let pending_count = requests.iter().filter(|r| r.3 == "pending").count();
 
     let cards = if !authenticated {
-        empty_state_card(
-            "Войдите в аккаунт ResursMap",
-            "После входа здесь будут ваши запросы на связь.",
-        )
+        guest_locked_section("Запросы на связь")
     } else if requests.is_empty() {
         empty_state_card(
             "Входящих запросов пока нет",
@@ -411,10 +408,7 @@ pub fn render_messages(
     let total_unread: i64 = conversations.iter().map(|c| c.unread_count).sum();
 
     let content = if !authenticated {
-        empty_state_card(
-            "Войдите в аккаунт ResursMap",
-            "После входа здесь появятся ваши личные сообщения.",
-        )
+        guest_locked_section("Сообщения")
     } else if conversations.is_empty() {
         empty_state_card(
             "Диалогов пока нет",
@@ -821,10 +815,7 @@ pub fn render_chat(
     };
 
     let content = if !authenticated {
-        empty_state_card(
-            "Войдите в аккаунт ResursMap",
-            "Для доступа к внутренним сообщениям требуется подтверждённая сессия.",
-        )
+        guest_locked_section("Чат")
     } else if messages.is_empty()
         && username.is_empty()
         && first_name.is_empty()
