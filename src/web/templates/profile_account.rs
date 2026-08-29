@@ -24,6 +24,14 @@ pub struct RenderMeParams<'a> {
     pub category: &'a str,
 }
 
+fn count_badge(count: i64) -> String {
+    if count <= 0 {
+        return String::new();
+    }
+
+    format!(r#"<span class="rm-command-badge">{count}</span>"#)
+}
+
 pub fn render_me(params: RenderMeParams<'_>) -> String {
     let RenderMeParams {
         authenticated,
@@ -370,10 +378,525 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
         String::new()
     };
 
+    let personal_center = if authenticated {
+        let attention_count = pending_count
+            .saturating_add(rejected_count)
+            .saturating_add(unread_notifications_count)
+            .saturating_add(pending_contact_requests_count)
+            .saturating_add(unread_messages_count);
+
+        let availability_class = if open_contact { "available" } else { "private" };
+
+        let availability_text = if open_contact {
+            "Готов к общению"
+        } else {
+            "Контакты закрыты"
+        };
+
+        let category_text = if safe_category.is_empty() {
+            "Направление не выбрано"
+        } else {
+            safe_category.as_str()
+        };
+
+        let admin_navigation = if moderator_level > 0 {
+            format!(
+                r#"<a class="rm-command-card rm-admin-command"
+                       href="/app/center">
+                    <span class="rm-command-icon">{}</span>
+                    <span class="rm-command-copy">
+                        <strong>Центр управления</strong>
+                        <small>
+                            Административный уровень {}
+                        </small>
+                    </span>
+                    <span class="rm-command-arrow">{}</span>
+                </a>"#,
+                icon("shield"),
+                moderator_level,
+                icon("chevron"),
+            )
+        } else {
+            String::new()
+        };
+
+        format!(
+            r#"
+<style id="resursmap-personal-center-v1">
+.rm-personal-center {{
+    --center-gold:#d6b77a;
+    --center-green:#62e0ad;
+    --center-blue:#7ab9ff;
+    --center-red:#ff7882;
+    position:relative;
+    overflow:hidden;
+    margin-bottom:24px;
+    padding:24px;
+    border:1px solid rgba(214,183,122,.27);
+    border-radius:26px;
+    background:
+        radial-gradient(circle at 100% 0%,
+            rgba(119,87,185,.18),transparent 34%),
+        radial-gradient(circle at 0% 100%,
+            rgba(38,123,91,.15),transparent 36%),
+        linear-gradient(145deg,
+            rgba(20,23,30,.98),
+            rgba(10,12,17,.98));
+    box-shadow:0 24px 68px rgba(0,0,0,.28);
+}}
+.rm-personal-center::after {{
+    content:"";
+    position:absolute;
+    width:230px;
+    height:230px;
+    top:-145px;
+    right:-115px;
+    border:1px solid rgba(214,183,122,.17);
+    border-radius:50%;
+    box-shadow:
+        0 0 0 35px rgba(214,183,122,.025),
+        0 0 0 72px rgba(119,87,185,.025);
+    pointer-events:none;
+}}
+.rm-center-kicker {{
+    position:relative;
+    z-index:1;
+    color:var(--center-gold);
+    font-size:10px;
+    font-weight:950;
+    letter-spacing:.18em;
+}}
+.rm-center-heading {{
+    position:relative;
+    z-index:1;
+    margin:10px 0 7px;
+    font-size:clamp(27px,7vw,43px);
+    line-height:1;
+    letter-spacing:-.04em;
+}}
+.rm-center-subtitle {{
+    position:relative;
+    z-index:1;
+    max-width:620px;
+    margin:0;
+    color:var(--muted);
+    font-size:13px;
+    line-height:1.6;
+}}
+.rm-center-status {{
+    position:relative;
+    z-index:1;
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    margin-top:17px;
+}}
+.rm-status-pill {{
+    min-height:30px;
+    display:inline-flex;
+    align-items:center;
+    gap:7px;
+    padding:0 11px;
+    border:1px solid rgba(255,255,255,.09);
+    border-radius:999px;
+    color:var(--muted);
+    background:rgba(255,255,255,.025);
+    font-size:10px;
+    font-weight:850;
+}}
+.rm-status-pill::before {{
+    content:"";
+    width:7px;
+    height:7px;
+    border-radius:50%;
+    background:var(--center-red);
+}}
+.rm-status-pill.available::before {{
+    background:var(--center-green);
+    box-shadow:0 0 12px rgba(98,224,173,.55);
+}}
+.rm-status-pill.private::before {{
+    background:var(--center-red);
+}}
+.rm-center-metrics {{
+    position:relative;
+    z-index:1;
+    display:grid;
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    gap:9px;
+    margin-top:20px;
+}}
+.rm-center-metric {{
+    min-width:0;
+    padding:14px;
+    border:1px solid rgba(255,255,255,.07);
+    border-radius:16px;
+    background:rgba(255,255,255,.025);
+}}
+.rm-center-metric strong {{
+    display:block;
+    font-size:23px;
+    line-height:1;
+}}
+.rm-center-metric span {{
+    display:block;
+    margin-top:7px;
+    color:var(--muted);
+    font-size:10px;
+}}
+.rm-center-metric.attention strong {{
+    color:#ffc26f;
+}}
+.rm-command-section {{
+    margin-bottom:24px;
+}}
+.rm-command-title {{
+    display:flex;
+    justify-content:space-between;
+    align-items:end;
+    gap:12px;
+    margin-bottom:11px;
+}}
+.rm-command-title h2 {{
+    margin:0;
+    font-size:21px;
+}}
+.rm-command-title span {{
+    color:var(--muted);
+    font-size:11px;
+}}
+.rm-command-grid {{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:10px;
+}}
+.rm-command-card {{
+    min-width:0;
+    min-height:90px;
+    display:flex;
+    align-items:center;
+    gap:12px;
+    padding:15px;
+    border:1px solid rgba(255,255,255,.08);
+    border-radius:18px;
+    color:var(--text);
+    background:
+        linear-gradient(145deg,
+            rgba(255,255,255,.035),
+            rgba(255,255,255,.015));
+    text-decoration:none;
+    transition:
+        transform .18s ease,
+        border-color .18s ease;
+}}
+.rm-command-card:hover {{
+    transform:translateY(-2px);
+    border-color:rgba(214,183,122,.28);
+}}
+.rm-command-icon {{
+    flex:0 0 43px;
+    height:43px;
+    display:grid;
+    place-items:center;
+    border:1px solid rgba(214,183,122,.22);
+    border-radius:14px;
+    color:var(--center-gold);
+    background:rgba(214,183,122,.07);
+}}
+.rm-command-icon svg {{
+    width:20px;
+    height:20px;
+}}
+.rm-command-copy {{
+    min-width:0;
+    flex:1;
+}}
+.rm-command-copy strong,
+.rm-command-copy small {{
+    display:block;
+}}
+.rm-command-copy strong {{
+    overflow-wrap:anywhere;
+    font-size:14px;
+}}
+.rm-command-copy small {{
+    margin-top:5px;
+    color:var(--muted);
+    font-size:10px;
+    line-height:1.4;
+}}
+.rm-command-arrow {{
+    flex:0 0 auto;
+    color:var(--muted);
+}}
+.rm-command-arrow svg {{
+    width:17px;
+    height:17px;
+}}
+.rm-command-badge {{
+    min-width:25px;
+    height:25px;
+    display:grid;
+    place-items:center;
+    padding:0 7px;
+    border:1px solid rgba(214,183,122,.32);
+    border-radius:999px;
+    color:var(--center-gold);
+    background:rgba(214,183,122,.09);
+    font-size:10px;
+    font-weight:950;
+}}
+.rm-admin-command {{
+    border-color:rgba(214,183,122,.24);
+    background:
+        linear-gradient(135deg,
+            rgba(214,183,122,.075),
+            rgba(119,87,185,.055));
+}}
+.rm-future-panel {{
+    margin-bottom:24px;
+    padding:18px;
+    border:1px dashed rgba(214,183,122,.22);
+    border-radius:19px;
+    background:rgba(214,183,122,.025);
+}}
+.rm-future-panel strong {{
+    display:block;
+    color:var(--center-gold);
+    font-size:14px;
+}}
+.rm-future-panel p {{
+    margin:7px 0 0;
+    color:var(--muted);
+    font-size:11px;
+    line-height:1.55;
+}}
+@media (max-width:680px) {{
+    .rm-personal-center {{
+        padding:20px;
+    }}
+    .rm-center-metrics {{
+        grid-template-columns:repeat(2,minmax(0,1fr));
+    }}
+    .rm-command-grid {{
+        grid-template-columns:1fr;
+    }}
+}}
+@media (max-width:390px) {{
+    .rm-center-metric {{
+        padding:12px;
+    }}
+    .rm-command-card {{
+        min-height:82px;
+    }}
+}}
+@media (prefers-reduced-motion:reduce) {{
+    .rm-command-card {{
+        transition:none;
+    }}
+}}
+</style>
+
+<section class="rm-personal-center">
+    <div class="rm-center-kicker">
+        RESURSMAP · PERSONAL COMMAND
+    </div>
+
+    <h1 class="rm-center-heading">
+        Мой центр
+    </h1>
+
+    <p class="rm-center-subtitle">
+        Ваш личный штурвал: ресурсы, связи,
+        сообщения, активность и возможности
+        в одном защищённом пространстве.
+    </p>
+
+    <div class="rm-center-status">
+        <span class="rm-status-pill {availability_class}">
+            {availability_text}
+        </span>
+        <span class="rm-status-pill">
+            {category_text}
+        </span>
+    </div>
+
+    <div class="rm-center-metrics">
+        <div class="rm-center-metric">
+            <strong>{resources_count}</strong>
+            <span>моих ресурсов</span>
+        </div>
+        <div class="rm-center-metric">
+            <strong>{approved_count}</strong>
+            <span>опубликовано</span>
+        </div>
+        <div class="rm-center-metric">
+            <strong>{favorites_count}</strong>
+            <span>в избранном</span>
+        </div>
+        <div class="rm-center-metric attention">
+            <strong>{attention_count}</strong>
+            <span>требуют внимания</span>
+        </div>
+    </div>
+</section>
+
+<section class="rm-command-section">
+    <div class="rm-command-title">
+        <h2>Мои направления</h2>
+        <span>Реальные разделы аккаунта</span>
+    </div>
+
+    <div class="rm-command-grid">
+        <a class="rm-command-card"
+           href="/app/my-resources">
+            <span class="rm-command-icon">
+                {resources_icon}
+            </span>
+            <span class="rm-command-copy">
+                <strong>Мои ресурсы</strong>
+                <small>
+                    Опубликовано: {approved_count} ·
+                    На проверке: {pending_count} ·
+                    Отклонено: {rejected_count}
+                </small>
+            </span>
+            <span class="rm-command-arrow">
+                {arrow}
+            </span>
+        </a>
+
+        <a class="rm-command-card"
+           href="/app/messages">
+            <span class="rm-command-icon">
+                {messages_icon}
+            </span>
+            <span class="rm-command-copy">
+                <strong>Сообщения</strong>
+                <small>
+                    Личные диалоги внутри ResursMap
+                </small>
+            </span>
+            {messages_badge}
+            <span class="rm-command-arrow">
+                {arrow}
+            </span>
+        </a>
+
+        <a class="rm-command-card"
+           href="/app/contact-requests">
+            <span class="rm-command-icon">
+                {contacts_icon}
+            </span>
+            <span class="rm-command-copy">
+                <strong>Запросы на связь</strong>
+                <small>
+                    Решайте, кто сможет связаться с вами
+                </small>
+            </span>
+            {contacts_badge}
+            <span class="rm-command-arrow">
+                {arrow}
+            </span>
+        </a>
+
+        <a class="rm-command-card"
+           href="/app/favorites">
+            <span class="rm-command-icon">
+                {favorites_icon}
+            </span>
+            <span class="rm-command-copy">
+                <strong>Избранное</strong>
+                <small>
+                    Сохранённые ресурсы: {favorites_count}
+                </small>
+            </span>
+            <span class="rm-command-arrow">
+                {arrow}
+            </span>
+        </a>
+
+        <a class="rm-command-card"
+           href="/app/notifications">
+            <span class="rm-command-icon">
+                {notifications_icon}
+            </span>
+            <span class="rm-command-copy">
+                <strong>Уведомления</strong>
+                <small>
+                    События аккаунта и сообщества
+                </small>
+            </span>
+            {notifications_badge}
+            <span class="rm-command-arrow">
+                {arrow}
+            </span>
+        </a>
+
+        <a class="rm-command-card"
+           href="/app/search">
+            <span class="rm-command-icon">
+                {search_icon}
+            </span>
+            <span class="rm-command-copy">
+                <strong>Найти возможности</strong>
+                <small>
+                    Люди, услуги, работа и сотрудничество
+                </small>
+            </span>
+            <span class="rm-command-arrow">
+                {arrow}
+            </span>
+        </a>
+
+        {admin_navigation}
+    </div>
+</section>
+
+<section class="rm-future-panel">
+    <strong>
+        Следующий уровень личного центра
+    </strong>
+    <p>
+        Работа, навыки, услуги, проекты и личные цели
+        будут подключаться сюда постепенно.
+        Бесплатный центр останется полноценным;
+        Premium добавит аналитику, оформление,
+        автоматизацию и продвижение.
+    </p>
+</section>
+"#,
+            availability_class = availability_class,
+            availability_text = availability_text,
+            category_text = category_text,
+            resources_count = resources_count,
+            approved_count = approved_count,
+            pending_count = pending_count,
+            rejected_count = rejected_count,
+            favorites_count = favorites_count,
+            attention_count = attention_count,
+            resources_icon = icon("map"),
+            messages_icon = icon("message-circle"),
+            contacts_icon = icon("users"),
+            favorites_icon = icon("heart"),
+            notifications_icon = icon("bell"),
+            search_icon = icon("search"),
+            arrow = icon("chevron"),
+            messages_badge = count_badge(unread_messages_count),
+            contacts_badge = count_badge(pending_contact_requests_count),
+            notifications_badge = count_badge(unread_notifications_count),
+            admin_navigation = admin_navigation,
+        )
+    } else {
+        String::new()
+    };
+
     let section_head_account = section_head("Ваш аккаунт", "Управление аккаунтом", None);
 
     let content_html = format!(
-        r####"{account_header}
+        r####"{personal_center}
+
+{account_header}
 
 
 {statistics}
@@ -1897,4 +2420,65 @@ pub fn render_favorites(
         &content,
         &bottom_nav("profile"),
     )
+}
+
+#[cfg(test)]
+mod personal_center_tests {
+    use super::*;
+
+    fn params(authenticated: bool) -> RenderMeParams<'static> {
+        RenderMeParams {
+            authenticated,
+            user_id: 42,
+            username: "captain",
+            first_name: "Amir",
+            last_name: "",
+            resources_count: 7,
+            approved_count: 4,
+            pending_count: 2,
+            rejected_count: 1,
+            favorites_count: 3,
+            unread_notifications_count: 5,
+            pending_contact_requests_count: 2,
+            unread_messages_count: 6,
+            moderator_level: 0,
+            open_contact: true,
+            intent_text: "Ищу партнёров",
+            intent_until: 0,
+            category: "Бизнес",
+        }
+    }
+
+    #[test]
+    fn personal_center_is_rendered_for_authenticated_user() {
+        let html = render_me(params(true));
+
+        assert!(html.contains("Мой центр"));
+        assert!(html.contains("/app/my-resources"));
+        assert!(html.contains("/app/messages"));
+        assert!(html.contains("/app/contact-requests"));
+        assert!(html.contains("/app/favorites"));
+        assert!(html.contains("/app/notifications"));
+        assert!(html.contains("Реальные разделы аккаунта"));
+    }
+
+    #[test]
+    fn personal_center_is_hidden_from_guest() {
+        let html = render_me(params(false));
+
+        assert!(!html.contains("RESURSMAP · PERSONAL COMMAND"));
+        assert!(html.contains("Войдите в аккаунт"));
+    }
+
+    #[test]
+    fn personal_center_escapes_profile_data() {
+        let mut unsafe_params = params(true);
+
+        unsafe_params.category = "<script>alert(1)</script>";
+
+        let html = render_me(unsafe_params);
+
+        assert!(!html.contains("<script>alert(1)</script>"));
+        assert!(html.contains("&lt;script&gt;alert(1)&lt;/script&gt;"));
+    }
 }
