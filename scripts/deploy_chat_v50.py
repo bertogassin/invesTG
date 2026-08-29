@@ -28,7 +28,13 @@ FILES = [
 
 def run(cmd: list[str], *, check: bool = True) -> subprocess.CompletedProcess[str]:
     print("+", " ".join(cmd))
-    return subprocess.run(cmd, cwd=ROOT, text=True, check=check)
+    return subprocess.run(
+        cmd,
+        cwd=ROOT,
+        text=True,
+        check=check,
+        capture_output=True,
+    )
 
 
 def fail(message: str) -> None:

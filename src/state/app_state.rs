@@ -155,7 +155,10 @@ impl AppState {
             return false;
         }
 
-        let now = crate::web::handlers::common::unix_now();
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|duration| duration.as_secs() as i64)
+            .unwrap_or(0);
         let rate_key = format!("typing:{actor_user_id}:{other_user_id}");
 
         {
