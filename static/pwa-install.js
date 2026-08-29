@@ -37,6 +37,14 @@
     }
 
     function assetVersion() {
+        var meta = document.querySelector(
+            'meta[name="resursmap-asset-version"]'
+        );
+
+        if (meta && meta.content) {
+            return meta.content;
+        }
+
         var scripts = document.getElementsByTagName("script");
 
         for (var i = 0; i < scripts.length; i++) {
@@ -51,7 +59,7 @@
             }
         }
 
-        return "4.9.0";
+        return "4.9.1";
     }
 
     function registerServiceWorker() {

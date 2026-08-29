@@ -444,7 +444,7 @@ pub async fn admin_reports(State(state): State<AppState>, headers: HeaderMap) ->
     <a class="brand" href="/app">
         <div class="brand-mark">{logo}</div>
         <div>
-            <div class="brand-name">RESURSMAP</div>
+            <div class="brand-name">ResursMap</div>
             <div class="brand-sub">REPORT CENTER</div>
         </div>
     </a>
@@ -526,8 +526,8 @@ pub async fn admin_reports(State(state): State<AppState>, headers: HeaderMap) ->
     {cards}
 </section>
 "#,
-        logo = templates::icon("map"),
-        shield = templates::icon("user"),
+        logo = templates::brand_logo(),
+        shield = templates::icon("shield"),
         pending_count = pending_count,
         closed_count = closed_count,
         cards = cards,
@@ -1150,7 +1150,7 @@ pub async fn admin_resources(
     <a class="brand" href="/app">
         <div class="brand-mark">{logo}</div>
         <div>
-            <div class="brand-name">RESURSMAP</div>
+            <div class="brand-name">ResursMap</div>
             <div class="brand-sub">MODERATION CENTER</div>
         </div>
     </a>
@@ -1376,8 +1376,8 @@ pub async fn admin_resources(
 <section>
 {cards}
 </section>"####,
-        logo = templates::icon("map"),
-        shield = templates::icon("user"),
+        logo = templates::brand_logo(),
+        shield = templates::icon("shield"),
         filter = safe_filter,
         q = safe_q,
         key_query = key_query,

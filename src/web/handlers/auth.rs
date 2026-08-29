@@ -1201,7 +1201,7 @@ pub async fn app_auth_page() -> Html<String> {
                       box-shadow:0 0 16px rgba(214,183,122,.65);
                   ">
             </span>
-            RESURSMAP
+            ResursMap
         </div>
 
         <h1 style="

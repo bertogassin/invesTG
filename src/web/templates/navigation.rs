@@ -1033,7 +1033,7 @@ pub fn render_menu() -> String {
         <div class="card-meta">Русский (скоро)</div>
     </div>
 
-    <button class="theme-toggle-btn"
+    <button class="ui-button sound-test-btn"
             type="button"
             onclick="playNotificationSound()"
             style="

@@ -1384,7 +1384,7 @@ pub fn render_edit_resource(
                 "Назад к ресурсу",
                 "arrow-left",
             ),
-            "user",
+            "edit",
             "Редактирование",
             "Редактировать ресурс",
             &format!("Категория: {}", category),

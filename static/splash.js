@@ -1,5 +1,17 @@
 // Заставка ResursMap — показывается только при первом заходе
 (function() {
+    function assetVersion() {
+        var meta = document.querySelector(
+            'meta[name="resursmap-asset-version"]'
+        );
+
+        if (meta && meta.content) {
+            return meta.content;
+        }
+
+        return "4.9.1";
+    }
+
     // Проверим, была ли заставка показана
     try {
         if (localStorage.getItem('resursmap-splash-shown') === '1') {
@@ -27,7 +39,7 @@
 
     // Логотип
     var logo = document.createElement('img');
-    logo.src = "/static/app-icon.svg";
+    logo.src = "/static/app-icon.svg?v=" + assetVersion();
     logo.alt = 'ResursMap';
     logo.style.cssText = [
         'width:96px',

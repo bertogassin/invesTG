@@ -7,7 +7,7 @@ pub fn escape_html(value: &str) -> String {
         .replace('\'', "&#39;")
 }
 
-pub const STATIC_ASSET_VERSION: &str = "4.9.0";
+pub const STATIC_ASSET_VERSION: &str = "4.9.1";
 
 pub fn static_asset(path: &str) -> String {
     let normalized = if path.starts_with("/static/") {
@@ -101,11 +101,27 @@ pub(crate) fn icon(name: &str) -> &'static str {
             r#"<svg class="icon" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>"#
         }
 
+        "plus" => {
+            r#"<svg class="icon" viewBox="0 0 24 24"><path d="M12 5v14"/><path d="M5 12h14"/></svg>"#
+        }
+
+        "edit" => {
+            r#"<svg class="icon" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>"#
+        }
+
+        "check" => {
+            r#"<svg class="icon" viewBox="0 0 24 24"><path d="m20 6-11 11-5-5"/></svg>"#
+        }
+
+        "x" => {
+            r#"<svg class="icon" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>"#
+        }
+
         _ => "",
     }
 }
 
-pub(crate) fn brand_logo() -> &'static str {
+pub fn brand_logo() -> &'static str {
     icon("logo")
 }
 
@@ -1282,6 +1298,7 @@ pub(crate) fn page_document(
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="resursmap-asset-version" content="{asset_version}">
 {site_head}
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;">
 <meta name="referrer" content="no-referrer">
@@ -1313,6 +1330,7 @@ pub(crate) fn page_document(
 </body>
 </html>"#,
         title = escape_html(title),
+        asset_version = STATIC_ASSET_VERSION,
         site_head = site_head_links(),
         style = base_style(),
         head_extra = head_extra_html,
@@ -1993,12 +2011,50 @@ mod public_entry_tests {
     use super::*;
 
     #[test]
+    fn registered_icons_render_svg() {
+        let icons = [
+            "globe",
+            "map",
+            "search",
+            "user",
+            "star",
+            "map-pin",
+            "chevron",
+            "briefcase",
+            "building",
+            "heart",
+            "message-circle",
+            "menu",
+            "logo",
+            "arrow-left",
+            "chevron-left",
+            "shield",
+            "users",
+            "bell",
+            "settings",
+            "alert-triangle",
+            "plus",
+            "edit",
+            "check",
+            "x",
+        ];
+
+        for name in icons {
+            let markup = icon(name);
+            assert!(!markup.is_empty(), "missing icon: {name}");
+            assert!(markup.contains("<svg"), "icon not svg: {name}");
+        }
+    }
+
+    #[test]
     fn topbar_exposes_account_inside_site() {
         let html = topbar("Карта", "map");
 
         assert!(html.contains("href=\"/app\""));
         assert!(html.contains("href=\"/app/me\""));
         assert!(html.contains("Аккаунт"));
+        assert!(html.contains("brand-logo-icon"));
+        assert!(html.contains("ResursMap"));
         assert!(!html.contains("/app/auth"));
     }
 }
