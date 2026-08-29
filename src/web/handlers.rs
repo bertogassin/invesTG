@@ -20,6 +20,7 @@ mod admin;
 mod admin_access;
 mod admin_administrators;
 mod admin_assignment_actions;
+mod admin_assignment_lifecycle;
 mod admin_security;
 mod admin_session_actions;
 mod admin_v2;
@@ -46,3 +47,5 @@ pub use admin_assignment_actions::{create_admin_assignment, new_admin_assignment
 pub use admin_security::{admin_security_page, admin_step_up_request, admin_step_up_verify};
 
 pub use admin_session_actions::revoke_admin_session;
+
+pub use admin_assignment_lifecycle::manage_admin_assignment;

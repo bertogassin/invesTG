@@ -1,4 +1,5 @@
 use super::super::handlers::administrators_panel;
+use super::super::handlers::manage_admin_assignment;
 use super::super::handlers::revoke_admin_session;
 use super::super::handlers::{admin_security_page, admin_step_up_request, admin_step_up_verify};
 use super::super::handlers::{
@@ -27,6 +28,10 @@ pub(super) fn routes() -> Router<AppState> {
         .route(
             "/app/center/administrators/new",
             get(new_admin_assignment_page),
+        )
+        .route(
+            "/app/center/administrators/{assignment_id}/{action}",
+            post(manage_admin_assignment),
         )
         .route("/app/center/security", get(admin_security_page))
         .route("/app/center/security/request", post(admin_step_up_request))

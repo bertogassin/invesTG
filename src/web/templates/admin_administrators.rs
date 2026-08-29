@@ -70,6 +70,108 @@ fn scope_title(scope_type: &str) -> &'static str {
     }
 }
 
+fn lifecycle_actions(administrator: &AdminAdministratorRow) -> String {
+    if administrator.level == 5 {
+        return r#"<div class="owner-lock">
+            Global Owner защищён от изменения и отзыва.
+        </div>"#
+            .to_string();
+    }
+
+    let id = administrator.assignment_id;
+    let mut actions = String::new();
+
+    if administrator.status == "active" {
+        actions.push_str(&format!(
+            r#"<form class="lifecycle-form"
+                     method="post"
+                     action="/app/center/administrators/{id}/suspend">
+                <input name="reason"
+                       minlength="5"
+                       maxlength="500"
+                       required
+                       placeholder="Причина приостановки">
+                <button class="warning-action"
+                        type="submit">
+                    Приостановить
+                </button>
+            </form>"#
+        ));
+    }
+
+    if administrator.status == "suspended" {
+        actions.push_str(&format!(
+            r#"<form class="lifecycle-form"
+                     method="post"
+                     action="/app/center/administrators/{id}/restore">
+                <input name="reason"
+                       minlength="5"
+                       maxlength="500"
+                       required
+                       placeholder="Причина восстановления">
+                <button class="restore-action"
+                        type="submit">
+                    Восстановить
+                </button>
+            </form>"#
+        ));
+    }
+
+    if administrator.status == "active" || administrator.status == "suspended" {
+        actions.push_str(&format!(
+            r#"<form class="lifecycle-form expiry-form"
+                     method="post"
+                     action="/app/center/administrators/{id}/change-expiry">
+                <input type="number"
+                       name="duration_days"
+                       min="1"
+                       max="365"
+                       value="90"
+                       required
+                       aria-label="Новый срок в днях">
+                <input name="reason"
+                       minlength="5"
+                       maxlength="500"
+                       required
+                       placeholder="Причина изменения срока">
+                <button type="submit">
+                    Изменить срок
+                </button>
+            </form>
+
+            <form class="lifecycle-form"
+                  method="post"
+                  action="/app/center/administrators/{id}/revoke">
+                <input name="reason"
+                       minlength="5"
+                       maxlength="500"
+                       required
+                       placeholder="Причина окончательного отзыва">
+                <button class="danger-action"
+                        type="submit">
+                    Отозвать назначение
+                </button>
+            </form>"#
+        ));
+    }
+
+    if actions.is_empty() {
+        return r#"<div class="owner-lock">
+            Для этого назначения действия недоступны.
+        </div>"#
+            .to_string();
+    }
+
+    format!(
+        r#"<div class="lifecycle-actions">
+            <div class="lifecycle-title">
+                Управление назначением
+            </div>
+            {actions}
+        </div>"#
+    )
+}
+
 pub fn render_admin_administrators(data: AdminAdministratorsData) -> String {
     let administrators_html = if data.administrators.is_empty() {
         r#"<div class="empty">
@@ -90,6 +192,8 @@ pub fn render_admin_administrators(data: AdminAdministratorsData) -> String {
                     .valid_until
                     .map(|value| value.to_string())
                     .unwrap_or_else(|| "Бессрочно".to_string());
+
+                let lifecycle_controls = lifecycle_actions(administrator);
 
                 let username = if administrator.username.is_empty() {
                     "Вход связан с профилем".to_string()
@@ -141,6 +245,8 @@ pub fn render_admin_administrators(data: AdminAdministratorsData) -> String {
                                 <span>Окончание: {valid_until}</span>
                                 <span>Scope: {scope_type}</span>
                             </div>
+
+                            {lifecycle_controls}
                         </article>
                         "#,
                     level = administrator.level,
@@ -159,6 +265,7 @@ pub fn render_admin_administrators(data: AdminAdministratorsData) -> String {
                     valid_from = administrator.valid_from,
                     valid_until = valid_until,
                     scope_type = escape_html(&administrator.scope_type),
+                    lifecycle_controls = lifecycle_controls,
                 )
             })
             .collect::<Vec<_>>()
@@ -557,6 +664,71 @@ h1 {{
     color:var(--muted);
     font-size:11px;
 }}
+.lifecycle-actions {{
+    display:grid;
+    gap:10px;
+    margin-top:17px;
+    padding-top:17px;
+    border-top:1px solid rgba(255,255,255,.07);
+}}
+.lifecycle-title {{
+    color:var(--gold);
+    font-size:12px;
+    font-weight:900;
+}}
+.lifecycle-form {{
+    display:grid;
+    grid-template-columns:minmax(0,1fr) auto;
+    gap:9px;
+}}
+.lifecycle-form.expiry-form {{
+    grid-template-columns:90px minmax(0,1fr) auto;
+}}
+.lifecycle-form input {{
+    min-width:0;
+    min-height:43px;
+    padding:0 12px;
+    border:1px solid rgba(255,255,255,.12);
+    border-radius:12px;
+    outline:none;
+    color:var(--text);
+    background:rgba(255,255,255,.035);
+    font:inherit;
+}}
+.lifecycle-form button {{
+    min-height:43px;
+    padding:0 14px;
+    border:1px solid var(--line);
+    border-radius:12px;
+    color:var(--gold);
+    background:var(--gold-soft);
+    font-weight:900;
+    cursor:pointer;
+}}
+.lifecycle-form .warning-action {{
+    color:#ffc26f;
+    border-color:rgba(255,194,111,.30);
+    background:rgba(255,194,111,.08);
+}}
+.lifecycle-form .restore-action {{
+    color:var(--green);
+    border-color:rgba(98,224,173,.30);
+    background:rgba(98,224,173,.08);
+}}
+.lifecycle-form .danger-action {{
+    color:var(--red);
+    border-color:rgba(255,109,120,.32);
+    background:rgba(255,109,120,.08);
+}}
+.owner-lock {{
+    margin-top:17px;
+    padding:13px;
+    border:1px solid rgba(223,192,127,.14);
+    border-radius:14px;
+    color:var(--muted);
+    background:rgba(223,192,127,.035);
+    font-size:11px;
+}}
 .session-head {{
     display:flex;
     align-items:center;
@@ -673,6 +845,10 @@ h1 {{
         grid-template-columns:repeat(2,minmax(0,1fr));
     }}
     .revoke-form {{
+        grid-template-columns:1fr;
+    }}
+    .lifecycle-form,
+    .lifecycle-form.expiry-form {{
         grid-template-columns:1fr;
     }}
 }}
