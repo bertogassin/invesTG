@@ -1,12 +1,13 @@
 use super::admin_access::{
-    load_admin_context, record_denied_access, verify_admin_session, AdminPermission,
+    create_admin_session, load_admin_context, record_denied_access, scope_is_authorized,
+    verify_admin_session, AdminPermission,
 };
 use super::auth::verify_authenticated_user;
 use crate::state::app_state::AppState;
 use crate::web::templates::escape_html;
 use axum::{
     extract::{Form, Query, State},
-    http::{header, HeaderMap, StatusCode},
+    http::{header, HeaderMap, HeaderValue, StatusCode},
     response::{Html, IntoResponse, Response},
 };
 use rusqlite::{params, OptionalExtension};
@@ -584,7 +585,7 @@ h1 {{
 <main class="page">
     <div class="topbar">
         <a class="back" href="/app/center">← Центр управления</a>
-        <span class="protected">OWNER · PROTECTED</span>
+        <span class="protected">TERRITORIAL · PROTECTED</span>
     </div>
 
     <section class="hero">
@@ -685,10 +686,7 @@ pub async fn admin_geography_page(
         }
     };
 
-    if !context.is_owner()
-        || !context.has_permission(AdminPermission::CitiesManage)
-        || !context.has_permission(AdminPermission::GroupsManage)
-    {
+    if !context.has_permission(AdminPermission::GroupsManage) {
         record_denied_access(
             &state,
             authenticated_user.user_id,
@@ -700,7 +698,43 @@ pub async fn admin_geography_page(
     }
 
     if !verify_admin_session(&state, &headers, context.user_id, context.assignment_id) {
-        return (StatusCode::SEE_OTHER, [(header::LOCATION, "/app/center")]).into_response();
+        let cookie = match create_admin_session(&state, &context, &headers) {
+            Ok(cookie) => cookie,
+            Err(_) => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    "Не удалось открыть административную сессию",
+                )
+                    .into_response();
+            }
+        };
+
+        let cookie = match HeaderValue::from_str(&cookie) {
+            Ok(cookie) => cookie,
+            Err(_) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Ошибка административной сессии",
+                )
+                    .into_response();
+            }
+        };
+
+        let mut response = StatusCode::SEE_OTHER.into_response();
+
+        response.headers_mut().insert(
+            header::LOCATION,
+            HeaderValue::from_static("/app/center/geography"),
+        );
+
+        response.headers_mut().insert(header::SET_COOKIE, cookie);
+
+        response.headers_mut().insert(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("no-store, no-cache, must-revalidate, private"),
+        );
+
+        return response;
     }
 
     let connection = match crate::db::pool::get_connection(&state.db_pool) {
@@ -737,6 +771,11 @@ pub async fn admin_geography_page(
            ON country.id = city.country_id
          JOIN geo_continents AS continent
            ON continent.id = country.continent_id
+         JOIN geographic_scopes AS city_scope
+           ON city_scope.scope_type = 'city'
+          AND city_scope.external_key =
+              'city:' || city.stable_key
+          AND city_scope.is_active = 1
          LEFT JOIN city_publication_targets AS target
            ON target.id = (
                SELECT candidate.id
@@ -756,11 +795,35 @@ pub async fn admin_geography_page(
                OR lower(country.name_ru) LIKE ?2
                OR lower(country.iso2) = lower(?1)
            )
+           AND (
+               ?3 = 1
+               OR city_scope.id IN (
+                   WITH RECURSIVE authorized_scopes(id) AS (
+                       SELECT ?4
+
+                       UNION
+
+                       SELECT additional.scope_id
+                       FROM admin_additional_scopes AS additional
+                       WHERE additional.assignment_id = ?5
+
+                       UNION
+
+                       SELECT child.id
+                       FROM geographic_scopes AS child
+                       JOIN authorized_scopes AS parent
+                         ON child.parent_scope_id = parent.id
+                       WHERE child.is_active = 1
+                   )
+                   SELECT id
+                   FROM authorized_scopes
+               )
+           )
          ORDER BY
              CASE WHEN lower(city.stable_key) = lower(?1) THEN 0 ELSE 1 END,
              city.population DESC,
              city.name_ru ASC
-         LIMIT ?3",
+         LIMIT ?6",
     ) {
         Ok(statement) => statement,
         Err(_) => {
@@ -772,8 +835,16 @@ pub async fn admin_geography_page(
         }
     };
 
-    let cities =
-        match statement.query_map(params![search, search_pattern, CITY_RESULT_LIMIT], |row| {
+    let cities = match statement.query_map(
+        params![
+            search,
+            search_pattern,
+            i64::from(context.is_owner()),
+            context.scope_id,
+            context.assignment_id,
+            CITY_RESULT_LIMIT,
+        ],
+        |row| {
             Ok(GeographyCityRow {
                 id: row.get(0)?,
                 stable_key: row.get(1)?,
@@ -789,26 +860,27 @@ pub async fn admin_geography_page(
                 telegram_url: row.get(11)?,
                 target_active: row.get(12)?,
             })
-        }) {
-            Ok(rows) => match rows.collect::<rusqlite::Result<Vec<_>>>() {
-                Ok(rows) => rows,
-                Err(_) => {
-                    return (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        "Не удалось прочитать каталог городов",
-                    )
-                        .into_response();
-                }
-            },
-
+        },
+    ) {
+        Ok(rows) => match rows.collect::<rusqlite::Result<Vec<_>>>() {
+            Ok(rows) => rows,
             Err(_) => {
                 return (
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    "Не удалось выполнить поиск",
+                    "Не удалось прочитать каталог городов",
                 )
                     .into_response();
             }
-        };
+        },
+
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Не удалось выполнить поиск",
+            )
+                .into_response();
+        }
+    };
 
     let scalar =
         |sql: &str| -> i64 { connection.query_row(sql, [], |row| row.get(0)).unwrap_or(0) };
@@ -919,7 +991,7 @@ pub async fn admin_geography_group_save(
         }
     };
 
-    if !context.is_owner() || !context.has_permission(AdminPermission::GroupsManage) {
+    if !context.has_permission(AdminPermission::GroupsManage) {
         record_denied_access(
             &state,
             user.user_id,
@@ -1023,6 +1095,21 @@ pub async fn admin_geography_group_save(
                 .into_response();
         }
     };
+
+    if !scope_is_authorized(&state, &context, city_scope_id) {
+        record_denied_access(
+            &state,
+            context.user_id,
+            "admin_group_scope_denied",
+            &format!("Попытка изменить город вне территории: {}", stable_key),
+        );
+
+        return (
+            StatusCode::FORBIDDEN,
+            "Город находится вне назначенной территории",
+        )
+            .into_response();
+    }
 
     let transaction = match connection.transaction() {
         Ok(transaction) => transaction,
@@ -1202,6 +1289,15 @@ mod tests {
             normalize_search(Some(&"x".repeat(100))).chars().count(),
             SEARCH_MAX_CHARS
         );
+    }
+
+    #[test]
+    fn territorial_protection_is_present() {
+        let source = include_str!("admin_geography.rs");
+
+        assert!(source.contains("WITH RECURSIVE authorized_scopes"));
+        assert!(source.contains("scope_is_authorized("));
+        assert!(source.contains("admin_group_scope_denied"));
     }
 
     #[test]
