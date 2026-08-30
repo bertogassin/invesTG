@@ -1,3 +1,5 @@
+use crate::db::pool::DbPool;
+use crate::geography::world;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::env;
@@ -8,6 +10,180 @@ use teloxide::types::{InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo};
 #[allow(dead_code)]
 pub async fn send_notification(bot: &Bot, telegram_id: i64, text: &str) -> ResponseResult<()> {
     bot.send_message(ChatId(telegram_id), text).await?;
+    Ok(())
+}
+
+fn parse_city_registration(value: &str) -> Option<(usize, usize, usize)> {
+    let parts = value.split_whitespace().collect::<Vec<_>>();
+
+    if parts.len() != 3 {
+        return None;
+    }
+
+    let continent_index = parts[0].parse().ok()?;
+    let country_index = parts[1].parse().ok()?;
+    let city_index = parts[2].parse().ok()?;
+
+    Some((continent_index, country_index, city_index))
+}
+
+fn city_from_indices(
+    continent_index: usize,
+    country_index: usize,
+    city_index: usize,
+) -> Option<(&'static str, &'static str, &'static str)> {
+    let geography = world();
+
+    let (continent, countries) = geography.iter().nth(continent_index)?;
+
+    let (country, cities) = countries.iter().nth(country_index)?;
+
+    let city = cities.get(city_index)?;
+
+    Some((*continent, *country, *city))
+}
+
+pub async fn register_city_handler(
+    bot: Bot,
+    msg: Message,
+    arguments: String,
+    db_pool: DbPool,
+) -> ResponseResult<()> {
+    let configured_admin_id = env::var("ADMIN_TELEGRAM_ID")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok());
+
+    let sender_id = msg.from.as_ref().map(|user| user.id.0);
+
+    if configured_admin_id.is_none() || sender_id != configured_admin_id {
+        bot.send_message(
+            msg.chat.id,
+            "Команда доступна только главному администратору ResursMap.",
+        )
+        .await?;
+
+        return Ok(());
+    }
+
+    if msg.chat.id.0 >= 0 {
+        bot.send_message(
+            msg.chat.id,
+            "Эту команду необходимо отправить внутри городской группы.",
+        )
+        .await?;
+
+        return Ok(());
+    }
+
+    let Some((continent_index, country_index, city_index)) = parse_city_registration(&arguments)
+    else {
+        bot.send_message(
+            msg.chat.id,
+            "Формат команды:\n/registercity КОНТИНЕНТ СТРАНА ГОРОД\n\nДля Ниццы: /registercity 0 2 4",
+        )
+        .await?;
+
+        return Ok(());
+    };
+
+    let Some((continent, country, city)) =
+        city_from_indices(continent_index, country_index, city_index)
+    else {
+        bot.send_message(
+            msg.chat.id,
+            "Город с такими координатами не найден в ResursMap.",
+        )
+        .await?;
+
+        return Ok(());
+    };
+
+    let city_links = load_cities();
+
+    let telegram_url = city_links.get(city).cloned().unwrap_or_default();
+
+    let connection = match db_pool.get() {
+        Ok(connection) => connection,
+
+        Err(_) => {
+            bot.send_message(
+                msg.chat.id,
+                "Не удалось подключить группу: база данных недоступна.",
+            )
+            .await?;
+
+            return Ok(());
+        }
+    };
+
+    let changed = connection
+        .execute(
+            "INSERT INTO city_publication_targets (
+                continent_index,
+                country_index,
+                city_index,
+                city_name,
+                target_name,
+                telegram_chat_id,
+                telegram_url,
+                target_kind,
+                is_active,
+                created_at,
+                updated_at
+             )
+             VALUES (
+                ?1, ?2, ?3, ?4,
+                'Основная городская группа',
+                ?5, ?6, 'group', 1,
+                strftime('%s','now'),
+                strftime('%s','now')
+             )
+             ON CONFLICT (
+                continent_index,
+                country_index,
+                city_index,
+                target_name
+             )
+             DO UPDATE SET
+                city_name = excluded.city_name,
+                telegram_chat_id =
+                    excluded.telegram_chat_id,
+                telegram_url =
+                    excluded.telegram_url,
+                target_kind = 'group',
+                is_active = 1,
+                updated_at = strftime('%s','now')",
+            rusqlite::params![
+                continent_index,
+                country_index,
+                city_index,
+                city,
+                msg.chat.id.0,
+                telegram_url,
+            ],
+        )
+        .unwrap_or(0);
+
+    drop(connection);
+
+    if changed != 1 {
+        bot.send_message(msg.chat.id, "Не удалось сохранить городскую группу.")
+            .await?;
+
+        return Ok(());
+    }
+
+    bot.send_message(
+        msg.chat.id,
+        format!(
+            "✅ Группа подключена к ResursMap\n\n📍 {}, {}\n🌍 {}\n\nТеперь сюда можно будет публиковать одобренные объявления ResursMap.",
+            city,
+            country,
+            continent,
+        ),
+    )
+    .await?;
+
     Ok(())
 }
 
@@ -161,4 +337,35 @@ fn load_cities() -> HashMap<String, String> {
         }
     }
     HashMap::new()
+}
+
+#[cfg(test)]
+mod city_registration_tests {
+    use super::*;
+
+    #[test]
+    fn registration_arguments_are_strict() {
+        assert_eq!(parse_city_registration("0 2 4"), Some((0, 2, 4)),);
+
+        assert_eq!(parse_city_registration(" 0 2 4 "), Some((0, 2, 4)),);
+
+        assert_eq!(parse_city_registration("0 2"), None,);
+
+        assert_eq!(parse_city_registration("0 2 4 extra"), None,);
+
+        assert_eq!(parse_city_registration("0 france 4"), None,);
+    }
+
+    #[test]
+    fn nice_coordinates_are_stable() {
+        assert_eq!(
+            city_from_indices(0, 2, 4),
+            Some(("Европа", "Франция", "Ницца")),
+        );
+    }
+
+    #[test]
+    fn invalid_city_coordinates_are_rejected() {
+        assert_eq!(city_from_indices(0, 2, 999), None,);
+    }
 }

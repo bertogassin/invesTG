@@ -8,7 +8,7 @@ mod utils;
 mod web;
 
 use bot::groups::welcome_chat_member;
-use bot::handler::{cities_handler, help_handler, start_handler};
+use bot::handler::{cities_handler, help_handler, register_city_handler, start_handler};
 use bot::security::{is_security_candidate, security_observer};
 use bot::translator::{is_translation_command, translation_handler};
 use state::app_state::AppState;
@@ -24,6 +24,9 @@ enum Command {
     Help,
     #[command(description = "список городов")]
     Cities,
+
+    #[command(description = "подключить городскую группу", hide)]
+    Registercity(String),
 }
 
 #[tokio::main]
@@ -60,6 +63,8 @@ async fn main() {
 
     let bot = Bot::new(bot_token);
 
+    let registration_db_pool = security_db_pool.clone();
+
     let translation_handler_branch = Update::filter_message()
         .filter(|msg: Message| is_translation_command(&msg))
         .endpoint(translation_handler);
@@ -74,11 +79,18 @@ async fn main() {
 
     let command_handler = Update::filter_message()
         .filter_command::<Command>()
-        .endpoint(|bot: Bot, msg: Message, command: Command| async move {
-            match command {
-                Command::Start => start_handler(bot, msg).await,
-                Command::Help => help_handler(bot, msg).await,
-                Command::Cities => cities_handler(bot, msg).await,
+        .endpoint(move |bot: Bot, msg: Message, command: Command| {
+            let db_pool = registration_db_pool.clone();
+
+            async move {
+                match command {
+                    Command::Start => start_handler(bot, msg).await,
+                    Command::Help => help_handler(bot, msg).await,
+                    Command::Cities => cities_handler(bot, msg).await,
+                    Command::Registercity(arguments) => {
+                        register_city_handler(bot, msg, arguments, db_pool).await
+                    }
+                }
             }
         });
 
