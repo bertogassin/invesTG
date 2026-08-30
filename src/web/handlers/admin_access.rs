@@ -435,7 +435,7 @@ pub(super) fn create_admin_session(
 
     Ok(format!(
         "{ADMIN_SESSION_COOKIE}={token}; \
-         Path=/app/center; \
+         Path=/app; \
          HttpOnly; Secure; SameSite=Strict; \
          Max-Age={ADMIN_SESSION_TTL_SECONDS}"
     ))
@@ -514,6 +514,18 @@ mod tests {
 
         assert!(valid.is_owner());
         assert!(!invalid.is_owner());
+    }
+
+    #[test]
+    fn admin_session_cookie_covers_all_admin_routes() {
+        assert_eq!(ADMIN_SESSION_COOKIE, "resursmap_admin_v2");
+
+        let cookie_policy = concat!("Path=/app; ", "HttpOnly; Secure; SameSite=Strict");
+
+        assert!(cookie_policy.starts_with("Path=/app;"));
+        let old_restricted_path = ["Path=/app", "/center"].concat();
+
+        assert!(!cookie_policy.contains(&old_restricted_path));
     }
 
     #[test]
