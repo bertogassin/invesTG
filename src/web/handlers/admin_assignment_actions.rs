@@ -73,7 +73,10 @@ fn role_title(level: i64) -> Option<&'static str> {
 fn safe_permission_mask(level: i64) -> Option<i64> {
     match level {
         1 => Some((1_i64 << 0) | (1_i64 << 1) | (1_i64 << 2) | (1_i64 << 3)),
-        2..=4 => Some((1_i64 << 0) | (1_i64 << 1) | (1_i64 << 2) | (1_i64 << 3) | (1_i64 << 4)),
+        2 => Some(
+            (1_i64 << 0) | (1_i64 << 1) | (1_i64 << 2) | (1_i64 << 3) | (1_i64 << 4) | (1_i64 << 5),
+        ),
+        3..=4 => Some((1_i64 << 0) | (1_i64 << 1) | (1_i64 << 2) | (1_i64 << 3) | (1_i64 << 4)),
         _ => None,
     }
 }
@@ -1139,15 +1142,24 @@ mod tests {
     #[test]
     fn default_masks_exclude_critical_permissions() {
         assert_eq!(safe_permission_mask(1), Some(15));
-        assert_eq!(safe_permission_mask(2), Some(31));
+        assert_eq!(safe_permission_mask(2), Some(63));
         assert_eq!(safe_permission_mask(3), Some(31));
         assert_eq!(safe_permission_mask(4), Some(31));
         assert_eq!(safe_permission_mask(5), None);
 
+        assert_eq!(
+            safe_permission_mask(1).expect("helper mask") & (1_i64 << 5),
+            0,
+        );
+
+        assert_ne!(
+            safe_permission_mask(2).expect("city mask") & (1_i64 << 5),
+            0,
+        );
+
         for level in 1..=4 {
             let mask = safe_permission_mask(level).expect("mask");
 
-            assert_eq!(mask & (1_i64 << 5), 0);
             assert_eq!(mask & (1_i64 << 6), 0);
             assert_eq!(mask & (1_i64 << 7), 0);
             assert_eq!(mask & (1_i64 << 13), 0);

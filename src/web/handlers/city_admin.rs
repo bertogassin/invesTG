@@ -422,6 +422,7 @@ pub async fn city_admin_panel(State(state): State<AppState>, headers: HeaderMap)
         || !context.has_permission(AdminPermission::ModerationReview)
         || !context.has_permission(AdminPermission::ComplaintsReview)
         || !context.has_permission(AdminPermission::GroupsManage)
+        || !context.has_permission(AdminPermission::AssistantsManage)
     {
         record_denied_access(
             &state,

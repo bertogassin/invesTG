@@ -53,6 +53,7 @@ pub async fn center_panel(State(state): State<AppState>, headers: HeaderMap) -> 
         && context.scope_type == "city"
         && context.has_permission(AdminPermission::ModerationReview)
         && context.has_permission(AdminPermission::GroupsManage)
+        && context.has_permission(AdminPermission::AssistantsManage)
     {
         return (
             StatusCode::SEE_OTHER,
