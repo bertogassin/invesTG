@@ -3,6 +3,7 @@ use std::time::Duration;
 
 const CONTINENTS: &[(&str, &str)] = &[
     ("AF", "Африка"),
+    ("AN", "Антарктида"),
     ("AS", "Азия"),
     ("EU", "Европа"),
     ("NA", "Северная Америка"),
@@ -10,11 +11,7 @@ const CONTINENTS: &[(&str, &str)] = &[
     ("OC", "Океания"),
 ];
 
-const COUNTRIES: &[(&str, &str, &str, &str)] = &[
-    ("EU", "DE", "DEU", "Германия"),
-    ("EU", "IT", "ITA", "Италия"),
-    ("EU", "FR", "FRA", "Франция"),
-];
+use super::geography_countries::COUNTRIES;
 
 const CITIES: &[(&str, &str, &str, i64, i64, i64)] = &[
     ("DE", "DE-BERLIN", "Берлин", 0, 0, 0),
@@ -400,6 +397,29 @@ mod tests {
             .expect("base schema");
 
         connection
+    }
+
+    #[test]
+    fn world_country_catalog_is_complete_and_unique() {
+        assert_eq!(COUNTRIES.len(), 249);
+
+        let mut iso2_codes = COUNTRIES
+            .iter()
+            .map(|country| country.1)
+            .collect::<Vec<_>>();
+
+        iso2_codes.sort_unstable();
+        iso2_codes.dedup();
+
+        assert_eq!(iso2_codes.len(), 249);
+
+        assert!(COUNTRIES.iter().any(|country| {
+            country.1 == "FR" && country.2 == "FRA" && country.3 == "Франция"
+        }));
+
+        assert!(COUNTRIES
+            .iter()
+            .any(|country| { country.0 == "AN" && country.1 == "AQ" && country.2 == "ATA" }));
     }
 
     #[test]
