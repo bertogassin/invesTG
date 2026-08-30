@@ -1574,3 +1574,23 @@ body:has(#chat-form) {
     cursor:not-allowed;
     opacity:.38;
 }
+
+
+.chat-message-image {
+  display: block;
+  max-width: min(100%, 280px);
+  max-height: 320px;
+  border-radius: 14px;
+  margin: 0 0 6px;
+  object-fit: cover;
+}
+.chat-message-caption { margin-top: 4px; }
+.chat-image-btn {
+  border: 0;
+  background: transparent;
+  color: var(--muted, #8b93a7);
+  font: inherit;
+  font-weight: 700;
+  padding: 8px 10px;
+  cursor: pointer;
+}

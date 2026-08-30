@@ -60,6 +60,13 @@ struct ChatApiMessage {
     deleted_at: i64,
     #[serde(skip_serializing_if = "String::is_empty")]
     client_message_id: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    attachment_kind: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    attachment_mime: String,
+    attachment_size: i64,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    attachment_url: String,
 }
 
 fn normalized_pair(current_user_id: i64, other_user_id: i64) -> Option<(i64, i64)> {
@@ -158,7 +165,11 @@ fn load_api_message_by_id(
                 ), ''),
                 messages.edited_at,
                 messages.deleted_at,
-                COALESCE(messages.client_message_id, '')
+                COALESCE(messages.client_message_id, ''),
+                COALESCE(messages.attachment_kind, ''),
+                COALESCE(messages.attachment_mime, ''),
+                COALESCE(messages.attachment_size, 0),
+                COALESCE(messages.attachment_path, '')
              FROM messages
              WHERE messages.id = ?1
                AND messages.conversation_id = ?2
@@ -179,6 +190,23 @@ fn load_api_message_by_id(
                     edited_at: row.get(9)?,
                     deleted_at: row.get(10)?,
                     client_message_id: row.get(11)?,
+                    attachment_kind: {
+                        let kind: String = row.get(12)?;
+                        kind
+                    },
+                    attachment_mime: row.get(13)?,
+                    attachment_size: row.get(14)?,
+                    attachment_url: {
+                        let deleted_at: i64 = row.get(10)?;
+                        let kind: String = row.get(12)?;
+                        let path: String = row.get(15)?;
+                        let id: i64 = row.get(0)?;
+                        if deleted_at == 0 && kind == "image" && !path.is_empty() {
+                            format!("/api/chat/media/{id}")
+                        } else {
+                            String::new()
+                        }
+                    },
                 })
             },
         )
@@ -276,7 +304,11 @@ pub async fn api_chat_messages(
                     ), ''),
                     messages.edited_at,
                     messages.deleted_at,
-                    COALESCE(messages.client_message_id, '')
+                    COALESCE(messages.client_message_id, ''),
+                COALESCE(messages.attachment_kind, ''),
+                COALESCE(messages.attachment_mime, ''),
+                COALESCE(messages.attachment_size, 0),
+                COALESCE(messages.attachment_path, '')
                  FROM messages
                  WHERE conversation_id = ?1
                    AND id < ?2
@@ -302,6 +334,23 @@ pub async fn api_chat_messages(
                                 edited_at: row.get(9)?,
                                 deleted_at: row.get(10)?,
                                 client_message_id: row.get(11)?,
+                                attachment_kind: {
+                                    let kind: String = row.get(12)?;
+                                    kind
+                                },
+                                attachment_mime: row.get(13)?,
+                                attachment_size: row.get(14)?,
+                                attachment_url: {
+                                    let deleted_at: i64 = row.get(10)?;
+                                    let kind: String = row.get(12)?;
+                                    let path: String = row.get(15)?;
+                                    let id: i64 = row.get(0)?;
+                                    if deleted_at == 0 && kind == "image" && !path.is_empty() {
+                                        format!("/api/chat/media/{id}")
+                                    } else {
+                                        String::new()
+                                    }
+                                },
                             })
                         },
                     )?
@@ -340,7 +389,11 @@ pub async fn api_chat_messages(
                     ), ''),
                     messages.edited_at,
                     messages.deleted_at,
-                    COALESCE(messages.client_message_id, '')
+                    COALESCE(messages.client_message_id, ''),
+                COALESCE(messages.attachment_kind, ''),
+                COALESCE(messages.attachment_mime, ''),
+                COALESCE(messages.attachment_size, 0),
+                COALESCE(messages.attachment_path, '')
                  FROM messages
                  WHERE conversation_id = ?1
                    AND id > ?2
@@ -366,6 +419,23 @@ pub async fn api_chat_messages(
                                 edited_at: row.get(9)?,
                                 deleted_at: row.get(10)?,
                                 client_message_id: row.get(11)?,
+                                attachment_kind: {
+                                    let kind: String = row.get(12)?;
+                                    kind
+                                },
+                                attachment_mime: row.get(13)?,
+                                attachment_size: row.get(14)?,
+                                attachment_url: {
+                                    let deleted_at: i64 = row.get(10)?;
+                                    let kind: String = row.get(12)?;
+                                    let path: String = row.get(15)?;
+                                    let id: i64 = row.get(0)?;
+                                    if deleted_at == 0 && kind == "image" && !path.is_empty() {
+                                        format!("/api/chat/media/{id}")
+                                    } else {
+                                        String::new()
+                                    }
+                                },
                             })
                         },
                     )?
@@ -404,7 +474,11 @@ pub async fn api_chat_messages(
                     ), ''),
                     messages.edited_at,
                     messages.deleted_at,
-                    COALESCE(messages.client_message_id, '')
+                    COALESCE(messages.client_message_id, ''),
+                COALESCE(messages.attachment_kind, ''),
+                COALESCE(messages.attachment_mime, ''),
+                COALESCE(messages.attachment_size, 0),
+                COALESCE(messages.attachment_path, '')
                  FROM messages
                  WHERE conversation_id = ?1
                  ORDER BY id DESC
@@ -427,6 +501,23 @@ pub async fn api_chat_messages(
                             edited_at: row.get(9)?,
                             deleted_at: row.get(10)?,
                             client_message_id: row.get(11)?,
+                            attachment_kind: {
+                                let kind: String = row.get(12)?;
+                                kind
+                            },
+                            attachment_mime: row.get(13)?,
+                            attachment_size: row.get(14)?,
+                            attachment_url: {
+                                let deleted_at: i64 = row.get(10)?;
+                                let kind: String = row.get(12)?;
+                                let path: String = row.get(15)?;
+                                let id: i64 = row.get(0)?;
+                                if deleted_at == 0 && kind == "image" && !path.is_empty() {
+                                    format!("/api/chat/media/{id}")
+                                } else {
+                                    String::new()
+                                }
+                            },
                         })
                     })?
                     .collect::<Result<Vec<_>, _>>()

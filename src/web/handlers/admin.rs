@@ -1844,3 +1844,221 @@ pub async fn admin_reject_resource(
             .into_response(),
     }
 }
+
+// ============ ПАНЕЛЬ МОДЕРАТОРА (уровни 1-3) ============
+
+pub async fn moderator_panel(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    let user = match verify_authenticated_user(&state, &headers) {
+        Some(user) => user,
+        None => {
+            return (StatusCode::UNAUTHORIZED, "Требуется вход").into_response();
+        }
+    };
+
+    // Определим уровень модератора
+    let mod_level: i64 = state.db_pool.get()
+        .ok()
+        .and_then(|conn| {
+            conn.query_row(
+                "SELECT COALESCE(MAX(level), 0) FROM moderator_roles WHERE user_id = ?1 AND is_active = 1",
+                rusqlite::params![user.user_id],
+                |row| row.get(0),
+            ).ok()
+        })
+        .unwrap_or(0);
+
+    if mod_level == 0 || mod_level == 4 {
+        return (StatusCode::NOT_FOUND, "404").into_response();
+    }
+
+    // Загрузим pending ресурсы
+    let pending_resources: Vec<(i64, String, String, String)> = state.db_pool.get()
+        .ok()
+        .map(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT id, title, category, description FROM resources WHERE moderation_status = 'pending' ORDER BY created_at DESC LIMIT 50"
+            ).ok();
+            let mut result = Vec::new();
+            if let Some(stmt) = stmt.as_mut() {
+                let rows = stmt.query_map([], |row| {
+                    Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+                });
+                if let Ok(rows) = rows {
+                    for row in rows.flatten() {
+                        result.push(row);
+                    }
+                }
+            }
+            result
+        })
+        .unwrap_or_default();
+
+    let level_title = match mod_level {
+        1 => "🏙 Модератор города",
+        2 => "🇫🇷 Модератор страны",
+        3 => "🌍 Модератор континента",
+        _ => "Модератор",
+    };
+
+    let resources_html = pending_resources
+        .iter()
+        .map(|(id, title, category, description)| {
+            let safe_title = templates::escape_html(title);
+            let safe_category = templates::escape_html(category);
+            let safe_description = templates::escape_html(description);
+
+            format!(
+                r#"<article style="
+    border:1px solid rgba(214,183,122,.22);
+    border-radius:18px;
+    padding:16px;
+    margin-bottom:12px;
+    background:rgba(214,183,122,.05);
+    box-shadow:0 8px 24px rgba(0,0,0,.15);
+">
+    <div style="font-size:11px;color:#8f96a3;margin-bottom:4px;">#{id} · {category}</div>
+    <div style="font-size:16px;font-weight:800;color:#f0d69c;margin-bottom:6px;">{title}</div>
+    <div style="font-size:13px;color:#9ca3af;line-height:1.5;">{description}</div>
+
+    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+        <button onclick="moderateResource({id}, 'approved')" style="
+            padding:8px 16px;
+            border:none;
+            border-radius:10px;
+            background:#16a34a;
+            color:#fff;
+            font-size:12px;
+            font-weight:800;
+            cursor:pointer;
+        ">✓ Одобрить</button>
+
+        <button onclick="moderateResource({id}, 'rejected')" style="
+            padding:8px 16px;
+            border:none;
+            border-radius:10px;
+            background:#dc2626;
+            color:#fff;
+            font-size:12px;
+            font-weight:800;
+            cursor:pointer;
+        ">✕ Отклонить</button>
+    </div>
+</article>"#,
+                id = id,
+                category = safe_category,
+                title = safe_title,
+                description = safe_description,
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("");
+
+    let empty_html = if pending_resources.is_empty() {
+        r#"<div style="padding:30px;text-align:center;color:#8f96a3;border:1px dashed rgba(214,183,122,.25);border-radius:18px;">Нет ресурсов на проверке</div>"#
+    } else {
+        ""
+    };
+
+    let html = format!(
+        r#"<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Панель модератора · ResursMap</title>
+<style>
+* {{ box-sizing:border-box; }}
+body {{
+    margin:0;
+    padding:20px;
+    background:linear-gradient(160deg,#080a0d,#0e1116);
+    color:#f3f0e9;
+    font-family:Inter,-apple-system,sans-serif;
+    min-height:100vh;
+}}
+.page {{ max-width:700px; margin:0 auto; }}
+h1 {{ color:#d6b77a; font-size:26px; margin:0 0 6px; }}
+.subtitle {{ color:#8f96a3; font-size:13px; margin-bottom:24px; }}
+h2 {{ color:#f0d69c; font-size:18px; margin:24px 0 12px; }}
+</style>
+</head>
+<body>
+<div class="page">
+<h1>{level_title}</h1>
+<p class="subtitle">Ресурсы, ожидающие модерации</p>
+
+<h2>На проверке ({count})</h2>
+{empty}
+{resources}
+</div>
+
+<script>
+function moderateResource(id, status) {{
+    fetch('/api/moderator/moderate-resource', {{
+        method: 'POST',
+        headers: {{'Content-Type': 'application/json'}},
+        body: JSON.stringify({{ id: id, status: status }})
+    }}).then(r => r.json()).then(d => {{
+        if (d.ok) {{ location.reload(); }}
+    }});
+}}
+</script>
+</body>
+</html>"#,
+        level_title = level_title,
+        count = pending_resources.len(),
+        empty = empty_html,
+        resources = resources_html,
+    );
+
+    Html(html).into_response()
+}
+
+pub async fn moderate_resource(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<serde_json::Value>,
+) -> Response {
+    let user = match verify_authenticated_user(&state, &headers) {
+        Some(user) => user,
+        None => return (StatusCode::UNAUTHORIZED, Json(json!({"ok": false}))).into_response(),
+    };
+
+    let mod_level: i64 = state.db_pool.get()
+        .ok()
+        .and_then(|conn| {
+            conn.query_row(
+                "SELECT COALESCE(MAX(level), 0) FROM moderator_roles WHERE user_id = ?1 AND is_active = 1",
+                rusqlite::params![user.user_id],
+                |row| row.get(0),
+            ).ok()
+        })
+        .unwrap_or(0);
+
+    if mod_level == 0 || mod_level == 4 {
+        return (StatusCode::FORBIDDEN, Json(json!({"ok": false}))).into_response();
+    }
+
+    let resource_id = payload.get("id").and_then(|v| v.as_i64()).unwrap_or(0);
+    let status = payload.get("status").and_then(|v| v.as_str()).unwrap_or("");
+
+    if resource_id <= 0 || (status != "approved" && status != "rejected") {
+        return (StatusCode::BAD_REQUEST, Json(json!({"ok": false}))).into_response();
+    }
+
+    let _ = state.db_pool.get().ok().map(|conn| {
+        conn.execute(
+            "UPDATE resources SET moderation_status = ?1, updated_at = strftime('%s','now') WHERE id = ?2",
+            rusqlite::params![status, resource_id],
+        )
+    });
+
+    let _ = state.db_pool.get().ok().map(|conn| {
+        conn.execute(
+            "INSERT INTO moderation_actions (moderator_id, action_type, target_type, target_id, details) VALUES (?1, 'moderate_resource', 'resource', ?2, ?3)",
+            rusqlite::params![user.user_id, resource_id, status],
+        )
+    });
+
+    Json(json!({"ok": true})).into_response()
+}

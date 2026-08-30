@@ -5,7 +5,7 @@ use super::super::handlers::revoke_admin_session;
 use super::super::handlers::{admin_geography_group_save, admin_geography_page};
 use super::super::handlers::{admin_security_page, admin_step_up_request, admin_step_up_verify};
 use super::super::handlers::{
-    center_panel,
+    center_panel, moderate_resource, moderator_panel,
     {
         admin_approve_resource, admin_bulk_resources, admin_close_report,
         admin_hide_reported_resource, admin_login, admin_login_page,
@@ -25,6 +25,8 @@ use axum::{
 pub(super) fn routes() -> Router<AppState> {
     Router::new()
         .route("/app/center", get(center_panel))
+        .route("/app/moderator", get(moderator_panel))
+        .route("/api/moderator/moderate-resource", post(moderate_resource))
         .route("/app/center/city", get(city_admin_panel))
         .route(
             "/app/center/city/helpers",

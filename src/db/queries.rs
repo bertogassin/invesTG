@@ -570,6 +570,23 @@ pub fn init_db() -> Result<Connection> {
         [],
     )?;
 
+    let _ = conn.execute(
+        "ALTER TABLE messages ADD COLUMN attachment_kind TEXT NOT NULL DEFAULT ''",
+        [],
+    );
+    let _ = conn.execute(
+        "ALTER TABLE messages ADD COLUMN attachment_mime TEXT NOT NULL DEFAULT ''",
+        [],
+    );
+    let _ = conn.execute(
+        "ALTER TABLE messages ADD COLUMN attachment_size INTEGER NOT NULL DEFAULT 0",
+        [],
+    );
+    let _ = conn.execute(
+        "ALTER TABLE messages ADD COLUMN attachment_path TEXT NOT NULL DEFAULT ''",
+        [],
+    );
+
     // ============================================================
     // USER BLOCKS — messenger privacy boundary
     // ============================================================

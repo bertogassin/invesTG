@@ -493,6 +493,21 @@
             bubble.className = "chat-bubble";
             body.className = "chat-message-body";
             body.textContent = String(message.message || "");
+            if (message.attachment_kind === "image" && message.attachment_url) {
+                var img = document.createElement("img");
+                img.className = "chat-message-image";
+                img.src = String(message.attachment_url);
+                img.alt = "Фото";
+                img.loading = "lazy";
+                body.textContent = "";
+                body.appendChild(img);
+                if (message.message) {
+                    var cap = document.createElement("div");
+                    cap.className = "chat-message-caption";
+                    cap.textContent = String(message.message);
+                    body.appendChild(cap);
+                }
+            }
             meta.className = "chat-message-meta";
             time.textContent = formatTime(
                 Number(message.created_at)
@@ -1125,6 +1140,61 @@
             scrollToBottom("smooth");
             flushPendingQueue();
         }
+
+        var imageInput = document.createElement("input");
+        imageInput.type = "file";
+        imageInput.accept = "image/jpeg,image/png,image/webp";
+        imageInput.id = "chat-image-input";
+        imageInput.hidden = true;
+        form.appendChild(imageInput);
+        var imageBtn = document.createElement("button");
+        imageBtn.type = "button";
+        imageBtn.id = "chat-image-btn";
+        imageBtn.textContent = "Фото";
+        imageBtn.className = "chat-image-btn";
+        if (send && send.parentNode) {
+            send.parentNode.insertBefore(imageBtn, send);
+        }
+        imageBtn.addEventListener("click", function () { imageInput.click(); });
+        imageInput.addEventListener("change", function () {
+            var file = imageInput.files && imageInput.files[0];
+            imageInput.value = "";
+            if (!file) return;
+            if (file.size > 2 * 1024 * 1024) {
+                setConnection("Фото больше 2 МБ", "is-error");
+                return;
+            }
+            var clientMessageId = createClientMessageId();
+            var formData = new FormData();
+            formData.append("image", file);
+            formData.append("client_message_id", clientMessageId);
+            formData.append("caption", input.value.trim());
+            var reply = window.ResursMapChatReply || null;
+            if (reply && reply.id) {
+                formData.append("reply_to_message_id", String(reply.id));
+            }
+            sendState.textContent = "Отправка фото…";
+            fetch("/api/chat/" + otherUserId + "/send-image", {
+                method: "POST",
+                body: formData,
+                credentials: "same-origin"
+            }).then(function (res) { return res.json().then(function (data) { return { res: res, data: data }; }); })
+              .then(function (pack) {
+                if (!pack.res.ok || !pack.data || !pack.data.ok) {
+                    throw new Error((pack.data && pack.data.error) || "send_failed");
+                }
+                input.value = "";
+                updateComposer();
+                if (pack.data.message) {
+                    appendMessages([pack.data.message]);
+                }
+                setConnection("В сети", "is-online");
+                sendState.textContent = "Отправлено · Enter — отправить";
+              }).catch(function () {
+                setConnection("Ошибка фото", "is-error");
+                sendState.textContent = "Фото не отправлено";
+              });
+        });
 
         form.addEventListener(
             "submit",
