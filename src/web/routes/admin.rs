@@ -13,6 +13,7 @@ use super::super::handlers::{
         admin_toggle_active, admin_toggle_premium, admin_toggle_verified,
     },
 };
+use super::super::handlers::{city_helper_create, city_helper_lifecycle, city_helpers_page};
 use super::super::handlers::{create_admin_assignment, new_admin_assignment_page};
 use super::super::handlers::{group_helper_panel, group_helper_report_action};
 use crate::state::app_state::AppState;
@@ -25,6 +26,14 @@ pub(super) fn routes() -> Router<AppState> {
     Router::new()
         .route("/app/center", get(center_panel))
         .route("/app/center/city", get(city_admin_panel))
+        .route(
+            "/app/center/city/helpers",
+            get(city_helpers_page).post(city_helper_create),
+        )
+        .route(
+            "/app/center/city/helpers/{assignment_id}/{action}",
+            post(city_helper_lifecycle),
+        )
         .route("/app/center/group", get(group_helper_panel))
         .route(
             "/app/center/group/report/{report_id}",

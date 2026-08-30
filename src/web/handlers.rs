@@ -37,11 +37,13 @@ mod admin_security;
 mod admin_session_actions;
 mod admin_v2;
 mod city_admin;
+mod city_helper_actions;
 mod group_helper;
 pub use admin::*;
 pub use admin_geography::{admin_geography_group_save, admin_geography_page};
 pub use admin_v2::*;
 pub use city_admin::city_admin_panel;
+pub use city_helper_actions::{city_helper_create, city_helper_lifecycle, city_helpers_page};
 pub use group_helper::{group_helper_panel, group_helper_report_action};
 
 mod navigation;

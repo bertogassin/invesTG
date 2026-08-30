@@ -330,7 +330,7 @@ footer {{ margin-top:28px; color:var(--muted); font-size:12px; }}
     <p>Защищённое управление ресурсами, жалобами, помощниками и подключёнными сообществами города.</p>
     <div class="actions">
         <a class="button primary" href="/app/center/geography?q={stable_key}">Платформы города</a>
-        <a class="button" href="/app/center/administrators">Назначения</a>
+        <a class="button" href="/app/center/city/helpers">Помощники города</a>
         <a class="button" href="/app">Открыть ResursMap</a>
     </div>
 </section>
