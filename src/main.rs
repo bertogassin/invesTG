@@ -39,6 +39,9 @@ async fn main() {
 
     db::geography_v2::initialize().expect("Не удалось применить миграцию Geography V2");
 
+    db::admin_geography::initialize()
+        .expect("Не удалось синхронизировать административную географию");
+
     // Единственный постоянный production-доступ к SQLite — connection pool.
     let db_pool = db::pool::create_pool().expect("Не удалось создать SQLite connection pool");
 
