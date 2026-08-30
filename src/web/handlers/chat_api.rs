@@ -1,6 +1,7 @@
 use super::auth::verify_user_session;
 use super::chat::load_user_conversations;
 use super::common::{input_text_is_valid, rate_limit_retry_after, request_is_cross_site};
+use super::user_blocks::users_are_blocked;
 use crate::state::app_state::AppState;
 use axum::{
     extract::{Path, Query, State},
@@ -571,6 +572,10 @@ pub async fn api_chat_send(
             return json_error(StatusCode::SERVICE_UNAVAILABLE, "database_unavailable");
         }
     };
+
+    if users_are_blocked(&connection, user_id, other_user_id) {
+        return json_error(StatusCode::FORBIDDEN, "user_blocked");
+    }
 
     let conversation_id = match conversation_id(&connection, user_id, other_user_id) {
         Some(conversation_id) => conversation_id,

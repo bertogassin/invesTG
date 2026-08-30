@@ -570,6 +570,64 @@ pub fn init_db() -> Result<Connection> {
         [],
     )?;
 
+    // ============================================================
+    // USER BLOCKS — messenger privacy boundary
+    // ============================================================
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS user_blocks (
+            blocker_user_id INTEGER NOT NULL,
+            blocked_user_id INTEGER NOT NULL,
+            created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+
+            PRIMARY KEY (blocker_user_id, blocked_user_id),
+
+            CHECK(blocker_user_id > 0),
+            CHECK(blocked_user_id > 0),
+            CHECK(blocker_user_id <> blocked_user_id),
+
+            FOREIGN KEY (blocker_user_id)
+                REFERENCES users(id)
+                ON DELETE CASCADE,
+
+            FOREIGN KEY (blocked_user_id)
+                REFERENCES users(id)
+                ON DELETE CASCADE
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_user_blocks_blocked
+         ON user_blocks(blocked_user_id, blocker_user_id)",
+        [],
+    )?;
+
+    // Последняя граница безопасности: если любой участник
+    // заблокировал другого, новое сообщение нельзя вставить
+    // ни через API, ни через старую HTML-форму.
+    conn.execute_batch(
+        "CREATE TRIGGER IF NOT EXISTS messages_reject_blocked_insert
+         BEFORE INSERT ON messages
+         WHEN EXISTS (
+             SELECT 1
+             FROM conversations AS conversation
+             JOIN user_blocks AS block
+               ON (
+                   block.blocker_user_id = conversation.user1_id
+                   AND block.blocked_user_id = conversation.user2_id
+               )
+               OR (
+                   block.blocker_user_id = conversation.user2_id
+                   AND block.blocked_user_id = conversation.user1_id
+               )
+             WHERE conversation.id = NEW.conversation_id
+         )
+         BEGIN
+             SELECT RAISE(ABORT, 'user_blocked');
+         END;",
+    )?;
+
     // BOT B3.5A — additive persistent security storage.
     crate::db::security::init_security_schema(&conn)?;
 

@@ -1,5 +1,6 @@
 use super::auth::verify_user_session;
 use super::common::{input_text_is_valid, rate_limit_retry_after, request_is_cross_site};
+use super::user_blocks::users_are_blocked;
 use crate::state::app_state::AppState;
 use axum::{
     extract::State,
@@ -125,6 +126,10 @@ pub async fn api_start_direct_chat(
     let Some((user1_id, user2_id)) = normalized_pair(sender_user_id, receiver_user_id) else {
         return json_error(StatusCode::BAD_REQUEST, "cannot_message_self");
     };
+
+    if users_are_blocked(&connection, sender_user_id, receiver_user_id) {
+        return json_error(StatusCode::FORBIDDEN, "user_blocked");
+    }
 
     let existing_conversation: Option<i64> = connection
         .query_row(

@@ -59,3 +59,6 @@ pub use admin_session_actions::revoke_admin_session;
 pub use admin_assignment_lifecycle::manage_admin_assignment;
 
 pub use direct_chat_start::api_start_direct_chat;
+
+mod user_blocks;
+pub use user_blocks::{api_chat_block, api_chat_block_status, api_chat_unblock};
