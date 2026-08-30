@@ -102,11 +102,9 @@ pub async fn api_start_direct_chat(
         }
     };
 
-    let receiver: Option<(i64, i64)> = connection
+    let receiver: Option<i64> = connection
         .query_row(
-            "SELECT
-                profile.user_id,
-                profile.open_contact
+            "SELECT profile.user_id
              FROM profiles AS profile
              JOIN users AS user
                ON user.id = profile.user_id
@@ -114,12 +112,12 @@ pub async fn api_start_direct_chat(
              WHERE profile.public_id = ?1
              LIMIT 1",
             rusqlite::params![public_id],
-            |row| Ok((row.get(0)?, row.get(1)?)),
+            |row| row.get(0),
         )
         .optional()
         .unwrap_or(None);
 
-    let Some((receiver_user_id, receiver_open_contact)) = receiver else {
+    let Some(receiver_user_id) = receiver else {
         return json_error(StatusCode::NOT_FOUND, "user_not_found");
     };
 
@@ -143,99 +141,6 @@ pub async fn api_start_direct_chat(
         )
         .optional()
         .unwrap_or(None);
-
-    if existing_conversation.is_none() && receiver_open_contact != 1 {
-        let existing_status: Option<String> = connection
-            .query_row(
-                "SELECT status
-                 FROM contact_requests
-                 WHERE sender_user_id = ?1
-                   AND receiver_user_id = ?2
-                 LIMIT 1",
-                rusqlite::params![sender_user_id, receiver_user_id],
-                |row| row.get(0),
-            )
-            .optional()
-            .unwrap_or(None);
-
-        if let Some(status) = existing_status.as_deref() {
-            if status == "pending" {
-                return (
-                    StatusCode::CONFLICT,
-                    Json(json!({
-                        "ok": false,
-                        "error": "request_already_pending"
-                    })),
-                )
-                    .into_response();
-            }
-
-            if status == "accepted" {
-                return (
-                    StatusCode::CONFLICT,
-                    Json(json!({
-                        "ok": false,
-                        "error": "already_connected"
-                    })),
-                )
-                    .into_response();
-            }
-        }
-
-        let now = crate::web::handlers::common::unix_now();
-
-        if connection
-            .execute(
-                "INSERT INTO contact_requests (
-                    sender_user_id,
-                    receiver_user_id,
-                    message,
-                    status,
-                    created_at,
-                    updated_at
-                 )
-                 VALUES (?1, ?2, ?3, 'pending', ?4, ?4)
-                 ON CONFLICT(sender_user_id, receiver_user_id)
-                 DO UPDATE SET
-                    message = excluded.message,
-                    status = 'pending',
-                    updated_at = excluded.updated_at",
-                rusqlite::params![sender_user_id, receiver_user_id, message, now],
-            )
-            .is_err()
-        {
-            return json_error(StatusCode::INTERNAL_SERVER_ERROR, "request_store_failed");
-        }
-
-        let _ = connection.execute(
-            "INSERT INTO user_notifications (
-                user_id,
-                resource_id,
-                kind,
-                title,
-                message,
-                is_read,
-                created_at
-             )
-             VALUES (
-                ?1, ?2,
-                'contact_request',
-                'Новый запрос на связь',
-                'Кто-то хочет связаться через ResursMap.',
-                0, ?3
-             )",
-            rusqlite::params![receiver_user_id, sender_user_id, now],
-        );
-
-        return (
-            StatusCode::OK,
-            Json(json!({
-                "ok": true,
-                "status": "pending"
-            })),
-        )
-            .into_response();
-    }
 
     let now = crate::web::handlers::common::unix_now();
 

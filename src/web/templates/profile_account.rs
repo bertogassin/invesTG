@@ -19,7 +19,6 @@ pub struct RenderMeParams<'a> {
     pub pending_contact_requests_count: i64,
     pub unread_messages_count: i64,
     pub moderator_level: i64,
-    pub open_contact: bool,
     pub intent_text: &'a str,
     pub intent_until: i64,
     pub category: &'a str,
@@ -49,7 +48,6 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
         pending_contact_requests_count,
         unread_messages_count,
         moderator_level,
-        open_contact,
         intent_text,
         intent_until,
         category,
@@ -81,8 +79,6 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
     } else {
         String::new()
     };
-
-    let contact_checked = if open_contact { "checked" } else { "" };
 
     let intent_status_text = if safe_intent_text.is_empty() {
         "Статус пока не указан".to_string()
@@ -388,13 +384,8 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
             .saturating_add(pending_contact_requests_count)
             .saturating_add(unread_messages_count);
 
-        let availability_class = if open_contact { "available" } else { "private" };
-
-        let availability_text = if open_contact {
-            "Готов к общению"
-        } else {
-            "Контакты закрыты"
-        };
+        let availability_class = "available";
+        let availability_text = "Внутренние сообщения доступны";
 
         let category_text = if safe_category.is_empty() {
             "Направление не выбрано"
@@ -996,54 +987,7 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
     </div>
 
 
-    <label style="
-        display:flex;
-        align-items:center;
-        gap:11px;
-        margin-bottom:17px;
-        cursor:pointer;
-    ">
 
-        <span style="
-            width:12px;
-            height:12px;
-            border-radius:50%;
-            flex:0 0 auto;
-            margin-top:4px;
-            {ready_dot_style}
-        "></span>
-
-        <input
-            id="profile-open-contact"
-            type="checkbox"
-            {contact_checked}
-            style="
-                width:20px;
-                height:20px;
-                flex:0 0 auto;
-            "
-         class="ui-input">
-
-        <div>
-            <div style="
-                font-size:14px;
-                font-weight:800;
-            ">
-                Готов к общению
-            </div>
-
-            <div style="
-                font-size:12px;
-                color:var(--muted);
-                margin-top:3px;
-                line-height:1.4;
-            ">
-                Зелёная точка означает, что вы
-                на связи и готовы к контакту.
-            </div>
-        </div>
-
-    </label>
 
 
     <div style="
@@ -1261,12 +1205,6 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
         intent_status_text = intent_status_text,
         safe_intent_text = safe_intent_text,
         safe_category = safe_category,
-        contact_checked = contact_checked,
-        ready_dot_style = if contact_checked == "checked" {
-            "background:#22c55e;box-shadow:0 0 8px rgba(34,197,94,.5);"
-        } else {
-            "background:#3f3f46;"
-        },
         contact_requests_card =
             super::extended_navigation_card(super::ExtendedNavigationCardParams {
                 id: None,
@@ -1344,10 +1282,7 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
     const saveButton =
         document.getElementById("profile-save");
 
-    const openContact =
-        document.getElementById(
-            "profile-open-contact"
-        );
+
 
     const intent =
         document.getElementById("profile-intent");
@@ -1374,7 +1309,6 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
 
     if (
         !saveButton ||
-        !openContact ||
         !intent ||
         !categoryInput ||
         !duration
@@ -1401,9 +1335,7 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
                                 "application/json"
                         },
                         body: JSON.stringify({
-                            open_contact:
-                                openContact.checked,
-                            intent_text:
+intent_text:
                                 intent.value.trim(),
                             duration_days:
                                 Number(duration.value),
@@ -1695,7 +1627,6 @@ pub struct RenderPublicUserProfileParams<'a> {
     pub username: &'a str,
     pub first_name: &'a str,
     pub last_name: &'a str,
-    pub open_contact: bool,
     pub intent_text: &'a str,
     pub chat_user_id: Option<i64>,
     pub resources: Vec<crate::web::view_models::PublicProfileResourceRow>,
@@ -1707,7 +1638,6 @@ pub fn render_public_user_profile(params: RenderPublicUserProfileParams<'_>) -> 
         username,
         first_name,
         last_name,
-        open_contact,
         intent_text,
         chat_user_id,
         resources,
@@ -1741,43 +1671,7 @@ pub fn render_public_user_profile(params: RenderPublicUserProfileParams<'_>) -> 
         "Участник".to_string()
     };
 
-    let contact_html = if open_contact && !safe_username.is_empty() {
-        format!(
-            r#"
-<a href="https://t.me/{username}"
-   target="_blank"
-   rel="noopener noreferrer"
-   style="
-       margin-top:14px;
-       min-height:46px;
-       display:inline-flex;
-       align-items:center;
-       justify-content:center;
-       padding:0 16px;
-       border-radius:14px;
-       text-decoration:none;
-       color:var(--text);
-       font-weight:850;
-       border:1px solid rgba(214,183,122,.38);
-       background:rgba(214,183,122,.08);
-   ">
-    Telegram · @{username}
-</a>
-"#,
-            username = safe_username
-        )
-    } else {
-        r#"
-<div style="
-    margin-top:12px;
-    font-size:12px;
-    color:var(--muted);
-">
-    Контакт пользователя закрыт.
-</div>
-"#
-        .to_string()
-    };
+    let contact_html = String::new();
 
     let public_id_js = serde_json::to_string(public_id).unwrap_or_else(|_| "\"\"".to_string());
 
@@ -2473,7 +2367,6 @@ mod personal_center_tests {
             pending_contact_requests_count: 2,
             unread_messages_count: 6,
             moderator_level: 0,
-            open_contact: true,
             intent_text: "Ищу партнёров",
             intent_until: 0,
             category: "Бизнес",

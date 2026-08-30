@@ -1533,3 +1533,44 @@ body:has(#chat-form) {
         max-height: 128px !important;
     }
 }
+
+/* Chat V5.7 user blocking controls */
+.chat-block-toggle {
+    min-height:32px;
+    margin-top:6px;
+    padding:0 11px;
+    border:1px solid rgba(255,109,120,.30);
+    border-radius:10px;
+    color:#ff8992;
+    background:rgba(255,109,120,.07);
+    font:inherit;
+    font-size:10px;
+    font-weight:850;
+    cursor:pointer;
+    touch-action:manipulation;
+}
+
+.chat-block-toggle.is-unblock {
+    border-color:rgba(98,224,173,.30);
+    color:var(--success,#62e0ad);
+    background:rgba(98,224,173,.07);
+}
+
+.chat-block-toggle:disabled {
+    cursor:wait;
+    opacity:.55;
+}
+
+#chat-form.is-chat-blocked {
+    border-color:rgba(255,109,120,.22)!important;
+}
+
+#chat-form.is-chat-blocked #chat-input {
+    cursor:not-allowed;
+    opacity:.62;
+}
+
+#chat-form.is-chat-blocked #chat-send {
+    cursor:not-allowed;
+    opacity:.38;
+}

@@ -35,7 +35,6 @@ pub async fn app_me(State(state): State<AppState>, headers: HeaderMap) -> Html<S
                 pending_contact_requests_count: 0,
                 unread_messages_count: 0,
                 moderator_level: 0,
-                open_contact: false,
                 intent_text: "",
                 intent_until: 0,
                 category: "",
@@ -80,7 +79,7 @@ pub async fn app_me(State(state): State<AppState>, headers: HeaderMap) -> Html<S
         )
         .ok();
 
-    let (username, first_name, last_name, open_contact, intent_text, intent_until, category) =
+    let (username, first_name, last_name, _open_contact, intent_text, intent_until, category) =
         profile.unwrap_or_else(|| {
             (
                 String::new(),
@@ -215,7 +214,6 @@ pub async fn app_me(State(state): State<AppState>, headers: HeaderMap) -> Html<S
         pending_contact_requests_count,
         unread_messages_count,
         moderator_level,
-        open_contact: open_contact == 1,
         intent_text: &intent_text,
         intent_until,
         category: &category,
@@ -284,7 +282,7 @@ pub async fn public_user_profile(
         username,
         first_name,
         last_name,
-        open_contact,
+        _open_contact,
         intent_text,
         intent_until,
     ) = match profile {
@@ -383,7 +381,6 @@ pub async fn public_user_profile(
             username: &username,
             first_name: &first_name,
             last_name: &last_name,
-            open_contact: open_contact == 1,
             intent_text: &visible_intent,
             chat_user_id,
             resources,
@@ -449,7 +446,7 @@ pub async fn api_profile_get(State(state): State<AppState>, headers: HeaderMap) 
 
     drop(db);
 
-    let (username, first_name, last_name, open_contact, intent_text, intent_until, _category) =
+    let (username, first_name, last_name, _open_contact, intent_text, intent_until, _category) =
         profile.unwrap_or_else(|| {
             (
                 String::new(),
@@ -467,7 +464,6 @@ pub async fn api_profile_get(State(state): State<AppState>, headers: HeaderMap) 
         "username": username,
         "first_name": first_name,
         "last_name": last_name,
-        "open_contact": open_contact == 1,
         "intent_text": intent_text,
         "intent_until": intent_until
     }))
