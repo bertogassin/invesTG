@@ -49,6 +49,18 @@ pub async fn center_panel(State(state): State<AppState>, headers: HeaderMap) -> 
             .into_response();
     }
 
+    if context.level.number() == 2
+        && context.scope_type == "city"
+        && context.has_permission(AdminPermission::ModerationReview)
+        && context.has_permission(AdminPermission::GroupsManage)
+    {
+        return (
+            StatusCode::SEE_OTHER,
+            [(header::LOCATION, "/app/center/city")],
+        )
+            .into_response();
+    }
+
     if !context.is_owner() || !context.has_permission(AdminPermission::InfrastructureRead) {
         record_denied_access(
             &state,
