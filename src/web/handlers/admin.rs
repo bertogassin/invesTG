@@ -176,7 +176,7 @@ pub async fn admin_reports(State(state): State<AppState>, headers: HeaderMap) ->
         return Html(
             r#"<h1>403</h1>
 <p>Доступ запрещён.</p>
-<a href="/app/admin/login">Войти через Telegram</a>"#
+<a href="/app/center">Вернуться в центр управления</a>"#
                 .to_string(),
         );
     }
@@ -787,7 +787,7 @@ pub async fn admin_resources(
         return Html(
             r#"<h1>403</h1>
 <p>Доступ запрещён.</p>
-<a href="/app/admin/login">Войти через Telegram</a>"#
+<a href="/app/center">Вернуться в центр управления</a>"#
                 .to_string(),
         );
     }

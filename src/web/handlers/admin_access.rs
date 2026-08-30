@@ -7,7 +7,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const ADMIN_SESSION_TTL_SECONDS: i64 = 1_800;
-const ADMIN_SESSION_COOKIE: &str = "resursmap_admin_v2";
+// Новое имя отделяет общую /app-сессию от старой cookie,
+// которая была ограничена путём /app/center.
+const ADMIN_SESSION_COOKIE: &str = "resursmap_admin_v2_app";
 
 static ADMIN_SESSION_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
@@ -518,7 +520,7 @@ mod tests {
 
     #[test]
     fn admin_session_cookie_covers_all_admin_routes() {
-        assert_eq!(ADMIN_SESSION_COOKIE, "resursmap_admin_v2");
+        assert_eq!(ADMIN_SESSION_COOKIE, "resursmap_admin_v2_app");
 
         let cookie_policy = concat!("Path=/app; ", "HttpOnly; Secure; SameSite=Strict");
 
