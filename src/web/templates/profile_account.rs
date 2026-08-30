@@ -1336,128 +1336,124 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
         },),
     );
 
-    let body_after_html = r####"{bottom_nav}
-
-
+    let body_after_html = r####"
 <script>
-(function() {{
+(function () {
+    "use strict";
+
     const saveButton =
         document.getElementById("profile-save");
 
     const openContact =
-        document.getElementById("profile-open-contact");
+        document.getElementById(
+            "profile-open-contact"
+        );
 
     const intent =
         document.getElementById("profile-intent");
 
     const categoryInput =
-        document.getElementById("profile-category");
+        document.getElementById(
+            "profile-category"
+        );
 
     const duration =
-        document.getElementById("profile-duration");
+        document.getElementById(
+            "profile-duration"
+        );
 
     const status =
-        document.getElementById("profile-save-status");
+        document.getElementById(
+            "profile-save-status"
+        );
 
     const current =
-        document.getElementById("intent-current");
-
+        document.getElementById(
+            "intent-current"
+        );
 
     if (
-        saveButton &&
-        openContact &&
-        intent &&
-        categoryInput &&
-        duration
-    ) {{
-        saveButton.addEventListener(
-            "click",
-            async () => {{
-                saveButton.disabled = true;
+        !saveButton ||
+        !openContact ||
+        !intent ||
+        !categoryInput ||
+        !duration
+    ) {
+        return;
+    }
 
-                if (status) {{
+    saveButton.addEventListener(
+        "click",
+        async function () {
+            saveButton.disabled = true;
+
+            if (status) {
+                status.textContent = "Сохраняем...";
+            }
+
+            try {
+                const response = await fetch(
+                    "/api/profile",
+                    {
+                        method: "POST",
+                        headers: {
+                            "Content-Type":
+                                "application/json"
+                        },
+                        body: JSON.stringify({
+                            open_contact:
+                                openContact.checked,
+                            intent_text:
+                                intent.value.trim(),
+                            duration_days:
+                                Number(duration.value),
+                            category:
+                                categoryInput.value.trim()
+                        })
+                    }
+                );
+
+                const data = await response.json();
+
+                if (response.status === 401) {
+                    if (status) {
+                        status.textContent =
+                            "Войдите в аккаунт.";
+                    }
+
+                    return;
+                }
+
+                if (!response.ok || !data.ok) {
+                    if (status) {
+                        status.textContent =
+                            "Не удалось сохранить.";
+                    }
+
+                    return;
+                }
+
+                if (current) {
+                    current.textContent =
+                        data.intent_text ||
+                        "Статус пока не указан";
+                }
+
+                if (status) {
                     status.textContent =
-                        "Сохраняем...";
-                }}
-
-                try {{
-                    const response =
-                        await fetch(
-                            "/api/profile",
-                            {{
-                                method: "POST",
-
-                                headers: {{
-                                    "Content-Type":
-                                        "application/json"
-                                }},
-
-                                body: JSON.stringify({{
-                                    open_contact:
-                                        openContact.checked,
-
-                                    intent_text:
-                                        intent.value.trim(),
-
-                                    duration_days:
-                                        Number(
-                                            duration.value
-                                        )
-                                },
-                        category: categoryInput.value.trim()})
-                            }}
-                        );
-
-                    const data =
-                        await response.json();
-
-                    if (
-                        response.status === 401
-                    ) {{
-                        if (status) {{
-                            status.textContent =
-                                "Войдите в аккаунт.";
-                        }}
-
-                        saveButton.disabled = false;
-                        return;
-                    }}
-
-                    if (!data.ok) {{
-                        if (status) {{
-                            status.textContent =
-                                "Не удалось сохранить.";
-                        }}
-
-                        saveButton.disabled = false;
-                        return;
-                    }}
-
-                    if (current) {{
-                        current.textContent =
-                            data.intent_text ||
-                            "Статус пока не указан";
-                    }}
-
-                    if (status) {{
-                        status.textContent =
-                            "✓ Статус сохранён";
-                    }}
-
-                }} catch (_) {{
-                    if (status) {{
-                        status.textContent =
-                            "Ошибка соединения.";
-                    }}
-                }}
-
+                        "✓ Статус сохранён";
+                }
+            } catch (_) {
+                if (status) {
+                    status.textContent =
+                        "Ошибка соединения.";
+                }
+            } finally {
                 saveButton.disabled = false;
-            }}
-        );
-    }}
-
-
-}})();
+            }
+        }
+    );
+})();
 </script>"####
         .to_string();
 
