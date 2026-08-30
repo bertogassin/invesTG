@@ -13,6 +13,8 @@ const CONTINENTS: &[(&str, &str)] = &[
 
 use super::geography_countries::COUNTRIES;
 
+const CITY_CATALOG: &str = include_str!("../../data/geography/cities15000.tsv");
+
 const CITIES: &[(&str, &str, &str, i64, i64, i64)] = &[
     ("DE", "DE-BERLIN", "Берлин", 0, 0, 0),
     ("DE", "DE-HAMBURG", "Гамбург", 0, 0, 1),
@@ -101,10 +103,6 @@ pub fn initialize_connection(connection: &mut Connection) -> Result<()> {
             FOREIGN KEY(country_id)
                 REFERENCES geo_countries(id),
             UNIQUE(
-                country_id,
-                name_ru
-            ),
-            UNIQUE(
                 legacy_continent_index,
                 legacy_country_index,
                 legacy_city_index
@@ -132,6 +130,37 @@ pub fn initialize_connection(connection: &mut Connection) -> Result<()> {
         "city_id",
         "ALTER TABLE city_publication_targets ADD COLUMN city_id INTEGER",
     )?;
+
+    for (column, alter_sql) in [
+        (
+            "geoname_id",
+            "ALTER TABLE geo_cities ADD COLUMN geoname_id INTEGER",
+        ),
+        (
+            "name_native",
+            "ALTER TABLE geo_cities ADD COLUMN name_native TEXT NOT NULL DEFAULT ''",
+        ),
+        (
+            "name_ascii",
+            "ALTER TABLE geo_cities ADD COLUMN name_ascii TEXT NOT NULL DEFAULT ''",
+        ),
+        (
+            "population",
+            "ALTER TABLE geo_cities ADD COLUMN population INTEGER NOT NULL DEFAULT 0",
+        ),
+        (
+            "feature_code",
+            "ALTER TABLE geo_cities ADD COLUMN feature_code TEXT NOT NULL DEFAULT ''",
+        ),
+        (
+            "source_modified_at",
+            "ALTER TABLE geo_cities ADD COLUMN source_modified_at TEXT NOT NULL DEFAULT ''",
+        ),
+    ] {
+        add_column_if_missing(connection, "geo_cities", column, alter_sql)?;
+    }
+
+    remove_city_name_unique_constraint(connection)?;
 
     let transaction = connection.transaction()?;
 
@@ -221,6 +250,133 @@ pub fn initialize_connection(connection: &mut Connection) -> Result<()> {
         )?;
     }
 
+    let city_catalog_imported: i64 = transaction.query_row(
+        "SELECT COUNT(*)
+             FROM geography_v2_migrations
+             WHERE version = 2",
+        [],
+        |row| row.get(0),
+    )?;
+
+    if city_catalog_imported == 0 {
+        let mut imported_cities = 0_i64;
+
+        for (line_index, line) in CITY_CATALOG.lines().enumerate().skip(1) {
+            if line.trim().is_empty() {
+                continue;
+            }
+
+            let fields = line.split('\t').collect::<Vec<_>>();
+
+            if fields.len() != 12 {
+                return Err(rusqlite::Error::InvalidQuery);
+            }
+
+            let geoname_id = fields[0]
+                .parse::<i64>()
+                .map_err(|_| rusqlite::Error::InvalidQuery)?;
+
+            let latitude = fields[6]
+                .parse::<f64>()
+                .map_err(|_| rusqlite::Error::InvalidQuery)?;
+
+            let longitude = fields[7]
+                .parse::<f64>()
+                .map_err(|_| rusqlite::Error::InvalidQuery)?;
+
+            let population = fields[9]
+                .parse::<i64>()
+                .map_err(|_| rusqlite::Error::InvalidQuery)?;
+
+            if geoname_id <= 0
+                || population < 0
+                || fields[1].is_empty()
+                || fields[2].len() != 2
+                || fields[3].is_empty()
+                || fields[8].is_empty()
+            {
+                return Err(rusqlite::Error::InvalidQuery);
+            }
+
+            let affected = transaction.execute(
+                "INSERT INTO geo_cities (
+                    country_id,
+                    stable_key,
+                    name_ru,
+                    name_native,
+                    name_ascii,
+                    latitude,
+                    longitude,
+                    timezone,
+                    population,
+                    feature_code,
+                    geoname_id,
+                    source_modified_at,
+                    is_active
+                 )
+                 SELECT
+                    country.id,
+                    ?2,
+                    ?3,
+                    ?4,
+                    ?5,
+                    ?6,
+                    ?7,
+                    ?8,
+                    ?9,
+                    ?10,
+                    ?11,
+                    ?12,
+                    1
+                 FROM geo_countries AS country
+                 WHERE country.iso2 = ?1
+                 ON CONFLICT(stable_key) DO UPDATE SET
+                    country_id = excluded.country_id,
+                    name_ru = excluded.name_ru,
+                    name_native = excluded.name_native,
+                    name_ascii = excluded.name_ascii,
+                    latitude = excluded.latitude,
+                    longitude = excluded.longitude,
+                    timezone = excluded.timezone,
+                    population = excluded.population,
+                    feature_code = excluded.feature_code,
+                    geoname_id = excluded.geoname_id,
+                    source_modified_at =
+                        excluded.source_modified_at,
+                    is_active = 1,
+                    updated_at = strftime('%s','now')",
+                params![
+                    fields[2], fields[1], fields[3], fields[4], fields[5], latitude, longitude,
+                    fields[8], population, fields[10], geoname_id, fields[11],
+                ],
+            )?;
+
+            if affected != 1 {
+                eprintln!("city catalog row failed: {}", line_index + 1);
+
+                return Err(rusqlite::Error::QueryReturnedNoRows);
+            }
+
+            imported_cities += 1;
+        }
+
+        if imported_cities != 34_104 {
+            return Err(rusqlite::Error::InvalidQuery);
+        }
+
+        transaction.execute(
+            "INSERT INTO geography_v2_migrations (
+                version,
+                name
+             )
+             VALUES (
+                2,
+                'geonames_cities15000_catalog'
+             )",
+            [],
+        )?;
+    }
+
     transaction.execute(
         "UPDATE resources
          SET city_id = (
@@ -289,6 +445,15 @@ pub fn initialize_connection(connection: &mut Connection) -> Result<()> {
 
     connection.execute_batch(
         r#"
+        CREATE UNIQUE INDEX IF NOT EXISTS
+            idx_geo_cities_geoname_id
+        ON geo_cities(geoname_id)
+        WHERE geoname_id IS NOT NULL;
+
+        CREATE INDEX IF NOT EXISTS
+            idx_geo_cities_population
+        ON geo_cities(country_id, population DESC, name_ru);
+
         CREATE INDEX IF NOT EXISTS idx_resources_city_id
         ON resources(city_id, moderation_status, is_active);
 
@@ -306,6 +471,143 @@ pub fn initialize_connection(connection: &mut Connection) -> Result<()> {
     )?;
 
     Ok(())
+}
+
+fn remove_city_name_unique_constraint(connection: &Connection) -> Result<()> {
+    let has_old_constraint = {
+        let mut indexes = connection.prepare("PRAGMA index_list(geo_cities)")?;
+
+        let index_rows = indexes
+            .query_map([], |row| {
+                Ok((row.get::<_, String>(1)?, row.get::<_, String>(3)?))
+            })?
+            .collect::<Result<Vec<_>>>()?;
+
+        let mut found = false;
+
+        for (index_name, origin) in index_rows {
+            if origin != "u" {
+                continue;
+            }
+
+            let pragma = format!("PRAGMA index_info({index_name})");
+            let mut columns = connection.prepare(&pragma)?;
+
+            let column_names = columns
+                .query_map([], |row| row.get::<_, String>(2))?
+                .collect::<Result<Vec<_>>>()?;
+
+            if column_names == ["country_id", "name_ru"] {
+                found = true;
+                break;
+            }
+        }
+
+        found
+    };
+
+    if !has_old_constraint {
+        return Ok(());
+    }
+
+    connection.pragma_update(None, "foreign_keys", "OFF")?;
+
+    let rebuild_result = connection.execute_batch(
+        r#"
+        BEGIN IMMEDIATE;
+
+        DROP TABLE IF EXISTS geo_cities_rebuilt;
+
+        CREATE TABLE geo_cities_rebuilt (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            country_id INTEGER NOT NULL,
+            stable_key TEXT NOT NULL UNIQUE,
+            name_ru TEXT NOT NULL,
+            latitude REAL,
+            longitude REAL,
+            timezone TEXT NOT NULL DEFAULT '',
+            legacy_continent_index INTEGER,
+            legacy_country_index INTEGER,
+            legacy_city_index INTEGER,
+            is_active INTEGER NOT NULL DEFAULT 1
+                CHECK(is_active IN (0,1)),
+            created_at INTEGER NOT NULL
+                DEFAULT (strftime('%s','now')),
+            updated_at INTEGER NOT NULL
+                DEFAULT (strftime('%s','now')),
+            geoname_id INTEGER,
+            name_native TEXT NOT NULL DEFAULT '',
+            name_ascii TEXT NOT NULL DEFAULT '',
+            population INTEGER NOT NULL DEFAULT 0,
+            feature_code TEXT NOT NULL DEFAULT '',
+            source_modified_at TEXT NOT NULL DEFAULT '',
+            FOREIGN KEY(country_id)
+                REFERENCES geo_countries(id),
+            UNIQUE(
+                legacy_continent_index,
+                legacy_country_index,
+                legacy_city_index
+            )
+        );
+
+        INSERT INTO geo_cities_rebuilt (
+            id,
+            country_id,
+            stable_key,
+            name_ru,
+            latitude,
+            longitude,
+            timezone,
+            legacy_continent_index,
+            legacy_country_index,
+            legacy_city_index,
+            is_active,
+            created_at,
+            updated_at,
+            geoname_id,
+            name_native,
+            name_ascii,
+            population,
+            feature_code,
+            source_modified_at
+        )
+        SELECT
+            id,
+            country_id,
+            stable_key,
+            name_ru,
+            latitude,
+            longitude,
+            timezone,
+            legacy_continent_index,
+            legacy_country_index,
+            legacy_city_index,
+            is_active,
+            created_at,
+            updated_at,
+            geoname_id,
+            name_native,
+            name_ascii,
+            population,
+            feature_code,
+            source_modified_at
+        FROM geo_cities;
+
+        DROP TABLE geo_cities;
+
+        ALTER TABLE geo_cities_rebuilt
+        RENAME TO geo_cities;
+
+        COMMIT;
+        "#,
+    );
+
+    if rebuild_result.is_err() {
+        let _ = connection.execute_batch("ROLLBACK;");
+    }
+
+    connection.pragma_update(None, "foreign_keys", "ON")?;
+    rebuild_result
 }
 
 fn add_column_if_missing(
@@ -397,6 +699,21 @@ mod tests {
             .expect("base schema");
 
         connection
+    }
+
+    #[test]
+    fn world_city_catalog_is_stable() {
+        let rows = CITY_CATALOG
+            .lines()
+            .skip(1)
+            .filter(|line| !line.trim().is_empty())
+            .collect::<Vec<_>>();
+
+        assert_eq!(rows.len(), 34_104);
+
+        assert!(rows.iter().any(|line| {
+            line.starts_with("2990440\tFR-NICE\tFR\tНицца\t") && line.contains("\tEurope/Paris\t")
+        }));
     }
 
     #[test]
