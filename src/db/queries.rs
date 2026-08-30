@@ -631,5 +631,7 @@ pub fn init_db() -> Result<Connection> {
     // BOT B3.5A — additive persistent security storage.
     crate::db::security::init_security_schema(&conn)?;
 
+    crate::db::promotions::init_promotion_schema(&conn)?;
+
     Ok(conn)
 }
