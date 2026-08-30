@@ -1478,3 +1478,58 @@ body.chat-overlay-open #chat-form.chat-composer {
     outline:2px solid rgba(255,255,255,.75);
     outline-offset:2px;
 }
+
+/* Chat V5.6 mobile composer gesture lock */
+body:has(#chat-form) {
+    overscroll-behavior-x: none;
+}
+
+#chat-form.chat-composer {
+    /*
+     * Жест, начатый на внешней рамке панели, не должен
+     * прокручивать страницу или сдвигать всю панель.
+     */
+    touch-action: none;
+    overscroll-behavior: none;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+#chat-form.chat-composer .chat-composer-main {
+    touch-action: none;
+    overscroll-behavior: none;
+}
+
+#chat-input {
+    /*
+     * Прокручивается только содержимое длинного сообщения.
+     */
+    touch-action: pan-y;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+    overflow-y: auto !important;
+    resize: none !important;
+    -webkit-user-select: text;
+    user-select: text;
+}
+
+#chat-form.chat-composer button {
+    touch-action: manipulation;
+}
+
+@media (max-width: 540px) {
+    #chat-form.chat-composer {
+        /*
+         * Убираем визуальный эффект нескольких рамок,
+         * сохраняя одну основную границу панели.
+         */
+        border-width: 1px !important;
+        box-shadow:
+            0 12px 34px rgba(0, 0, 0, .32),
+            inset 0 1px 0 rgba(255, 255, 255, .045) !important;
+    }
+
+    #chat-input {
+        max-height: 128px !important;
+    }
+}
