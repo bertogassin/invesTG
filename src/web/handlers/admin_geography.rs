@@ -1153,6 +1153,15 @@ pub async fn admin_geography_group_save(
                  city_name = ?2,
                  telegram_chat_id = ?3,
                  telegram_url = ?4,
+                 platform = 'telegram',
+                 external_target_id = CAST(?3 AS TEXT),
+                 external_url = ?4,
+                 capabilities =
+                     '[\"publish\",\"moderate\",\"audit\"]',
+                 provider_status = CASE
+                     WHEN ?5 = 1 THEN 'active'
+                     ELSE 'disabled'
+                 END,
                  is_active = ?5,
                  updated_at = strftime('%s','now')
              WHERE id = ?6",
@@ -1177,11 +1186,25 @@ pub async fn admin_geography_group_save(
                  telegram_chat_id,
                  telegram_url,
                  target_kind,
+                 platform,
+                 external_target_id,
+                 external_url,
+                 capabilities,
+                 provider_status,
                  is_active
              )
              VALUES (
                  ?1, ?2, ?3, ?4, ?5,
-                 ?6, ?7, ?8, 'group', ?9
+                 ?6, ?7, ?8, 'group',
+                 'telegram',
+                 CAST(?7 AS TEXT),
+                 ?8,
+                 '[\"publish\",\"moderate\",\"audit\"]',
+                 CASE
+                     WHEN ?9 = 1 THEN 'active'
+                     ELSE 'disabled'
+                 END,
+                 ?9
              )",
             params![
                 1_000_000_i64 + continent_id,

@@ -133,6 +133,40 @@ pub fn initialize_connection(connection: &mut Connection) -> Result<()> {
 
     for (column, alter_sql) in [
         (
+            "telegram_url",
+            "ALTER TABLE city_publication_targets ADD COLUMN telegram_url TEXT NOT NULL DEFAULT ''",
+        ),
+        (
+            "platform",
+            "ALTER TABLE city_publication_targets ADD COLUMN platform TEXT NOT NULL DEFAULT 'telegram'",
+        ),
+        (
+            "external_target_id",
+            "ALTER TABLE city_publication_targets ADD COLUMN external_target_id TEXT NOT NULL DEFAULT ''",
+        ),
+        (
+            "external_url",
+            "ALTER TABLE city_publication_targets ADD COLUMN external_url TEXT NOT NULL DEFAULT ''",
+        ),
+        (
+            "capabilities",
+            "ALTER TABLE city_publication_targets ADD COLUMN capabilities TEXT NOT NULL DEFAULT '[]'",
+        ),
+        (
+            "provider_status",
+            "ALTER TABLE city_publication_targets ADD COLUMN provider_status TEXT NOT NULL DEFAULT 'active'",
+        ),
+    ] {
+        add_column_if_missing(
+            connection,
+            "city_publication_targets",
+            column,
+            alter_sql,
+        )?;
+    }
+
+    for (column, alter_sql) in [
+        (
             "geoname_id",
             "ALTER TABLE geo_cities ADD COLUMN geoname_id INTEGER",
         ),
@@ -409,6 +443,26 @@ pub fn initialize_connection(connection: &mut Connection) -> Result<()> {
         [],
     )?;
 
+    transaction.execute(
+        "UPDATE city_publication_targets
+         SET platform = 'telegram',
+             external_target_id =
+                 CAST(telegram_chat_id AS TEXT),
+             external_url = telegram_url,
+             capabilities =
+                 '[\"publish\",\"moderate\",\"audit\"]',
+             provider_status = CASE
+                 WHEN is_active = 1 THEN 'active'
+                 ELSE 'disabled'
+             END
+         WHERE telegram_chat_id <> 0
+           AND (
+               external_target_id = ''
+               OR external_target_id IS NULL
+           )",
+        [],
+    )?;
+
     let unmapped_resources: i64 = transaction.query_row(
         "SELECT COUNT(*)
          FROM resources
@@ -460,6 +514,22 @@ pub fn initialize_connection(connection: &mut Connection) -> Result<()> {
         CREATE INDEX IF NOT EXISTS
             idx_city_publication_targets_city_id
         ON city_publication_targets(city_id, is_active);
+
+        CREATE INDEX IF NOT EXISTS
+            idx_community_targets_platform
+        ON city_publication_targets(
+            platform,
+            provider_status,
+            is_active
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS
+            idx_community_targets_external_identity
+        ON city_publication_targets(
+            platform,
+            external_target_id
+        )
+        WHERE external_target_id <> '';
 
         CREATE UNIQUE INDEX IF NOT EXISTS
             idx_one_active_primary_group_per_city
@@ -699,6 +769,42 @@ mod tests {
             .expect("base schema");
 
         connection
+    }
+
+    #[test]
+    fn publication_targets_have_universal_platform_identity() {
+        let mut connection = test_connection();
+
+        initialize_connection(&mut connection).expect("geography migration");
+
+        let target = connection
+            .query_row(
+                "SELECT
+                     platform,
+                     external_target_id,
+                     external_url,
+                     capabilities,
+                     provider_status
+                 FROM city_publication_targets
+                 WHERE id = 1",
+                [],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, String>(3)?,
+                        row.get::<_, String>(4)?,
+                    ))
+                },
+            )
+            .expect("universal target");
+
+        assert_eq!(target.0, "telegram");
+        assert_eq!(target.1, "-1001");
+        assert_eq!(target.2, "");
+        assert!(target.3.contains("moderate"));
+        assert_eq!(target.4, "active");
     }
 
     #[test]
