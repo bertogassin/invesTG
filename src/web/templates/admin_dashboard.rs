@@ -119,7 +119,10 @@ pub(crate) fn render_admin_dashboard(data: AdminDashboardData<'_>) -> String {
     gap:12px;
 }
 .admin-stat {
+    display:block;
     min-height:132px;
+    color:inherit;
+    text-decoration:none;
     padding:18px;
     border:1px solid var(--owner-line);
     border-radius:21px;
@@ -506,6 +509,7 @@ pub(crate) fn render_admin_dashboard(data: AdminDashboardData<'_>) -> String {
          aria-label="Разделы центра">
         <a href="#global-overview">Обзор</a>
         <a href="#global-indicators">Показатели</a>
+        <a href="/app/admin/resources?filter=pending">Ресурсы</a>
         <a href="#system-state">Система</a>
         <a href="#admin-hierarchy">Иерархия</a>
         <a href="/app/center/administrators">Администраторы</a>
@@ -663,28 +667,65 @@ pub(crate) fn render_admin_dashboard(data: AdminDashboardData<'_>) -> String {
 
 fn render_stats(data: &AdminDashboardData<'_>) -> String {
     let values = [
-        ("👥", data.users, "Активные пользователи"),
-        ("◈", data.resources, "Активные ресурсы"),
-        ("⌛", data.pending_resources, "Ожидают проверки"),
-        ("★", data.premium_resources, "Premium-ресурсы"),
-        ("⚑", data.complaints, "Открытые жалобы"),
-        ("🔔", data.unread_notifications, "Ваши уведомления"),
-        ("🔐", data.active_sessions, "Admin-сессии"),
-        ("▤", data.audit_events, "События аудита"),
+        ("👥", data.users, "Активные пользователи", None),
+        (
+            "◈",
+            data.resources,
+            "Активные ресурсы",
+            Some("/app/admin/resources"),
+        ),
+        (
+            "⌛",
+            data.pending_resources,
+            "Ожидают проверки",
+            Some("/app/admin/resources?filter=pending"),
+        ),
+        (
+            "★",
+            data.premium_resources,
+            "Premium-ресурсы",
+            Some("/app/admin/resources?filter=premium"),
+        ),
+        (
+            "⚑",
+            data.complaints,
+            "Открытые жалобы",
+            Some("/app/admin/reports"),
+        ),
+        ("🔔", data.unread_notifications, "Ваши уведомления", None),
+        (
+            "🔐",
+            data.active_sessions,
+            "Admin-сессии",
+            Some("/app/center/security"),
+        ),
+        ("▤", data.audit_events, "События аудита", None),
     ];
 
     values
         .iter()
-        .map(|(icon, value, label)| {
-            format!(
-                r#"
+        .map(|(icon, value, label, href)| {
+            if let Some(href) = href {
+                format!(
+                    r#"
+<a class="admin-stat" href="{href}">
+    <div class="admin-stat-icon">{icon}</div>
+    <div class="admin-stat-value">{value}</div>
+    <div class="admin-stat-label">{label}</div>
+</a>
+"#
+                )
+            } else {
+                format!(
+                    r#"
 <article class="admin-stat">
     <div class="admin-stat-icon">{icon}</div>
     <div class="admin-stat-value">{value}</div>
     <div class="admin-stat-label">{label}</div>
 </article>
 "#
-            )
+                )
+            }
         })
         .collect()
 }

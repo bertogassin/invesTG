@@ -1,4 +1,9 @@
-use super::auth::{create_admin_session, is_admin_session, verify_telegram_init_data};
+use super::admin_access::{
+    load_admin_context, verify_admin_session as verify_admin_v2_session, AdminPermission,
+};
+use super::auth::{
+    create_admin_session, is_admin_session, verify_authenticated_user, verify_telegram_init_data,
+};
 use super::common::{
     csrf_rejected_response, input_text_is_valid, rate_limit_retry_after, request_is_cross_site,
     telegram_owner_user_id,
@@ -14,6 +19,26 @@ use axum::{
 };
 use serde_json::json;
 use std::collections::BTreeMap;
+
+fn is_resource_moderation_session(state: &AppState, headers: &HeaderMap) -> bool {
+    // Сохраняем поддержку старой административной панели.
+    if is_admin_session(state, headers) {
+        return true;
+    }
+
+    // Admin V2 использует отдельную короткую серверную сессию.
+    let Some(user) = verify_authenticated_user(state, headers) else {
+        return false;
+    };
+
+    let Some(context) = load_admin_context(state, user.user_id) else {
+        return false;
+    };
+
+    context.is_owner()
+        && context.has_permission(AdminPermission::ModerationReview)
+        && verify_admin_v2_session(state, headers, context.user_id, context.assignment_id)
+}
 
 pub async fn admin_login_page() -> Html<String> {
     let head_extra = r####"<script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -758,7 +783,7 @@ pub async fn admin_resources(
         );
     }
 
-    if !is_admin_session(&state, &headers) {
+    if !is_resource_moderation_session(&state, &headers) {
         return Html(
             r#"<h1>403</h1>
 <p>Доступ запрещён.</p>
@@ -1429,7 +1454,7 @@ pub async fn admin_bulk_resources(
             .into_response();
     }
 
-    if !is_admin_session(&state, &headers) {
+    if !is_resource_moderation_session(&state, &headers) {
         return (
             StatusCode::FORBIDDEN,
             Html("<h1>403</h1><p>Доступ запрещён</p>".to_string()),
@@ -1537,7 +1562,7 @@ async fn admin_toggle_field(
     id: i64,
     field: &str,
 ) -> Response {
-    if !is_admin_session(state, headers) {
+    if !is_resource_moderation_session(state, headers) {
         return (StatusCode::FORBIDDEN, Html("<h1>403</h1>".to_string())).into_response();
     }
 
@@ -1629,7 +1654,7 @@ pub async fn admin_approve_resource(
         return csrf_rejected_response();
     }
 
-    if !is_admin_session(&state, &headers) {
+    if !is_resource_moderation_session(&state, &headers) {
         return (StatusCode::UNAUTHORIZED, "Доступ запрещён").into_response();
     }
 
@@ -1727,7 +1752,7 @@ pub async fn admin_reject_resource(
         return csrf_rejected_response();
     }
 
-    if !is_admin_session(&state, &headers) {
+    if !is_resource_moderation_session(&state, &headers) {
         return (StatusCode::UNAUTHORIZED, "Доступ запрещён").into_response();
     }
 
