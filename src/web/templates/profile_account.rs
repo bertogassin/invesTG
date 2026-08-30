@@ -81,7 +81,7 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
     };
 
     let intent_status_text = if safe_intent_text.is_empty() {
-        "Статус пока не указан".to_string()
+        "Статус не указан".to_string()
     } else if intent_until > 0 {
         safe_intent_text.to_string()
     } else {
@@ -859,18 +859,7 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
     </div>
 </section>
 
-<section class="rm-future-panel">
-    <strong>
-        Следующий уровень личного центра
-    </strong>
-    <p>
-        Работа, навыки, услуги, проекты и личные цели
-        будут подключаться сюда постепенно.
-        Бесплатный центр останется полноценным;
-        Premium добавит аналитику, оформление,
-        автоматизацию и продвижение.
-    </p>
-</section>
+
 "#,
             availability_class = availability_class,
             availability_text = availability_text,
@@ -1210,8 +1199,8 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
                 id: None,
                 href: "/app/contact-requests",
                 icon_html: "👥",
-                title: "Запросы на связь",
-                meta: "Входящие запросы от участников",
+                title: "Архив запросов",
+                meta: "Ранее полученные запросы",
                 trailing_html: Some(&format!(
                     r#"<div style="
     display:flex;
@@ -1368,7 +1357,7 @@ intent_text:
                 if (current) {
                     current.textContent =
                         data.intent_text ||
-                        "Статус пока не указан";
+                        "Статус не указан";
                 }
 
                 if (status) {
@@ -1423,7 +1412,7 @@ pub fn render_notifications(
         guest_locked_section("Уведомления")
     } else if notifications.is_empty() {
         empty_state_card(
-            "🔔 Уведомлений пока нет",
+            "Уведомлений нет",
             "Здесь появятся результаты модерации и важные изменения ваших ресурсов.",
         )
     } else {
@@ -1701,8 +1690,7 @@ pub fn render_public_user_profile(params: RenderPublicUserProfileParams<'_>) -> 
              line-height:1.5;
              margin-bottom:14px;
          ">
-        Контакт установлен. Вы можете продолжить общение
-        во внутреннем чате.
+        Открыть личный диалог.
     </div>
 
     <a href="/app/chat/{chat_user_id}"
@@ -1892,8 +1880,8 @@ pub fn render_public_user_profile(params: RenderPublicUserProfileParams<'_>) -> 
 
     let cards = if resources.is_empty() {
         empty_state_card(
-            "Публичных ресурсов пока нет",
-            "У этого участника пока нет опубликованных ресурсов.",
+            "Ресурсы не опубликованы",
+            "В профиле нет опубликованных ресурсов.",
         )
     } else {
         resources
@@ -2232,7 +2220,7 @@ pub fn render_public_user_profile(params: RenderPublicUserProfileParams<'_>) -> 
                 "user",
                 "Участник",
                 &hero_display_name,
-                "Публичный профиль участника сообщества.",
+                "Профиль участника ResursMap.",
             ),
             content = main_html,
         ),

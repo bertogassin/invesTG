@@ -13,8 +13,8 @@ pub fn render_contact_requests(
         guest_locked_section("Запросы на связь")
     } else if requests.is_empty() {
         empty_state_card(
-            "Входящих запросов пока нет",
-            "Когда кто-то захочет связаться через ResursMap, запрос появится здесь.",
+            "Нет входящих запросов",
+            "Новые запросы будут отображаться здесь.",
         )
     } else {
         requests
@@ -340,7 +340,7 @@ pub fn render_contact_requests(
             "user",
             "Связи",
             "Запросы на связь",
-            "Здесь вы решаете, кто сможет начать общение с вами внутри ResursMap.",
+            "Управление ранее полученными запросами.",
         ),
         &content_html,
         &bottom_nav("profile"),
@@ -411,8 +411,8 @@ pub fn render_messages(
         guest_locked_section("Сообщения")
     } else if conversations.is_empty() {
         empty_state_card(
-            "Диалогов пока нет",
-            "После принятия запроса на связь здесь появится внутренний чат.",
+            "Нет диалогов",
+            "Откройте профиль участника, чтобы начать диалог.",
         )
     } else {
         conversations
@@ -460,7 +460,7 @@ pub fn render_messages(
                 let last_message_html = if has_last_message {
                     safe_last_message
                 } else {
-                    "Чат открыт. Сообщений пока нет.".to_string()
+                    "Новый диалог".to_string()
                 };
 
                 let unread_html = if unread_count > 0 {
@@ -585,7 +585,7 @@ pub fn render_messages(
             "message-circle",
             "Внутренняя связь",
             "Сообщения",
-            "Ваши личные диалоги внутри ResursMap. Список обновляется автоматически.",
+            "Личные сообщения и активные диалоги.",
         ),
         &content_html,
         &bottom_nav("profile"),
@@ -815,10 +815,7 @@ pub fn render_chat(
         && first_name.is_empty()
         && last_name.is_empty()
     {
-        empty_state_card(
-            "Чат недоступен",
-            "Между этими пользователями ещё нет подтверждённого контакта.",
-        )
+        empty_state_card("Чат недоступен", "Диалог недоступен.")
     } else {
         let first_message_id = messages.first().map(|message| message.id).unwrap_or(0);
 

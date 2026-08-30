@@ -323,7 +323,7 @@ pub fn render_continents(
     <div class="rm-stats-row">
         <div class="rm-stat">
             <strong>{users_count}</strong>
-            <span>людей</span>
+            <span>участников</span>
         </div>
         <div class="rm-stat rm-stat-online">
             <strong>{online_count}</strong>
@@ -394,7 +394,7 @@ pub fn render_continents(
     <div id="resursmap-install-hint"
          class="card-meta"
          style="margin-top:5px;line-height:1.45;">
-        Установите на телефон.
+        Приложение ResursMap
     </div>
 
     <div class="rm-install-grid">
@@ -535,7 +535,7 @@ pub fn render_continents(
                     Свяжитесь
                 </div>
                 <div class="card-meta" style="margin-top:5px;">
-                    Отправьте запрос. Для личных сообщений нужен вход.
+                    Откройте профиль и начните диалог.
                 </div>
             </div>
 
@@ -734,7 +734,7 @@ pub fn render_city(ci: usize, si: usize, zi: usize) -> String {
                         country,
                         city,
                         &format!(
-                            "{} · {}<br>Карта ресурсов города.",
+                            "{} · {}<br>Ресурсы города.",
                             escape_html(cname),
                             escape_html(country),
                         ),
@@ -1117,7 +1117,7 @@ pub fn render_menu() -> String {
 
     <div class="card" style="display:block;padding:20px;margin-top:12px;">
         <div class="card-title" style="margin-bottom:6px;">Язык</div>
-        <div class="card-meta">Русский (скоро)</div>
+        <div class="card-meta">Русский</div>
     </div>
 
     <button class="ui-button sound-test-btn"

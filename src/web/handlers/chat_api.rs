@@ -1119,7 +1119,7 @@ pub async fn api_chat_conversations(State(state): State<AppState>, headers: Head
                 &conversation.last_name,
             );
             let last_message = if conversation.last_message.is_empty() {
-                "Чат открыт. Сообщений пока нет.".to_string()
+                "Новый диалог".to_string()
             } else {
                 conversation.last_message.clone()
             };

@@ -1027,8 +1027,8 @@ pub fn render_my_resources(
         )
     } else if resources.is_empty() {
         empty_state_card(
-            "У вас пока нет ресурсов",
-            "Добавьте первый ресурс через нужный город и категорию.",
+            "Нет опубликованных ресурсов",
+            "Добавьте ресурс в выбранном городе и категории.",
         )
     } else {
         resources
@@ -1088,7 +1088,7 @@ pub fn render_my_resources(
                             color:#dc2626;
                             font-size:12px;
                             line-height:1.5;
-                        "><strong>Ресурс скрыт.</strong> Он временно не показывается пользователям.</div>"#
+                        "><strong>Ресурс скрыт.</strong> Публикация недоступна другим участникам.</div>"#
                             .to_string()
                     } else {
                         String::new()
