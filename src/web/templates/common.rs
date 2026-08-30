@@ -7,7 +7,17 @@ pub fn escape_html(value: &str) -> String {
         .replace('\'', "&#39;")
 }
 
-pub const STATIC_ASSET_VERSION: &str = "4.9.4";
+pub const STATIC_ASSET_VERSION: &str = "4.9.5";
+
+pub fn profession_label(raw: &str) -> String {
+    match raw.trim().to_lowercase().as_str() {
+        "work" | "job" | "jobs" => "Работа".to_string(),
+        "business" => "Бизнес".to_string(),
+        "services" | "service" => "Услуги".to_string(),
+        "community" => "Сообщество".to_string(),
+        _ => raw.trim().to_string(),
+    }
+}
 
 pub fn static_asset(path: &str) -> String {
     let normalized = if path.starts_with("/static/") {

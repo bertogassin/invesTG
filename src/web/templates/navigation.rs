@@ -1,7 +1,7 @@
 use super::common::{
     bottom_nav, empty_state_card, escape_html, guest_mode_hint, icon, navigation_card,
-    page_document, page_shell, people_result_card, resource_result_card, search_form_hero,
-    section_head, simple_hero, topbar,
+    page_document, page_shell, people_result_card, profession_label, resource_result_card,
+    search_form_hero, section_head, simple_hero, topbar,
 };
 use crate::geography::world;
 
@@ -359,22 +359,34 @@ pub fn render_continents(
         categories_count = people_by_category.len(),
         categories_html = _categories
             .iter()
-            .map(|(cat, cnt)| format!(
-                r#"<a class="rm-category" href="/app/search?q={cat}">{cat} <span>{cnt}</span></a>"#,
-                cat = cat,
-                cnt = cnt,
-            ))
+            .map(|(cat, cnt)| {
+                let label = profession_label(cat);
+                format!(
+                    r#"<a class="rm-category" href="/app/search?q={q}">{label} <span>{cnt}</span></a>"#,
+                    q = urlencoding::encode(cat),
+                    label = escape_html(&label),
+                    cnt = cnt,
+                )
+            })
             .collect::<Vec<_>>()
             .join(""),
-        people_categories_html = people_by_category
-            .iter()
-            .map(|(cat, cnt)| format!(
-                r#"<a class="rm-category" href="/app/search?q={cat}">{cat} <span>{cnt}</span></a>"#,
-                cat = cat,
-                cnt = cnt,
-            ))
-            .collect::<Vec<_>>()
-            .join(""),
+        people_categories_html = if people_by_category.is_empty() {
+            r#"<p class="rm-empty-professions">Пока нет указанных профессий. Откройте Аккаунт и укажите, чем вы занимаетесь.</p>"#.to_string()
+        } else {
+            people_by_category
+                .iter()
+                .map(|(cat, cnt)| {
+                    let label = profession_label(cat);
+                    format!(
+                        r#"<a class="rm-category" href="/app/search?q={q}">{label} <span>{cnt}</span></a>"#,
+                        q = urlencoding::encode(cat),
+                        label = escape_html(&label),
+                        cnt = cnt,
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("")
+        },
     );
 
     let main_html = format!(

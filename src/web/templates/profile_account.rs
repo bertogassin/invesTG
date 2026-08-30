@@ -1069,9 +1069,11 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
         <input
             id="profile-category"
             type="text"
+            list="profile-profession-suggestions"
             maxlength="80"
             value="{safe_category}"
             placeholder="Например: электрик, сантехник, дизайнер..."
+            autocomplete="off"
             style="
                 width:100%;
                 box-sizing:border-box;
@@ -1083,6 +1085,21 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
                 font:inherit;
             "
          class="ui-input">
+
+        <datalist id="profile-profession-suggestions">
+            <option value="Электрик"></option>
+            <option value="Сантехник"></option>
+            <option value="Программист"></option>
+            <option value="Дизайнер"></option>
+            <option value="Водитель"></option>
+            <option value="Строитель"></option>
+            <option value="Повар"></option>
+            <option value="Врач"></option>
+            <option value="Учитель"></option>
+            <option value="Юрист"></option>
+            <option value="Бизнес"></option>
+            <option value="Услуги"></option>
+        </datalist>
 
     </label>
 

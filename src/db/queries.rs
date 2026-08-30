@@ -633,5 +633,49 @@ pub fn init_db() -> Result<Connection> {
 
     crate::db::promotions::init_promotion_schema(&conn)?;
 
+    ensure_profile_profession_column(&conn)?;
+
     Ok(conn)
+}
+
+/// Профессия профиля. Колонка использовалась в UI/API, но не всегда
+/// существовала в старых базах — SELECT молча давал 0 профессий на главной.
+pub fn ensure_profile_profession_column(conn: &Connection) -> Result<()> {
+    let _ = conn.execute(
+        "ALTER TABLE profiles
+         ADD COLUMN category TEXT NOT NULL DEFAULT ''",
+        [],
+    );
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_profiles_category
+         ON profiles(category)",
+        [],
+    )?;
+
+    conn.execute(
+        "UPDATE profiles
+         SET category = (
+            SELECT r.category
+            FROM resources AS r
+            WHERE r.client_id = profiles.client_id
+              AND trim(r.category) <> ''
+            ORDER BY CASE r.moderation_status
+                        WHEN 'approved' THEN 0
+                        ELSE 1
+                     END,
+                     r.updated_at DESC
+            LIMIT 1
+         )
+         WHERE trim(category) = ''
+           AND EXISTS (
+             SELECT 1
+             FROM resources AS r
+             WHERE r.client_id = profiles.client_id
+               AND trim(r.category) <> ''
+           )",
+        [],
+    )?;
+
+    Ok(())
 }

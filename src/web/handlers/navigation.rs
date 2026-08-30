@@ -9,6 +9,32 @@ use axum::{
 };
 use std::collections::BTreeMap;
 
+fn grouped_category_counts(state: &AppState, sql: &str) -> Vec<(String, i64)> {
+    state
+        .db_pool
+        .get()
+        .ok()
+        .map(|conn| {
+            let mut result = Vec::new();
+            let mut stmt = match conn.prepare(sql) {
+                Ok(stmt) => stmt,
+                Err(_) => return result,
+            };
+            let rows = stmt.query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+            });
+            if let Ok(rows) = rows {
+                for row in rows.flatten() {
+                    if !row.0.is_empty() {
+                        result.push(row);
+                    }
+                }
+            }
+            result
+        })
+        .unwrap_or_default()
+}
+
 pub async fn home() -> Redirect {
     Redirect::permanent("/app")
 }
@@ -69,47 +95,32 @@ pub async fn app_root(State(state): State<AppState>, headers: HeaderMap) -> Html
         })
         .unwrap_or(0);
 
-    let categories = state.db_pool.get()
-        .ok()
-        .map(|conn| {
-            let mut stmt = conn.prepare(
-                "SELECT category, COUNT(*) as cnt FROM resources WHERE is_active = 1 GROUP BY category ORDER BY cnt DESC LIMIT 10"
-            ).ok();
-            let mut result = Vec::new();
-            if let Some(stmt) = stmt.as_mut() {
-                let rows = stmt.query_map([], |row| {
-                    Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
-                });
-                if let Ok(rows) = rows {
-                    for row in rows.flatten() {
-                        result.push(row);
-                    }
-                }
-            }
-            result
-        })
-        .unwrap_or_default();
+    let categories = grouped_category_counts(
+        &state,
+        "SELECT trim(category) AS category, COUNT(*) AS cnt
+         FROM resources
+         WHERE is_active = 1
+           AND trim(category) <> ''
+         GROUP BY trim(category)
+         ORDER BY cnt DESC
+         LIMIT 10",
+    );
 
-    let people_by_category = state.db_pool.get()
-        .ok()
-        .map(|conn| {
-            let mut stmt = conn.prepare(
-                "SELECT p.category, COUNT(*) as cnt FROM profiles p JOIN users u ON u.id = p.user_id WHERE u.is_active = 1 AND p.category <> '' GROUP BY p.category ORDER BY cnt DESC LIMIT 10"
-            ).ok();
-            let mut result = Vec::new();
-            if let Some(stmt) = stmt.as_mut() {
-                let rows = stmt.query_map([], |row| {
-                    Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
-                });
-                if let Ok(rows) = rows {
-                    for row in rows.flatten() {
-                        result.push(row);
-                    }
-                }
-            }
-            result
-        })
-        .unwrap_or_default();
+    let mut people_by_category = grouped_category_counts(
+        &state,
+        "SELECT trim(p.category) AS category, COUNT(*) AS cnt
+         FROM profiles p
+         JOIN users u ON u.id = p.user_id
+         WHERE u.is_active = 1
+           AND trim(p.category) <> ''
+         GROUP BY trim(p.category)
+         ORDER BY cnt DESC
+         LIMIT 10",
+    );
+
+    if people_by_category.is_empty() {
+        people_by_category = categories.clone();
+    }
 
     let guest_mode = verify_user_session(&state, &headers).is_none();
 
