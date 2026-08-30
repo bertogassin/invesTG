@@ -3,14 +3,16 @@ use super::admin_access::{
     AdminPermission,
 };
 use super::auth::verify_authenticated_user;
+use super::common::{csrf_rejected_response, request_is_cross_site};
 use crate::state::app_state::AppState;
 use crate::web::templates::escape_html;
 use axum::{
-    extract::State,
+    extract::{Form, Path, State},
     http::{header, HeaderMap, HeaderValue, StatusCode},
     response::{Html, IntoResponse, Response},
 };
-use rusqlite::params;
+use rusqlite::{params, OptionalExtension};
+use serde::Deserialize;
 
 const EVENT_LIMIT: i64 = 80;
 const RISK_LIMIT: i64 = 40;
@@ -168,6 +170,41 @@ fn render_page(
         reports
             .iter()
             .map(|report| {
+                let actions = if report.status == "closed" {
+                    String::new()
+                } else {
+                    format!(
+                        r#"<div class="report-actions">
+                            <form method="post"
+                                  action="/app/center/group/report/{id}">
+                                <input name="reason"
+                                       minlength="5"
+                                       maxlength="500"
+                                       required
+                                       placeholder="Причина решения">
+                                <div class="action-buttons">
+                                    <button name="action"
+                                            value="close"
+                                            class="close">
+                                        Закрыть
+                                    </button>
+                                    <button name="action"
+                                            value="escalate"
+                                            class="escalate">
+                                        Передать выше
+                                    </button>
+                                    <button name="action"
+                                            value="reject"
+                                            class="reject">
+                                        Отклонить материал
+                                    </button>
+                                </div>
+                            </form>
+                        </div>"#,
+                        id = report.id,
+                    )
+                };
+
                 format!(
                     r#"<article class="report-card">
                         <div class="event-head">
@@ -182,6 +219,7 @@ fn render_page(
                             <span>Ресурс #{resource_id}</span>
                             <span>Unix: {created_at}</span>
                         </div>
+                        {actions}
                     </article>"#,
                     title = escape_html(&report.resource_title),
                     status = escape_html(&report.status),
@@ -189,6 +227,7 @@ fn render_page(
                     id = report.id,
                     resource_id = report.resource_id,
                     created_at = report.created_at,
+                    actions = actions,
                 )
             })
             .collect::<Vec<_>>()
@@ -377,6 +416,52 @@ h1 {{
     margin:10px 0;
     color:#cad5cf;
 }}
+.report-actions {{
+    margin-top:14px;
+    padding-top:13px;
+    border-top:1px solid var(--line);
+}}
+.report-actions form {{
+    display:grid;
+    gap:9px;
+}}
+.report-actions input {{
+    width:100%;
+    min-height:43px;
+    padding:0 12px;
+    border:1px solid var(--line);
+    border-radius:11px;
+    color:var(--text);
+    background:#0b1511;
+    font:inherit;
+}}
+.action-buttons {{
+    display:grid;
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:7px;
+}}
+.action-buttons button {{
+    min-height:41px;
+    padding:7px;
+    border-radius:10px;
+    font-weight:850;
+    cursor:pointer;
+}}
+.action-buttons .close {{
+    color:var(--text);
+    border:1px solid var(--line);
+    background:rgba(255,255,255,.05);
+}}
+.action-buttons .escalate {{
+    color:var(--gold);
+    border:1px solid rgba(214,183,122,.32);
+    background:rgba(214,183,122,.08);
+}}
+.action-buttons .reject {{
+    color:var(--red);
+    border:1px solid rgba(255,125,125,.30);
+    background:rgba(255,125,125,.08);
+}}
 .risk,
 .report-status {{
     padding:5px 8px;
@@ -431,6 +516,9 @@ h1 {{
     .risk-row {{
         align-items:flex-start;
         flex-direction:column;
+    }}
+    .action-buttons {{
+        grid-template-columns:1fr;
     }}
 }}
 </style>
@@ -770,9 +858,299 @@ pub async fn group_helper_panel(State(state): State<AppState>, headers: HeaderMa
     response
 }
 
+#[derive(Debug, Deserialize)]
+pub struct HelperReportActionForm {
+    action: String,
+    reason: String,
+}
+
+fn report_action_is_valid(value: &str) -> bool {
+    matches!(value, "close" | "escalate" | "reject")
+}
+
+fn action_reason_is_valid(value: &str) -> bool {
+    let length = value.trim().chars().count();
+
+    (5..=500).contains(&length) && !value.chars().any(char::is_control)
+}
+
+pub async fn group_helper_report_action(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(report_id): Path<i64>,
+    Form(form): Form<HelperReportActionForm>,
+) -> Response {
+    if request_is_cross_site(&headers) {
+        return csrf_rejected_response();
+    }
+
+    if report_id <= 0
+        || !report_action_is_valid(&form.action)
+        || !action_reason_is_valid(&form.reason)
+    {
+        return (StatusCode::BAD_REQUEST, "Некорректное действие или причина").into_response();
+    }
+
+    let user = match verify_authenticated_user(&state, &headers) {
+        Some(user) => user,
+        None => {
+            return (
+                StatusCode::UNAUTHORIZED,
+                "Требуется вход в аккаунт ResursMap",
+            )
+                .into_response();
+        }
+    };
+
+    let context = match load_admin_context(&state, user.user_id) {
+        Some(context) => context,
+        None => {
+            record_denied_access(
+                &state,
+                user.user_id,
+                "group_helper_action_denied",
+                "Нет активного назначения",
+            );
+
+            return (StatusCode::NOT_FOUND, "404").into_response();
+        }
+    };
+
+    if context.level.number() != 1
+        || context.scope_type != "group"
+        || !context.has_permission(AdminPermission::ModerationReview)
+        || !context.has_permission(AdminPermission::ComplaintsReview)
+    {
+        record_denied_access(
+            &state,
+            user.user_id,
+            "group_helper_action_permission_denied",
+            "Нет территориальных прав уровня 1",
+        );
+
+        return (StatusCode::FORBIDDEN, "Действие недоступно").into_response();
+    }
+
+    if !verify_admin_session(&state, &headers, context.user_id, context.assignment_id) {
+        return (
+            StatusCode::UNAUTHORIZED,
+            "Административная сессия недействительна",
+        )
+            .into_response();
+    }
+
+    let mut connection = match crate::db::pool::get_connection(&state.db_pool) {
+        Ok(connection) => connection,
+        Err(_) => {
+            return (StatusCode::SERVICE_UNAVAILABLE, "База данных недоступна").into_response();
+        }
+    };
+
+    let scoped_report = connection
+        .query_row(
+            "SELECT
+                 report.resource_id,
+                 report.status,
+                 city.stable_key
+             FROM resource_reports AS report
+             JOIN resources AS resource
+               ON resource.id = report.resource_id
+             JOIN geo_cities AS city
+               ON city.id = resource.city_id
+             JOIN geographic_scopes AS city_scope
+               ON city_scope.scope_type = 'city'
+              AND city_scope.external_key =
+                  'city:' || city.stable_key
+             JOIN geographic_scopes AS group_scope
+               ON group_scope.parent_scope_id = city_scope.id
+              AND group_scope.scope_type = 'group'
+              AND group_scope.is_active = 1
+             WHERE report.id = ?1
+               AND group_scope.id = ?2",
+            params![report_id, context.scope_id],
+            |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                ))
+            },
+        )
+        .optional();
+
+    let (resource_id, report_status, stable_key) = match scoped_report {
+        Ok(Some(report)) => report,
+        Ok(None) => {
+            record_denied_access(
+                &state,
+                context.user_id,
+                "group_helper_report_scope_denied",
+                &format!("report_id={report_id}"),
+            );
+
+            return (
+                StatusCode::FORBIDDEN,
+                "Жалоба находится вне назначенной группы",
+            )
+                .into_response();
+        }
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Не удалось проверить жалобу",
+            )
+                .into_response();
+        }
+    };
+
+    if report_status == "closed" {
+        return (StatusCode::CONFLICT, "Жалоба уже закрыта").into_response();
+    }
+
+    let reason = form.reason.trim();
+    let transaction = match connection.transaction() {
+        Ok(transaction) => transaction,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "Не удалось открыть транзакцию",
+            )
+                .into_response();
+        }
+    };
+
+    let result = match form.action.as_str() {
+        "close" => transaction.execute(
+            "UPDATE resource_reports
+             SET status = 'closed',
+                 updated_at = strftime('%s','now')
+             WHERE id = ?1",
+            params![report_id],
+        ),
+
+        "escalate" => transaction.execute(
+            "UPDATE resource_reports
+             SET status = 'escalated',
+                 updated_at = strftime('%s','now')
+             WHERE id = ?1",
+            params![report_id],
+        ),
+
+        "reject" => {
+            let resource_update = transaction.execute(
+                "UPDATE resources
+                 SET moderation_status = 'rejected',
+                     rejection_reason = ?2,
+                     is_verified = 0,
+                     is_active = 0,
+                     updated_at = strftime('%s','now')
+                 WHERE id = ?1",
+                params![resource_id, format!("Решение помощника группы: {reason}"),],
+            );
+
+            if resource_update.is_err() {
+                resource_update
+            } else {
+                transaction.execute(
+                    "UPDATE resource_reports
+                     SET status = 'closed',
+                         updated_at = strftime('%s','now')
+                     WHERE id = ?1",
+                    params![report_id],
+                )
+            }
+        }
+
+        _ => unreachable!("validated action"),
+    };
+
+    if result.is_err() {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Не удалось применить решение",
+        )
+            .into_response();
+    }
+
+    let _ = transaction.execute(
+        "INSERT INTO moderation_actions (
+             moderator_id,
+             action_type,
+             target_type,
+             target_id,
+             details
+         )
+         VALUES (
+             ?1,
+             ?2,
+             'resource_report',
+             ?3,
+             ?4
+         )",
+        params![
+            context.user_id,
+            format!("GROUP_HELPER_{}", form.action.to_uppercase()),
+            report_id,
+            format!("city={stable_key}; resource_id={resource_id}; reason={reason}"),
+        ],
+    );
+
+    let _ = transaction.execute(
+        "INSERT INTO admin_security_events (
+             user_id,
+             assignment_id,
+             event_type,
+             severity,
+             details
+         )
+         VALUES (
+             ?1,
+             ?2,
+             'group_helper_report_action',
+             'info',
+             ?3
+         )",
+        params![
+            context.user_id,
+            context.assignment_id,
+            format!(
+                "action={}; report_id={}; city={}",
+                form.action, report_id, stable_key
+            ),
+        ],
+    );
+
+    if transaction.commit().is_err() {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Не удалось сохранить решение",
+        )
+            .into_response();
+    }
+
+    (
+        StatusCode::SEE_OTHER,
+        [(header::LOCATION, "/app/center/group")],
+    )
+        .into_response()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn report_action_policy_is_strict() {
+        assert!(report_action_is_valid("close"));
+        assert!(report_action_is_valid("escalate"));
+        assert!(report_action_is_valid("reject"));
+        assert!(!report_action_is_valid("delete"));
+        assert!(!report_action_is_valid(""));
+
+        assert!(action_reason_is_valid("Жалоба проверена"));
+        assert!(!action_reason_is_valid("нет"));
+        assert!(!action_reason_is_valid("Причина\nс переводом"));
+    }
 
     #[test]
     fn security_actions_have_stable_titles() {

@@ -40,7 +40,7 @@ mod group_helper;
 pub use admin::*;
 pub use admin_geography::{admin_geography_group_save, admin_geography_page};
 pub use admin_v2::*;
-pub use group_helper::group_helper_panel;
+pub use group_helper::{group_helper_panel, group_helper_report_action};
 
 mod navigation;
 pub use navigation::*;

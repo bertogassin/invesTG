@@ -1,5 +1,4 @@
 use super::super::handlers::administrators_panel;
-use super::super::handlers::group_helper_panel;
 use super::super::handlers::manage_admin_assignment;
 use super::super::handlers::revoke_admin_session;
 use super::super::handlers::{admin_geography_group_save, admin_geography_page};
@@ -14,6 +13,7 @@ use super::super::handlers::{
     },
 };
 use super::super::handlers::{create_admin_assignment, new_admin_assignment_page};
+use super::super::handlers::{group_helper_panel, group_helper_report_action};
 use crate::state::app_state::AppState;
 use axum::{
     routing::{get, post},
@@ -24,6 +24,10 @@ pub(super) fn routes() -> Router<AppState> {
     Router::new()
         .route("/app/center", get(center_panel))
         .route("/app/center/group", get(group_helper_panel))
+        .route(
+            "/app/center/group/report/{report_id}",
+            post(group_helper_report_action),
+        )
         .route("/app/center/geography", get(admin_geography_page))
         .route(
             "/app/center/geography/group",
