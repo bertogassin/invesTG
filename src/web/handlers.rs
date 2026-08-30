@@ -37,7 +37,7 @@ mod admin_security;
 mod admin_session_actions;
 mod admin_v2;
 pub use admin::*;
-pub use admin_geography::admin_geography_page;
+pub use admin_geography::{admin_geography_group_save, admin_geography_page};
 pub use admin_v2::*;
 
 mod navigation;

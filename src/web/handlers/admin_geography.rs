@@ -5,11 +5,11 @@ use super::auth::verify_authenticated_user;
 use crate::state::app_state::AppState;
 use crate::web::templates::escape_html;
 use axum::{
-    extract::{Query, State},
+    extract::{Form, Query, State},
     http::{header, HeaderMap, StatusCode},
     response::{Html, IntoResponse, Response},
 };
-use rusqlite::params;
+use rusqlite::{params, OptionalExtension};
 use serde::Deserialize;
 
 const CITY_RESULT_LIMIT: i64 = 80;
@@ -22,6 +22,7 @@ pub struct GeographyQuery {
 
 #[derive(Debug)]
 struct GeographyCityRow {
+    id: i64,
     stable_key: String,
     city_name: String,
     native_name: String,
@@ -75,6 +76,20 @@ fn render_city_card(row: &GeographyCityRow) -> String {
         .map(escape_html)
         .unwrap_or_else(|| "Основная городская группа".to_string());
 
+    let chat_id_value = row
+        .telegram_chat_id
+        .filter(|value| *value < 0)
+        .map(|value| value.to_string())
+        .unwrap_or_default();
+
+    let telegram_url_value = row.telegram_url.as_deref().unwrap_or_default();
+
+    let active_checked = if row.target_active == Some(1) {
+        " checked"
+    } else {
+        ""
+    };
+
     let telegram_link = row
         .telegram_url
         .as_deref()
@@ -122,6 +137,57 @@ fn render_city_card(row: &GeographyCityRow) -> String {
         <strong>{target}</strong>
         <small>Telegram-группа города</small>
         {telegram_link}
+
+        <details class="group-editor">
+            <summary>Настроить группу</summary>
+
+            <form class="group-form"
+                  method="post"
+                  action="/app/center/geography/group">
+                <input type="hidden"
+                       name="city_id"
+                       value="{city_id}">
+
+                <label>
+                    Название группы
+                    <input name="target_name"
+                           minlength="3"
+                           maxlength="80"
+                           required
+                           value="{target}">
+                </label>
+
+                <label>
+                    Telegram Chat ID
+                    <input name="telegram_chat_id"
+                           type="number"
+                           max="-1"
+                           required
+                           placeholder="-1001234567890"
+                           value="{chat_id_value}">
+                </label>
+
+                <label>
+                    Ссылка Telegram
+                    <input name="telegram_url"
+                           type="url"
+                           maxlength="200"
+                           placeholder="https://t.me/group"
+                           value="{telegram_url_value}">
+                </label>
+
+                <label class="active-control">
+                    <input name="is_active"
+                           type="checkbox"
+                           value="1"{active_checked}>
+                    Группа активна
+                </label>
+
+                <button type="submit">
+                    Сохранить группу
+                </button>
+            </form>
+        </details>
     </div>
 </article>
 "#,
@@ -137,6 +203,10 @@ fn render_city_card(row: &GeographyCityRow) -> String {
         timezone = escape_html(&row.timezone),
         target = target,
         telegram_link = telegram_link,
+        city_id = row.id,
+        chat_id_value = escape_html(&chat_id_value),
+        telegram_url_value = escape_html(telegram_url_value),
+        active_checked = active_checked,
     )
 }
 
@@ -429,6 +499,55 @@ h1 {{
     margin-top:5px;
     color:var(--muted);
 }}
+.group-editor {{
+    margin-top:14px;
+    padding-top:12px;
+    border-top:1px solid var(--line);
+}}
+.group-editor summary {{
+    cursor:pointer;
+    color:var(--gold);
+    font-size:13px;
+    font-weight:850;
+}}
+.group-form {{
+    display:grid;
+    gap:10px;
+    margin-top:12px;
+}}
+.group-form label {{
+    display:grid;
+    gap:5px;
+    color:var(--muted);
+    font-size:11px;
+    font-weight:750;
+}}
+.group-form input:not([type="hidden"]):not([type="checkbox"]) {{
+    width:100%;
+    min-height:42px;
+    padding:0 11px;
+    border:1px solid var(--line);
+    border-radius:11px;
+    color:var(--text);
+    background:#0c1016;
+    font:inherit;
+}}
+.group-form .active-control {{
+    display:flex;
+    align-items:center;
+    grid-template-columns:auto 1fr;
+    gap:8px;
+    color:var(--text);
+}}
+.group-form button {{
+    min-height:43px;
+    border:0;
+    border-radius:11px;
+    color:#17120a;
+    background:linear-gradient(135deg,#ead29f,var(--gold));
+    font-weight:900;
+    cursor:pointer;
+}}
 .telegram-link {{
     margin-top:12px;
     color:var(--blue);
@@ -600,6 +719,7 @@ pub async fn admin_geography_page(
 
     let mut statement = match connection.prepare(
         "SELECT
+             city.id,
              city.stable_key,
              city.name_ru,
              city.name_native,
@@ -655,18 +775,19 @@ pub async fn admin_geography_page(
     let cities =
         match statement.query_map(params![search, search_pattern, CITY_RESULT_LIMIT], |row| {
             Ok(GeographyCityRow {
-                stable_key: row.get(0)?,
-                city_name: row.get(1)?,
-                native_name: row.get(2)?,
-                country_name: row.get(3)?,
-                iso2: row.get(4)?,
-                continent_name: row.get(5)?,
-                population: row.get(6)?,
-                timezone: row.get(7)?,
-                target_name: row.get(8)?,
-                telegram_chat_id: row.get(9)?,
-                telegram_url: row.get(10)?,
-                target_active: row.get(11)?,
+                id: row.get(0)?,
+                stable_key: row.get(1)?,
+                city_name: row.get(2)?,
+                native_name: row.get(3)?,
+                country_name: row.get(4)?,
+                iso2: row.get(5)?,
+                continent_name: row.get(6)?,
+                population: row.get(7)?,
+                timezone: row.get(8)?,
+                target_name: row.get(9)?,
+                telegram_chat_id: row.get(10)?,
+                telegram_url: row.get(11)?,
+                target_active: row.get(12)?,
             })
         }) {
             Ok(rows) => match rows.collect::<rusqlite::Result<Vec<_>>>() {
@@ -736,6 +857,339 @@ pub async fn admin_geography_page(
     response
 }
 
+#[derive(Debug, Deserialize)]
+pub struct GeographyGroupForm {
+    city_id: i64,
+    target_name: String,
+    telegram_chat_id: i64,
+    telegram_url: String,
+    is_active: Option<String>,
+}
+
+fn normalize_target_name(value: &str) -> Option<String> {
+    let value = value.trim().chars().take(80).collect::<String>();
+
+    (value.chars().count() >= 3).then_some(value)
+}
+
+fn normalize_telegram_url(value: &str) -> Option<String> {
+    let value = value.trim();
+
+    if value.is_empty() {
+        return Some(String::new());
+    }
+
+    if value.len() > 200
+        || !value.starts_with("https://t.me/")
+        || value.contains(char::is_whitespace)
+    {
+        return None;
+    }
+
+    Some(value.to_string())
+}
+
+pub async fn admin_geography_group_save(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Form(form): Form<GeographyGroupForm>,
+) -> Response {
+    let user = match verify_authenticated_user(&state, &headers) {
+        Some(user) => user,
+        None => {
+            return (
+                StatusCode::UNAUTHORIZED,
+                "Требуется вход в аккаунт ResursMap",
+            )
+                .into_response();
+        }
+    };
+
+    let context = match load_admin_context(&state, user.user_id) {
+        Some(context) => context,
+        None => {
+            record_denied_access(
+                &state,
+                user.user_id,
+                "admin_group_update_denied",
+                "Нет активного назначения",
+            );
+
+            return (StatusCode::NOT_FOUND, "404").into_response();
+        }
+    };
+
+    if !context.is_owner() || !context.has_permission(AdminPermission::GroupsManage) {
+        record_denied_access(
+            &state,
+            user.user_id,
+            "admin_group_permission_denied",
+            "Нет права GroupsManage",
+        );
+
+        return (StatusCode::FORBIDDEN, "Управление группами недоступно").into_response();
+    }
+
+    if !verify_admin_session(&state, &headers, context.user_id, context.assignment_id) {
+        return (
+            StatusCode::UNAUTHORIZED,
+            "Административная сессия недействительна",
+        )
+            .into_response();
+    }
+
+    if form.city_id <= 0 || form.telegram_chat_id >= 0 {
+        return (
+            StatusCode::BAD_REQUEST,
+            "Telegram Chat ID должен быть отрицательным",
+        )
+            .into_response();
+    }
+
+    let target_name = match normalize_target_name(&form.target_name) {
+        Some(value) => value,
+        None => {
+            return (
+                StatusCode::BAD_REQUEST,
+                "Название должно содержать от 3 до 80 символов",
+            )
+                .into_response();
+        }
+    };
+
+    let telegram_url = match normalize_telegram_url(&form.telegram_url) {
+        Some(value) => value,
+        None => {
+            return (
+                StatusCode::BAD_REQUEST,
+                "Допустима только ссылка https://t.me/...",
+            )
+                .into_response();
+        }
+    };
+
+    let is_active = i64::from(form.is_active.as_deref() == Some("1"));
+
+    let mut connection = match crate::db::pool::get_connection(&state.db_pool) {
+        Ok(connection) => connection,
+        Err(_) => {
+            return (StatusCode::SERVICE_UNAVAILABLE, "База данных недоступна").into_response();
+        }
+    };
+
+    let city = connection
+        .query_row(
+            "SELECT
+                 city.stable_key,
+                 city.name_ru,
+                 country.id,
+                 continent.id,
+                 city_scope.id
+             FROM geo_cities AS city
+             JOIN geo_countries AS country
+               ON country.id = city.country_id
+             JOIN geo_continents AS continent
+               ON continent.id = country.continent_id
+             JOIN geographic_scopes AS city_scope
+               ON city_scope.scope_type = 'city'
+              AND city_scope.external_key =
+                  'city:' || city.stable_key
+              AND city_scope.is_active = 1
+             WHERE city.id = ?1
+               AND city.is_active = 1",
+            params![form.city_id],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, i64>(2)?,
+                    row.get::<_, i64>(3)?,
+                    row.get::<_, i64>(4)?,
+                ))
+            },
+        )
+        .optional();
+
+    let (stable_key, city_name, country_id, continent_id, city_scope_id) = match city {
+        Ok(Some(city)) => city,
+        Ok(None) => {
+            return (StatusCode::NOT_FOUND, "Город не найден").into_response();
+        }
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Не удалось проверить город",
+            )
+                .into_response();
+        }
+    };
+
+    let transaction = match connection.transaction() {
+        Ok(transaction) => transaction,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "Не удалось открыть транзакцию",
+            )
+                .into_response();
+        }
+    };
+
+    let existing_id = transaction
+        .query_row(
+            "SELECT id
+             FROM city_publication_targets
+             WHERE city_id = ?1
+               AND target_kind = 'group'
+             ORDER BY is_active DESC, id ASC
+             LIMIT 1",
+            params![form.city_id],
+            |row| row.get::<_, i64>(0),
+        )
+        .optional();
+
+    let existing_id = match existing_id {
+        Ok(value) => value,
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Не удалось проверить текущую группу",
+            )
+                .into_response();
+        }
+    };
+
+    let write = if let Some(target_id) = existing_id {
+        transaction.execute(
+            "UPDATE city_publication_targets
+             SET target_name = ?1,
+                 city_name = ?2,
+                 telegram_chat_id = ?3,
+                 telegram_url = ?4,
+                 is_active = ?5,
+                 updated_at = strftime('%s','now')
+             WHERE id = ?6",
+            params![
+                target_name,
+                city_name,
+                form.telegram_chat_id,
+                telegram_url,
+                is_active,
+                target_id,
+            ],
+        )
+    } else {
+        transaction.execute(
+            "INSERT INTO city_publication_targets (
+                 continent_index,
+                 country_index,
+                 city_index,
+                 city_id,
+                 city_name,
+                 target_name,
+                 telegram_chat_id,
+                 telegram_url,
+                 target_kind,
+                 is_active
+             )
+             VALUES (
+                 ?1, ?2, ?3, ?4, ?5,
+                 ?6, ?7, ?8, 'group', ?9
+             )",
+            params![
+                1_000_000_i64 + continent_id,
+                1_000_000_i64 + country_id,
+                1_000_000_i64 + form.city_id,
+                form.city_id,
+                city_name,
+                target_name,
+                form.telegram_chat_id,
+                telegram_url,
+                is_active,
+            ],
+        )
+    };
+
+    if write.is_err() {
+        return (
+            StatusCode::CONFLICT,
+            "Этот Chat ID уже подключён к другому городу",
+        )
+            .into_response();
+    }
+
+    if transaction
+        .execute(
+            "INSERT INTO geographic_scopes (
+                 scope_type,
+                 parent_scope_id,
+                 external_key,
+                 display_name,
+                 is_active
+             )
+             VALUES (
+                 'group',
+                 ?1,
+                 'group:' || ?2 || ':main',
+                 ?3 || ' · ' || ?4,
+                 ?5
+             )
+             ON CONFLICT(scope_type, external_key) DO UPDATE SET
+                 parent_scope_id = excluded.parent_scope_id,
+                 display_name = excluded.display_name,
+                 is_active = excluded.is_active,
+                 updated_at = strftime('%s','now')",
+            params![city_scope_id, stable_key, target_name, city_name, is_active,],
+        )
+        .is_err()
+    {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Не удалось обновить область группы",
+        )
+            .into_response();
+    }
+
+    let _ = transaction.execute(
+        "INSERT INTO admin_security_events (
+             user_id,
+             assignment_id,
+             event_type,
+             severity,
+             details
+         )
+         VALUES (
+             ?1,
+             ?2,
+             'admin_geography_group_updated',
+             'info',
+             ?3
+         )",
+        params![
+            context.user_id,
+            context.assignment_id,
+            format!("city={stable_key}; active={is_active}"),
+        ],
+    );
+
+    if transaction.commit().is_err() {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Не удалось сохранить группу",
+        )
+            .into_response();
+    }
+
+    (
+        StatusCode::SEE_OTHER,
+        [(
+            header::LOCATION,
+            format!("/app/center/geography?q={stable_key}&saved=1"),
+        )],
+    )
+        .into_response()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -751,8 +1205,28 @@ mod tests {
     }
 
     #[test]
+    fn telegram_group_input_policy_is_strict() {
+        assert_eq!(
+            normalize_target_name("  Основная группа  "),
+            Some("Основная группа".to_string())
+        );
+
+        assert!(normalize_target_name("x").is_none());
+
+        assert_eq!(
+            normalize_telegram_url("https://t.me/resursmap"),
+            Some("https://t.me/resursmap".to_string())
+        );
+
+        assert!(normalize_telegram_url("https://example.com/group").is_none());
+
+        assert!(normalize_telegram_url("https://t.me/bad link").is_none());
+    }
+
+    #[test]
     fn telegram_status_requires_negative_chat_and_active_target() {
         let mut row = GeographyCityRow {
+            id: 1,
             stable_key: "FR-NICE".to_string(),
             city_name: "Ницца".to_string(),
             native_name: "Nice".to_string(),

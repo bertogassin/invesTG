@@ -1,7 +1,7 @@
-use super::super::handlers::admin_geography_page;
 use super::super::handlers::administrators_panel;
 use super::super::handlers::manage_admin_assignment;
 use super::super::handlers::revoke_admin_session;
+use super::super::handlers::{admin_geography_group_save, admin_geography_page};
 use super::super::handlers::{admin_security_page, admin_step_up_request, admin_step_up_verify};
 use super::super::handlers::{
     center_panel,
@@ -23,6 +23,10 @@ pub(super) fn routes() -> Router<AppState> {
     Router::new()
         .route("/app/center", get(center_panel))
         .route("/app/center/geography", get(admin_geography_page))
+        .route(
+            "/app/center/geography/group",
+            post(admin_geography_group_save),
+        )
         .route(
             "/app/center/administrators",
             get(administrators_panel).post(create_admin_assignment),
