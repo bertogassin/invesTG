@@ -1012,6 +1012,236 @@ pub fn render_resource_profile(params: RenderResourceProfileParams<'_>) -> Strin
     )
 }
 
+pub struct RenderResourcePromotionParams<'a> {
+    pub resource_id: i64,
+    pub title: &'a str,
+    pub category: &'a str,
+    pub description: &'a str,
+    pub address: &'a str,
+    pub city_name: &'a str,
+    pub target_name: &'a str,
+    pub target_id: i64,
+    pub existing_status: Option<&'a str>,
+}
+
+pub fn render_resource_promotion(params: RenderResourcePromotionParams<'_>) -> String {
+    let title = escape_html(params.title);
+    let category = escape_html(params.category);
+    let description = escape_html(params.description);
+    let address = escape_html(params.address);
+    let city_name = escape_html(params.city_name);
+    let target_name = escape_html(params.target_name);
+
+    let action_html = if params.existing_status.is_some() {
+        r#"
+<div class="card"
+     style="
+         display:block;
+         padding:18px;
+         margin-top:16px;
+         border:1px solid rgba(214,183,122,.32);
+         background:rgba(214,183,122,.07);
+     ">
+    <div class="card-title">
+        Заявка ожидает подтверждения
+    </div>
+    <div class="card-meta"
+         style="margin-top:6px;">
+        Повторная заявка не требуется.
+    </div>
+</div>
+"#
+        .to_string()
+    } else {
+        format!(
+            r#"
+<form method="post"
+      action="/app/resource/{resource_id}/promote/request"
+      class="ui-form"
+      style="margin-top:16px;">
+    <input type="hidden"
+           name="target_id"
+           value="{target_id}">
+
+    <button type="submit"
+            class="ui-button"
+            style="
+                width:100%;
+                min-height:52px;
+                border-radius:15px;
+                border:1px solid rgba(214,183,122,.55);
+                background:
+                    linear-gradient(
+                        135deg,
+                        rgba(214,183,122,.20),
+                        rgba(214,183,122,.08)
+                    );
+                color:var(--text);
+                font-weight:900;
+                cursor:pointer;
+            ">
+        Отправить на модерацию
+    </button>
+</form>
+"#,
+            resource_id = params.resource_id,
+            target_id = params.target_id,
+        )
+    };
+
+    let content = format!(
+        r#"
+<section class="card"
+         style="
+             display:block;
+             overflow:hidden;
+             padding:0;
+             border:1px solid rgba(214,183,122,.52);
+             background:
+                 radial-gradient(
+                     circle at 100% 0%,
+                     rgba(126,212,228,.15),
+                     transparent 34%
+                 ),
+                 linear-gradient(
+                     145deg,
+                     rgba(20,23,30,.99),
+                     rgba(10,12,17,.99)
+                 );
+             box-shadow:
+                 0 22px 60px rgba(0,0,0,.30),
+                 0 0 38px rgba(214,183,122,.08);
+         ">
+
+    <div style="
+        padding:15px 20px;
+        border-bottom:1px solid rgba(214,183,122,.24);
+        color:var(--gold-light);
+        font-size:12px;
+        font-weight:900;
+        letter-spacing:.12em;
+        text-transform:uppercase;
+    ">
+        RESURSMAP · {city_name}
+    </div>
+
+    <div style="padding:22px 20px;">
+
+        <div style="
+            color:var(--muted);
+            font-size:11px;
+            font-weight:800;
+            letter-spacing:.08em;
+            text-transform:uppercase;
+        ">
+            {category}
+        </div>
+
+        <h2 style="
+            margin:8px 0 12px;
+            font-size:24px;
+            line-height:1.18;
+            overflow-wrap:anywhere;
+        ">
+            {title}
+        </h2>
+
+        <div style="
+            color:var(--text);
+            font-size:14px;
+            line-height:1.55;
+            white-space:pre-wrap;
+            overflow-wrap:anywhere;
+        ">
+            {description}
+        </div>
+
+        <div style="
+            margin-top:16px;
+            color:var(--muted);
+            font-size:13px;
+            overflow-wrap:anywhere;
+        ">
+            📍 {address}
+        </div>
+
+        <div style="
+            margin-top:20px;
+            padding-top:15px;
+            border-top:1px solid rgba(214,183,122,.18);
+            color:var(--gold-light);
+            font-size:12px;
+            font-weight:850;
+        ">
+            ResursMap — люди, услуги и возможности рядом
+        </div>
+
+        <div style="
+            margin-top:7px;
+            color:var(--muted);
+            font-size:11px;
+        ">
+            resursmap.de
+        </div>
+
+    </div>
+</section>
+
+<section class="card"
+         style="
+             display:block;
+             padding:18px;
+             margin-top:16px;
+         ">
+    <div class="card-title">
+        Место публикации
+    </div>
+
+    <div class="card-meta"
+         style="margin-top:7px;">
+        {target_name} · {city_name}
+    </div>
+
+    <div class="card-meta"
+         style="
+             margin-top:10px;
+             line-height:1.5;
+         ">
+        Перед публикацией заявка проверяется администратором.
+        Контактные данные остаются на странице объявления.
+    </div>
+</section>
+
+{action_html}
+"#,
+        city_name = city_name,
+        category = category,
+        title = title,
+        description = description,
+        address = address,
+        target_name = target_name,
+        action_html = action_html,
+    );
+
+    page_shell(
+        "Продвижение · ResursMap",
+        &topbar("Продвижение", "map-pin"),
+        &back_hero(
+            &back_link(
+                &format!("/app/resource/{}", params.resource_id,),
+                "Объявление",
+                "arrow-left",
+            ),
+            "map-pin",
+            "Городская публикация",
+            "Продвижение",
+            "Предварительный просмотр публикации ResursMap.",
+        ),
+        &content,
+        "",
+    )
+}
+
 // ============================================================
 // МОИ РЕСУРСЫ
 // ============================================================
@@ -1090,6 +1320,35 @@ pub fn render_my_resources(
                             line-height:1.5;
                         "><strong>Ресурс скрыт.</strong> Публикация недоступна другим участникам.</div>"#
                             .to_string()
+                    } else {
+                        String::new()
+                    };
+
+                let promotion_button =
+                    if moderation_status == "approved"
+                        && *is_active == 1
+                    {
+                        format!(
+                            r#"<a
+                                href="/app/resource/{id}/promote"
+                                style="
+                                    display:inline-flex;
+                                    align-items:center;
+                                    justify-content:center;
+                                    min-height:42px;
+                                    padding:0 14px;
+                                    border-radius:12px;
+                                    text-decoration:none;
+                                    font-size:13px;
+                                    font-weight:850;
+                                    color:var(--gold-light);
+                                    border:1px solid rgba(214,183,122,.48);
+                                    background:rgba(214,183,122,.10);
+                                ">
+                                Продвинуть
+                            </a>"#,
+                            id = id,
+                        )
                     } else {
                         String::new()
                     };
@@ -1226,6 +1485,8 @@ pub fn render_my_resources(
                                         ✎ Редактировать
                                     </a>
 
+                                    {promotion_button}
+
                                     <a
                                         href="/app/resource/{id}"
                                         style="
@@ -1263,6 +1524,7 @@ pub fn render_my_resources(
                     moderation_badge = moderation_badge,
                     rejection_html = rejection_html,
                     hidden_html = hidden_html,
+                    promotion_button = promotion_button,
                 )
             })
             .collect::<Vec<_>>()

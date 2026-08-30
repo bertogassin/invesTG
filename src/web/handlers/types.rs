@@ -40,3 +40,8 @@ pub struct ContactRequestPayload {
 pub struct RejectResourceForm {
     pub reason: String,
 }
+
+#[derive(Debug, Deserialize)]
+pub struct PromotionRequestForm {
+    pub target_id: i64,
+}

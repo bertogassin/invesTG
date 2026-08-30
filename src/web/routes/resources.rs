@@ -1,6 +1,7 @@
 use super::super::handlers::{
     add_resource, add_resource_page, api_favorite_status, api_favorite_toggle, api_report_resource,
-    api_resource_vote, app_cat, edit_resource, edit_resource_page, my_resources, resource_profile,
+    api_resource_vote, app_cat, edit_resource, edit_resource_page, my_resources,
+    request_resource_promotion, resource_profile, resource_promotion_page,
 };
 use crate::state::app_state::AppState;
 use axum::{
@@ -12,6 +13,11 @@ pub(super) fn routes() -> Router<AppState> {
     Router::new()
         .route("/app/my-resources", get(my_resources))
         .route("/app/resource/{id}", get(resource_profile))
+        .route("/app/resource/{id}/promote", get(resource_promotion_page))
+        .route(
+            "/app/resource/{id}/promote/request",
+            post(request_resource_promotion),
+        )
         .route(
             "/app/resource/{id}/edit",
             get(edit_resource_page).post(edit_resource),

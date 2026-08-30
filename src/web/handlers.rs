@@ -24,6 +24,9 @@ pub use profiles::*;
 mod resources;
 pub use resources::*;
 
+mod resource_promotions;
+pub use resource_promotions::{request_resource_promotion, resource_promotion_page};
+
 mod admin;
 mod admin_access;
 mod admin_administrators;
