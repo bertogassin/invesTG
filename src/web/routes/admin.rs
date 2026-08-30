@@ -1,4 +1,5 @@
 use super::super::handlers::administrators_panel;
+use super::super::handlers::group_helper_panel;
 use super::super::handlers::manage_admin_assignment;
 use super::super::handlers::revoke_admin_session;
 use super::super::handlers::{admin_geography_group_save, admin_geography_page};
@@ -22,6 +23,7 @@ use axum::{
 pub(super) fn routes() -> Router<AppState> {
     Router::new()
         .route("/app/center", get(center_panel))
+        .route("/app/center/group", get(group_helper_panel))
         .route("/app/center/geography", get(admin_geography_page))
         .route(
             "/app/center/geography/group",

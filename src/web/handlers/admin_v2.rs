@@ -38,6 +38,17 @@ pub async fn center_panel(State(state): State<AppState>, headers: HeaderMap) -> 
         }
     };
 
+    if context.level.number() == 1
+        && context.scope_type == "group"
+        && context.has_permission(AdminPermission::ModerationReview)
+    {
+        return (
+            StatusCode::SEE_OTHER,
+            [(header::LOCATION, "/app/center/group")],
+        )
+            .into_response();
+    }
+
     if !context.is_owner() || !context.has_permission(AdminPermission::InfrastructureRead) {
         record_denied_access(
             &state,
