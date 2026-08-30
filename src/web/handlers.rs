@@ -32,10 +32,12 @@ mod admin_access;
 mod admin_administrators;
 mod admin_assignment_actions;
 mod admin_assignment_lifecycle;
+mod admin_geography;
 mod admin_security;
 mod admin_session_actions;
 mod admin_v2;
 pub use admin::*;
+pub use admin_geography::admin_geography_page;
 pub use admin_v2::*;
 
 mod navigation;

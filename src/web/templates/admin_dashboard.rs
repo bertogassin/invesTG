@@ -510,6 +510,7 @@ pub(crate) fn render_admin_dashboard(data: AdminDashboardData<'_>) -> String {
         <a href="#global-overview">Обзор</a>
         <a href="#global-indicators">Показатели</a>
         <a href="/app/admin/resources?filter=pending">Ресурсы</a>
+        <a href="/app/center/geography">География</a>
         <a href="#system-state">Система</a>
         <a href="#admin-hierarchy">Иерархия</a>
         <a href="/app/center/administrators">Администраторы</a>
