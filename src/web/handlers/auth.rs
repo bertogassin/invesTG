@@ -1,3 +1,4 @@
+use crate::web::templates::transactional_code_email_html;
 use super::common::{
     csrf_rejected_response, rate_limit_retry_after, request_is_cross_site, unix_now,
 };
@@ -380,15 +381,12 @@ async fn send_email_code(email: &str, code: &str) -> Result<(), String> {
             "from": from,
             "to": [email],
             "subject": "Код входа в ResursMap",
-            "html": format!(
-                "<div style=\"font-family:Arial,sans-serif;max-width:520px;margin:auto;padding:32px\">\
-                    <h2 style=\"margin:0 0 18px\">ResursMap</h2>\
-                    <p>Ваш код входа:</p>\
-                    <div style=\"font-size:34px;font-weight:800;letter-spacing:8px;margin:24px 0\">{}</div>\
-                    <p>Код действует 10 минут.</p>\
-                    <p style=\"color:#777;font-size:13px\">Если вы не запрашивали вход, просто проигнорируйте это письмо.</p>\
-                </div>",
-                code
+            "html": transactional_code_email_html(
+                "ResursMap",
+                "Ваш код входа:",
+                &code,
+                "Код действует 10 минут.",
+                "Если вы не запрашивали вход, просто проигнорируйте это письмо.",
             )
         }))
         .send()

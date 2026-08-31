@@ -7,7 +7,7 @@ pub fn escape_html(value: &str) -> String {
         .replace('\'', "&#39;")
 }
 
-pub const STATIC_ASSET_VERSION: &str = "4.9.17";
+pub const STATIC_ASSET_VERSION: &str = "4.9.18";
 
 pub fn profession_label(raw: &str) -> String {
     match raw.trim().to_lowercase().as_str() {
@@ -692,6 +692,89 @@ body::before {
 
 .card-arrow {
     color: var(--muted);
+}
+
+.rm-back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--muted);
+    text-decoration: none;
+    margin-bottom: 20px;
+}
+
+.card--result {
+    text-decoration: none;
+    color: inherit;
+    margin-bottom: 14px;
+    align-items: flex-start;
+}
+
+.card-title--lg {
+    font-size: 17px;
+    min-width: 0;
+}
+
+.card-title--people {
+    font-size: 17px;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.card-meta--mt-4 { margin-top: 4px; }
+.card-meta--mt-8 { margin-top: 8px; }
+.card-meta--mt-9 { margin-top: 9px; }
+.card-meta--wrap { overflow-wrap: anywhere; }
+
+.card-meta--desc {
+    margin-top: 8px;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+}
+
+.rm-card-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+}
+
+.rm-card-row--badges {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-top: 10px;
+}
+
+.rm-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.rm-card-rating {
+    flex: 0 0 auto;
+    font-size: 12px;
+    color: var(--muted);
+    white-space: nowrap;
+}
+
+.rm-ready-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #22c55e;
+    box-shadow: 0 0 6px rgba(34, 197, 94, .5);
+    flex: 0 0 auto;
+}
+
+.section-head--mt-24 {
+    margin-top: 24px;
 }
 
 /* -----------------------------------------------------------
@@ -3670,9 +3753,7 @@ pub(crate) fn topbar(subtitle: &str, _icon_name: &str) -> String {
 
 pub(crate) fn back_link(href: &str, label: &str, icon_name: &str) -> String {
     format!(
-        r#"<a href="{href}"
-   style="display:inline-flex;align-items:center;gap:8px;
-          color:var(--muted);text-decoration:none;margin-bottom:20px;">
+        r#"<a href="{href}" class="rm-back-link">
     {icon}
     <span>{label}</span>
 </a>"#,
@@ -3755,31 +3836,15 @@ pub(crate) fn people_result_card(
 ) -> String {
     format!(
         r#"
-<a href="{href}"
-   class="card"
-   style="
-       text-decoration:none;
-       color:inherit;
-       margin-bottom:14px;
-       align-items:flex-start;
-   ">
+<a href="{href}" class="card card--result">
 
     <div class="card-icon">
         {user_icon}
     </div>
 
-    <div class="card-content"
-         style="min-width:0;">
+    <div class="card-content">
 
-        <div class="card-title"
-             style="
-                 font-size:17px;
-                 line-height:1.3;
-                 overflow-wrap:anywhere;
-                 display:flex;
-                 align-items:center;
-                 gap:8px;
-             ">
+        <div class="card-title card-title--people">
             {ready_dot}
             {display_name}
         </div>
@@ -3788,12 +3853,7 @@ pub(crate) fn people_result_card(
 
         {intent_html}
 
-        <div style="
-            display:flex;
-            gap:8px;
-            flex-wrap:wrap;
-            margin-top:10px;
-        ">
+        <div class="rm-card-row">
             {contact_html}
         </div>
 
@@ -3808,7 +3868,7 @@ pub(crate) fn people_result_card(
         href = escape_html(href),
         user_icon = icon("user"),
         ready_dot = if is_ready {
-            r#"<span style="width:10px;height:10px;border-radius:50%;background:#22c55e;box-shadow:0 0 6px rgba(34,197,94,.5);flex:0 0 auto;"></span>"#
+            r#"<span class="rm-ready-dot"></span>"#
         } else {
             ""
         },
@@ -3848,74 +3908,39 @@ pub(crate) fn resource_result_card(params: ResourceResultCardParams<'_>) -> Stri
     } = params;
     format!(
         r#"
-<a href="{href}"
-   class="card"
-   style="
-       text-decoration:none;
-       color:inherit;
-       margin-bottom:14px;
-       align-items:flex-start;
-   ">
+<a href="{href}" class="card card--result">
 
     <div class="card-icon">{resource_icon}</div>
 
-    <div class="card-content" style="min-width:0;">
+    <div class="card-content">
 
-        <div style="
-            display:flex;
-            justify-content:space-between;
-            align-items:flex-start;
-            gap:10px;
-        ">
-            <div class="card-title"
-                 style="font-size:17px;min-width:0;">
+        <div class="rm-card-header">
+            <div class="card-title card-title--lg">
                 {title}
             </div>
 
-            <div style="
-                flex:0 0 auto;
-                font-size:12px;
-                color:var(--muted);
-                white-space:nowrap;
-            ">
+            <div class="rm-card-rating">
                 ⭐ {rating:.1} · {votes}
             </div>
         </div>
 
-        <div class="card-meta"
-             style="margin-top:5px;">
+        <div class="card-meta card-meta--mt-4">
             {category}
         </div>
 
-        <div class="card-meta"
-             style="
-                 margin-top:8px;
-                 line-height:1.45;
-                 overflow-wrap:anywhere;
-             ">
+        <div class="card-meta card-meta--desc">
             {description}
         </div>
 
-        <div class="card-meta"
-             style="margin-top:9px;">
+        <div class="card-meta card-meta--mt-9">
             📍 {location}
         </div>
 
-        <div class="card-meta"
-             style="
-                 margin-top:4px;
-                 overflow-wrap:anywhere;
-             ">
+        <div class="card-meta card-meta--mt-4 card-meta--wrap">
             {address}
         </div>
 
-        <div style="
-            display:flex;
-            gap:8px;
-            align-items:center;
-            flex-wrap:wrap;
-            margin-top:10px;
-        ">
+        <div class="rm-card-row--badges">
             {premium_badge}
             {verified_badge}
         </div>
@@ -3969,7 +3994,7 @@ pub(crate) fn profile_resource_card(params: ProfileResourceCardParams<'_>) -> St
 
     let address_html = match address {
         Some(addr) if !addr.is_empty() => format!(
-            r#"<div class="card-meta" style="margin-top:8px;overflow-wrap:anywhere;">
+            r#"<div class="card-meta card-meta--mt-8 card-meta--wrap">
             📍 {addr}
         </div>
 "#,
@@ -3979,20 +4004,20 @@ pub(crate) fn profile_resource_card(params: ProfileResourceCardParams<'_>) -> St
     };
 
     format!(
-        r#"<a href="{href}" class="card" style="text-decoration:none;color:inherit;margin-bottom:14px;align-items:flex-start;">
+        r#"<a href="{href}" class="card card--result">
     <div class="card-icon">{resource_icon}</div>
 
-    <div class="card-content" style="min-width:0;">
+    <div class="card-content">
         <div class="card-title">{title}</div>
 
-        <div class="card-meta" style="margin-top:4px;">{category}</div>
+        <div class="card-meta card-meta--mt-4">{category}</div>
 
-        <div class="card-meta" style="margin-top:8px;line-height:1.45;overflow-wrap:anywhere;">{description}</div>
+        <div class="card-meta card-meta--desc">{description}</div>
 
         {address_html}
-        <div class="card-meta" style="margin-top:8px;">⭐ {rating:.1} · {votes} голосов</div>
+        <div class="card-meta card-meta--mt-8">⭐ {rating:.1} · {votes} голосов</div>
 
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:9px;">
+        <div class="rm-card-row--badges">
             {premium_badge}
             {verified_badge}
         </div>
@@ -5053,21 +5078,46 @@ pub(crate) fn guest_locked_section(feature: &str, next_path: &str) -> String {
 }
 
 pub(crate) fn section_head(title: &str, caption: &str, margin_top: Option<u32>) -> String {
-    let style = match margin_top {
-        Some(px) => format!(r#" style="margin-top:{px}px;""#),
-        None => String::new(),
+    let class_extra = match margin_top {
+        Some(24) => " section-head--mt-24",
+        _ => "",
     };
 
     format!(
-        r#"<div class="section-head"{style}>
+        r#"<div class="section-head{class_extra}">
     <div>
         <h2 class="section-title">{title}</h2>
         <p class="section-caption">{caption}</p>
     </div>
 </div>"#,
-        style = style,
+        class_extra = class_extra,
         title = escape_html(title),
         caption = escape_html(caption),
+    )
+}
+
+/// HTML shell for transactional emails (login codes, password reset, admin OTP).
+/// Inline styles are required for email client compatibility.
+pub fn transactional_code_email_html(
+    heading: &str,
+    intro: &str,
+    code: &str,
+    expiry_note: &str,
+    footer: &str,
+) -> String {
+    format!(
+        "<div style=\"font-family:Arial,sans-serif;max-width:520px;margin:auto;padding:32px\">\
+            <h2 style=\"margin:0 0 18px\">{heading}</h2>\
+            <p>{intro}</p>\
+            <div style=\"font-size:34px;font-weight:800;letter-spacing:8px;margin:24px 0\">{code}</div>\
+            <p>{expiry_note}</p>\
+            <p style=\"color:#777;font-size:13px\">{footer}</p>\
+        </div>",
+        heading = escape_html(heading),
+        intro = escape_html(intro),
+        code = escape_html(code),
+        expiry_note = escape_html(expiry_note),
+        footer = escape_html(footer),
     )
 }
 

@@ -30,5 +30,5 @@ done
 
 echo "HEAD_AFTER=$(git rev-parse --short HEAD)"
 echo "SERVICE=$(systemctl is-active resursmap)"
-echo "CACHE_VERSION=4.9.17"
+echo "CACHE_VERSION=4.9.18"
 echo "DEPLOY=COMPLETE"

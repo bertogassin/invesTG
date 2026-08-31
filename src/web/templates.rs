@@ -5,6 +5,7 @@ mod admin_security;
 mod common;
 pub use common::brand_logo;
 pub use common::escape_html;
+pub use common::transactional_code_email_html;
 pub(crate) use common::extended_navigation_card;
 pub(crate) use common::icon;
 pub(crate) use common::navigation_card;

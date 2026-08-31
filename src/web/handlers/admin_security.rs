@@ -4,7 +4,7 @@ use super::admin_access::{
 use super::auth::verify_authenticated_user;
 use super::common::request_is_cross_site;
 use crate::state::app_state::AppState;
-use crate::web::templates::{render_admin_security, AdminSecurityData};
+use crate::web::templates::{render_admin_security, transactional_code_email_html, AdminSecurityData};
 use axum::{
     extract::{Form, Query, State},
     http::{header, HeaderMap, HeaderValue, StatusCode},
@@ -194,14 +194,12 @@ async fn send_code(email: &str, code: &str) -> Result<(), String> {
             "from": from,
             "to": [email],
             "subject": "Защищённая сессия владельца · ResursMap",
-            "html": format!(
-                "<div style=\"font-family:Arial,sans-serif;max-width:520px;margin:auto;padding:32px\">\
-                 <h2>ResursMap · Владелец</h2>\
-                 <p>Код подтверждения административной сессии:</p>\
-                 <div style=\"font-size:34px;font-weight:800;letter-spacing:8px;margin:24px 0\">{code}</div>\
-                 <p>Код действует 10 минут и только в текущей сессии.</p>\
-                 <p style=\"color:#777;font-size:13px\">Если вы не запрашивали код, проверьте безопасность аккаунта.</p>\
-                 </div>"
+            "html": transactional_code_email_html(
+                "ResursMap · Владелец",
+                "Код подтверждения административной сессии:",
+                &code,
+                "Код действует 10 минут и только в текущей сессии.",
+                "Если вы не запрашивали код, проверьте безопасность аккаунта.",
             )
         }))
         .send()

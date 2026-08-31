@@ -1,3 +1,4 @@
+use crate::web::templates::transactional_code_email_html;
 use super::auth::{auth_redirect_target, email_rate_limit_id, normalize_email};
 use super::auth_email::{
     auth_related_href, email_password_auth_response, hash_password, validate_password,
@@ -67,15 +68,12 @@ async fn send_reset_email(email: &str, code: &str) -> Result<(), String> {
             "from": from,
             "to": [email],
             "subject": "Сброс пароля ResursMap",
-            "html": format!(
-                "<div style=\"font-family:Arial,sans-serif;max-width:520px;margin:auto;padding:32px\">\
-                    <h2 style=\"margin:0 0 18px\">ResursMap</h2>\
-                    <p>Код для сброса пароля:</p>\
-                    <div style=\"font-size:34px;font-weight:800;letter-spacing:8px;margin:24px 0\">{}</div>\
-                    <p>Код действует 10 минут.</p>\
-                    <p style=\"color:#777;font-size:13px\">Если вы не запрашивали сброс, проигнорируйте письмо.</p>\
-                </div>",
-                code
+            "html": transactional_code_email_html(
+                "ResursMap",
+                "Код для сброса пароля:",
+                &code,
+                "Код действует 10 минут.",
+                "Если вы не запрашивали сброс, проигнорируйте письмо.",
             )
         }))
         .send()
