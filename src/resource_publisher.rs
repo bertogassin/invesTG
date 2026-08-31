@@ -17,7 +17,7 @@ pub fn promotion_price_label() -> String {
 }
 
 struct PromotionPublishRow {
-    request_id: i64,
+    _request_id: i64,
     status: String,
     payment_status: String,
     bot_check_status: String,
@@ -55,7 +55,7 @@ fn load_publish_row(connection: &Connection, request_id: i64) -> Option<Promotio
             params![request_id],
             |row| {
                 Ok(PromotionPublishRow {
-                    request_id: row.get(0)?,
+                    _request_id: row.get(0)?,
                     status: row.get(1)?,
                     payment_status: row.get(2)?,
                     bot_check_status: row.get(3)?,
@@ -93,6 +93,7 @@ fn format_group_message(row: &PromotionPublishRow) -> String {
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn record_promotion_event(
     connection: &Connection,
     request_id: i64,
@@ -257,9 +258,7 @@ pub fn mark_promotion_paid(
     request_id: i64,
     owner_user_id: i64,
 ) -> Result<bool, String> {
-    let connection = pool
-        .get()
-        .map_err(|_| "database_unavailable".to_string())?;
+    let connection = pool.get().map_err(|_| "database_unavailable".to_string())?;
 
     let now = chrono::Utc::now().timestamp();
     let updated = connection

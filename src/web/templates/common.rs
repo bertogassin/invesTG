@@ -4199,9 +4199,7 @@ pub(crate) fn resource_visibility_with_status(active: i64, status: &str) -> Stri
             r#"<span class="rm-mod-badge rm-mod-badge--active">● Активен · {safe_status}</span>"#
         )
     } else {
-        format!(
-            r#"<span class="rm-mod-badge rm-mod-badge--hidden">● Скрыт · {safe_status}</span>"#
-        )
+        format!(r#"<span class="rm-mod-badge rm-mod-badge--hidden">● Скрыт · {safe_status}</span>"#)
     }
 }
 
@@ -4210,7 +4208,10 @@ pub(crate) fn moderator_level_badge(level: i64) -> String {
         1 => ("Уровень 1 · Помощник группы", "rm-mod-level-badge--1"),
         2 => ("Уровень 2 · Администратор города", "rm-mod-level-badge--2"),
         3 => ("Уровень 3 · Администратор страны", "rm-mod-level-badge--3"),
-        4 => ("Уровень 4 · Администратор континента", "rm-mod-level-badge--4"),
+        4 => (
+            "Уровень 4 · Администратор континента",
+            "rm-mod-level-badge--4",
+        ),
         5 => ("Уровень 5 · Владелец ResursMap", "rm-mod-level-badge--5"),
         _ => return String::new(),
     };
@@ -4241,7 +4242,9 @@ pub(crate) fn my_resource_moderation_badge(is_active: i64, status: &str) -> &'st
             "rejected" => {
                 r#"<span class="rm-resource-mod-badge rm-resource-mod-badge--rejected">🔴 Отклонён</span>"#
             }
-            _ => r#"<span class="rm-resource-mod-badge rm-resource-mod-badge--pending">🟡 На проверке</span>"#,
+            _ => {
+                r#"<span class="rm-resource-mod-badge rm-resource-mod-badge--pending">🟡 На проверке</span>"#
+            }
         }
     }
 }
@@ -5006,7 +5009,11 @@ pub(crate) fn admin_ops_page(title: &str, content_html: &str) -> String {
     admin_ops_page_themed(title, "", content_html)
 }
 
-pub(crate) fn admin_ops_page_themed(title: &str, theme_modifier: &str, content_html: &str) -> String {
+pub(crate) fn admin_ops_page_themed(
+    title: &str,
+    theme_modifier: &str,
+    content_html: &str,
+) -> String {
     admin_ops_page_styled(title, theme_modifier, content_html, "")
 }
 
@@ -5078,12 +5085,7 @@ pub(crate) fn guest_mode_panel(next_path: &str) -> String {
 </div>"#,
         map_card = navigation_card("/app", "globe", "Карта ресурсов", "Страны и города"),
         search_card = navigation_card("/app/search", "search", "Поиск", "Люди и ресурсы"),
-        login_card = navigation_card(
-            &login_href,
-            "user",
-            "Войти",
-            "Email и пароль",
-        ),
+        login_card = navigation_card(&login_href, "user", "Войти", "Email и пароль",),
         register_card = navigation_card(
             &register_href,
             "edit",

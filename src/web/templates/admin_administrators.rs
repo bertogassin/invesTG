@@ -945,12 +945,5 @@ h1 {{
         sessions_html = sessions_html,
     );
 
-    super::common::page_document(
-        "Все администраторы · ResursMap",
-        head,
-        "",
-        &main,
-        "",
-        "",
-    )
+    super::common::page_document("Все администраторы · ResursMap", head, "", &main, "", "")
 }

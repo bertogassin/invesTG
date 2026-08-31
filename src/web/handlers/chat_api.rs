@@ -49,10 +49,7 @@ pub(crate) fn chat_media_attachment_url(
     kind: &str,
     path: &str,
 ) -> String {
-    if deleted_at == 0
-        && !path.is_empty()
-        && (kind == "image" || kind == "voice")
-    {
+    if deleted_at == 0 && !path.is_empty() && (kind == "image" || kind == "voice") {
         format!("/api/chat/media/{id}")
     } else {
         String::new()
@@ -346,11 +343,7 @@ fn load_api_message_by_id(
         )
         .ok()?;
 
-    attach_reactions(
-        connection,
-        std::slice::from_mut(&mut message),
-        user_id,
-    );
+    attach_reactions(connection, std::slice::from_mut(&mut message), user_id);
 
     Some(message)
 }
@@ -1488,8 +1481,7 @@ pub async fn api_chat_react(
         }
     }
 
-    let Some(message) =
-        load_api_message_by_id(&connection, conversation_id, message_id, user_id)
+    let Some(message) = load_api_message_by_id(&connection, conversation_id, message_id, user_id)
     else {
         return json_error(StatusCode::INTERNAL_SERVER_ERROR, "message_reload_failed");
     };

@@ -250,15 +250,10 @@ pub async fn resource_promotion_page(
         )
         .ok();
 
-    let (existing_status, existing_payment_status, existing_request_id) =
-        match existing_row {
-            Some((status, payment, id)) => (
-                Some(status),
-                Some(payment),
-                Some(id),
-            ),
-            None => (None, None, None),
-        };
+    let (existing_status, existing_payment_status, existing_request_id) = match existing_row {
+        Some((status, payment, id)) => (Some(status), Some(payment), Some(id)),
+        None => (None, None, None),
+    };
 
     drop(connection);
 
@@ -368,16 +363,8 @@ pub async fn request_resource_promotion(
             .into_response();
     }
 
-    let screening = screen_listing_content(
-        &resource.title,
-        &resource.description,
-        "",
-    );
-    let bot_check_status = if screening.passed {
-        "passed"
-    } else {
-        "failed"
-    };
+    let screening = screen_listing_content(&resource.title, &resource.description, "");
+    let bot_check_status = if screening.passed { "passed" } else { "failed" };
     let price_minor = promotion_price_minor();
 
     let transaction = match connection
@@ -533,14 +520,7 @@ pub async fn promotion_payment_page(
                AND pr.requester_user_id = ?3
              LIMIT 1",
             rusqlite::params![request_id, resource_id, authenticated.user_id],
-            |row| {
-                Ok((
-                    row.get(0)?,
-                    row.get(1)?,
-                    row.get(2)?,
-                    row.get(3)?,
-                ))
-            },
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
         )
         .ok();
 
@@ -629,11 +609,7 @@ pub async fn confirm_promotion_payment(
     let connection = match crate::db::pool::get_connection(&state.db_pool) {
         Ok(connection) => connection,
         Err(_) => {
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                "Сервис недоступен",
-            )
-                .into_response();
+            return (StatusCode::SERVICE_UNAVAILABLE, "Сервис недоступен").into_response();
         }
     };
 
@@ -650,8 +626,7 @@ pub async fn confirm_promotion_payment(
     drop(connection);
 
     if bot_status == "passed" {
-        if let Err(error) = try_publish_promotion(&state, request_id, authenticated.user_id).await
-        {
+        if let Err(error) = try_publish_promotion(&state, request_id, authenticated.user_id).await {
             return status_response(
                 "Публикация · ResursMap",
                 "⚠ ResursMap",
@@ -681,10 +656,8 @@ pub async fn confirm_promotion_payment(
     )
 }
 
-pub async fn admin_promotion_queue(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-) -> Response {
+#[allow(clippy::type_complexity)]
+pub async fn admin_promotion_queue(State(state): State<AppState>, headers: HeaderMap) -> Response {
     if !is_resource_moderation_session(&state, &headers) {
         return Redirect::temporary("/login?next=%2Fapp%2Fadmin%2Fpromotions").into_response();
     }
@@ -692,8 +665,7 @@ pub async fn admin_promotion_queue(
     let connection = match crate::db::pool::get_connection(&state.db_pool) {
         Ok(connection) => connection,
         Err(_) => {
-            return Html("<h1>503</h1><p>База данных недоступна.</p>".to_string())
-                .into_response();
+            return Html("<h1>503</h1><p>База данных недоступна.</p>".to_string()).into_response();
         }
     };
 

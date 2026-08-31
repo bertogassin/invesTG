@@ -282,8 +282,7 @@ pub async fn chat_page(
         .unwrap_or_default();
 
     let message_ids: Vec<i64> = messages.iter().map(|message| message.id).collect();
-    let reactions_by_message =
-        super::chat_api::reactions_for_view(&db, &message_ids, user_id);
+    let reactions_by_message = super::chat_api::reactions_for_view(&db, &message_ids, user_id);
 
     for message in &mut messages {
         if let Some(reactions) = reactions_by_message.get(&message.id) {

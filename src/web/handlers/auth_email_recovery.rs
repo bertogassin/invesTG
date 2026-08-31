@@ -1,11 +1,13 @@
-use crate::web::templates::transactional_code_email_html;
 use super::auth::{auth_redirect_target, email_rate_limit_id, normalize_email};
 use super::auth_email::{
     auth_related_href, email_password_auth_response, hash_password, validate_password,
     AuthNextQuery,
 };
-use super::common::{csrf_rejected_response, rate_limit_retry_after, request_is_cross_site, unix_now};
+use super::common::{
+    csrf_rejected_response, rate_limit_retry_after, request_is_cross_site, unix_now,
+};
 use crate::state::app_state::AppState;
+use crate::web::templates::transactional_code_email_html;
 use axum::{
     extract::{Query, State},
     http::{HeaderMap, StatusCode},
@@ -71,7 +73,7 @@ async fn send_reset_email(email: &str, code: &str) -> Result<(), String> {
             "html": transactional_code_email_html(
                 "ResursMap",
                 "Код для сброса пароля:",
-                &code,
+                code,
                 "Код действует 10 минут.",
                 "Если вы не запрашивали сброс, проигнорируйте письмо.",
             )
@@ -567,7 +569,8 @@ pub async fn login_code_page(Query(query): Query<AuthNextQuery>) -> Html<String>
 }})();
 </script>
 "##,
-        redirect_target_json = serde_json::to_string(&redirect_target).unwrap_or_else(|_| "\"/app\"".to_string()),
+        redirect_target_json =
+            serde_json::to_string(&redirect_target).unwrap_or_else(|_| "\"/app\"".to_string()),
     );
 
     Html(crate::web::templates::render_auth_page(
@@ -724,7 +727,8 @@ pub async fn forgot_password_page(Query(query): Query<AuthNextQuery>) -> Html<St
 }})();
 </script>
 "##,
-        redirect_target_json = serde_json::to_string(&redirect_target).unwrap_or_else(|_| "\"/app\"".to_string()),
+        redirect_target_json =
+            serde_json::to_string(&redirect_target).unwrap_or_else(|_| "\"/app\"".to_string()),
     );
 
     Html(crate::web::templates::render_auth_page(

@@ -170,11 +170,8 @@ pub async fn add_resource_page(
         let category_url = urlencoding::encode(category);
         let next = format!("/app/{ci}/{si}/{zi}/cat/{category_url}/add");
 
-        return Redirect::temporary(&format!(
-            "/login?next={}",
-            urlencoding::encode(&next)
-        ))
-        .into_response();
+        return Redirect::temporary(&format!("/login?next={}", urlencoding::encode(&next)))
+            .into_response();
     }
 
     Html(templates::render_add_resource(ci, si, zi, k.trim())).into_response()
@@ -265,7 +262,6 @@ pub async fn add_resource(
         )
             .into_response();
     }
-
 
     if let Some(retry_after) =
         rate_limit_retry_after(&state, owner_user_id, "resource_add", 10, 3600).await

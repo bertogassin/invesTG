@@ -3,8 +3,7 @@ use super::admin_access::{
 };
 use super::auth::verify_authenticated_user;
 use super::common::{
-    csrf_rejected_response, input_text_is_valid, request_is_cross_site,
-    telegram_owner_user_id,
+    csrf_rejected_response, input_text_is_valid, request_is_cross_site, telegram_owner_user_id,
 };
 use super::types::RejectResourceForm;
 use crate::state::app_state::AppState;

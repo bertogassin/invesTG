@@ -1,6 +1,6 @@
 use super::common::{
-    back_hero, back_link, bottom_nav, contact_request_status_badge, empty_state_card,
-    empty_state_action, empty_state_card_with_actions, escape_html, guest_locked_section, icon,
+    back_hero, back_link, bottom_nav, contact_request_status_badge, empty_state_action,
+    empty_state_card, empty_state_card_with_actions, escape_html, guest_locked_section, icon,
     page_shell, section_head, static_asset, topbar,
 };
 
@@ -549,11 +549,8 @@ fn render_chat_message_row(
 
     let reply_html = if message.reply_to_message_id > 0 {
         let reply_preview = escape_html(&message.reply_message);
-        let reply_author = chat_reply_author_label(
-            message.reply_sender_user_id,
-            viewer_user_id,
-            other_user_id,
-        );
+        let reply_author =
+            chat_reply_author_label(message.reply_sender_user_id, viewer_user_id, other_user_id);
 
         format!(
             r#"

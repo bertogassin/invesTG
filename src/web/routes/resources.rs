@@ -1,8 +1,8 @@
 use super::super::handlers::{
     add_resource, add_resource_page, api_favorite_status, api_favorite_toggle, api_report_resource,
-    api_resource_vote, app_cat, edit_resource, edit_resource_page, my_resources,
-    confirm_promotion_payment, promotion_payment_page, request_resource_promotion,
-    resource_profile, resource_promotion_page,
+    api_resource_vote, app_cat, confirm_promotion_payment, edit_resource, edit_resource_page,
+    my_resources, promotion_payment_page, request_resource_promotion, resource_profile,
+    resource_promotion_page,
 };
 use crate::state::app_state::AppState;
 use axum::{

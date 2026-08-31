@@ -1,8 +1,10 @@
-﻿use super::auth::{
+use super::auth::{
     append_user_session_cookie, auth_redirect_target, create_user_session, email_rate_limit_id,
     ensure_profile_public_id, normalize_email, EMAIL_USER_ID_BASE,
 };
-use super::common::{csrf_rejected_response, rate_limit_retry_after, request_is_cross_site, unix_now};
+use super::common::{
+    csrf_rejected_response, rate_limit_retry_after, request_is_cross_site, unix_now,
+};
 use crate::state::app_state::AppState;
 use argon2::{
     password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
@@ -390,8 +392,7 @@ pub async fn login_email(
 
     let rate_id = email_rate_limit_id(&state, &email);
 
-    if let Some(retry_after) =
-        rate_limit_retry_after(&state, rate_id, "email_login", 20, 600).await
+    if let Some(retry_after) = rate_limit_retry_after(&state, rate_id, "email_login", 20, 600).await
     {
         return (
             StatusCode::TOO_MANY_REQUESTS,
@@ -580,14 +581,16 @@ pub async fn login_page(Query(query): Query<AuthNextQuery>) -> Html<String> {
 }})();
 </script>
 "##,
-        redirect_target_json = serde_json::to_string(&redirect_target).unwrap_or_else(|_| "\"/app\"".to_string()),
+        redirect_target_json =
+            serde_json::to_string(&redirect_target).unwrap_or_else(|_| "\"/app\"".to_string()),
     );
 
     Html(crate::web::templates::render_auth_page(
         crate::web::templates::AuthPageParams {
             document_title: "Вход · ResursMap",
             heading: "Вход",
-            subtitle: "Карта работает без регистрации. Вход нужен для сообщений, избранного и публикаций.",
+            subtitle:
+                "Карта работает без регистрации. Вход нужен для сообщений, избранного и публикаций.",
             body_html: &body_html,
             footer_html: &footer_html,
             script_html: &body_after,
@@ -720,7 +723,8 @@ pub async fn register_page(Query(query): Query<AuthNextQuery>) -> Html<String> {
 }})();
 </script>
 "##,
-        redirect_target_json = serde_json::to_string(&redirect_target).unwrap_or_else(|_| "\"/app\"".to_string()),
+        redirect_target_json =
+            serde_json::to_string(&redirect_target).unwrap_or_else(|_| "\"/app\"".to_string()),
     );
 
     Html(crate::web::templates::render_auth_page(

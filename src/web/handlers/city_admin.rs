@@ -288,7 +288,10 @@ fn render_page(
     );
 
     admin_ops_page_themed(
-        &format!("{} · Управление городом · ResursMap", escape_html(&city.name)),
+        &format!(
+            "{} · Управление городом · ResursMap",
+            escape_html(&city.name)
+        ),
         "rm-admin-ops--city",
         &content,
     )

@@ -98,10 +98,7 @@ pub fn init_db() -> Result<Connection> {
         columns
     };
 
-    if !identity_columns
-        .iter()
-        .any(|name| name == "password_hash")
-    {
+    if !identity_columns.iter().any(|name| name == "password_hash") {
         conn.execute(
             "ALTER TABLE auth_identities
              ADD COLUMN password_hash TEXT NOT NULL DEFAULT ''",

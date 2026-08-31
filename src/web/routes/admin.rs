@@ -1,10 +1,10 @@
-use super::super::handlers::{
-    admin_approve_promotion, admin_promotion_queue, admin_reject_promotion,
-};
 use super::super::handlers::administrators_panel;
 use super::super::handlers::city_admin_panel;
 use super::super::handlers::manage_admin_assignment;
 use super::super::handlers::revoke_admin_session;
+use super::super::handlers::{
+    admin_approve_promotion, admin_promotion_queue, admin_reject_promotion,
+};
 use super::super::handlers::{admin_geography_group_save, admin_geography_page};
 use super::super::handlers::{admin_security_page, admin_step_up_request, admin_step_up_verify};
 use super::super::handlers::{

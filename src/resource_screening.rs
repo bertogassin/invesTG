@@ -81,11 +81,7 @@ mod tests {
 
     #[test]
     fn suspicious_link_fails() {
-        let result = screen_listing_content(
-            "Test",
-            "Смотри https://bit.ly/example",
-            "",
-        );
+        let result = screen_listing_content("Test", "Смотри https://bit.ly/example", "");
         assert!(!result.passed);
     }
 }

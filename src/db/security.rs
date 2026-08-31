@@ -129,84 +129,84 @@ pub fn init_security_schema(conn: &Connection) -> rusqlite::Result<()> {
 
 #[cfg(feature = "telegram-bot")]
 mod bot_moderation {
-use crate::db::pool::{get_connection, DbPool};
-use rusqlite::{params, OptionalExtension};
+    use crate::db::pool::{get_connection, DbPool};
+    use rusqlite::{params, OptionalExtension};
 
-pub const DEFAULT_WARNING_COOLDOWN_SECONDS: i64 = 60;
-pub const SECURITY_RISK_HISTORY_SECONDS: i64 = 3600;
-pub const SECURITY_RISK_DECAY_SECONDS: i64 = 600;
+    pub const DEFAULT_WARNING_COOLDOWN_SECONDS: i64 = 60;
+    pub const SECURITY_RISK_HISTORY_SECONDS: i64 = 3600;
+    pub const SECURITY_RISK_DECAY_SECONDS: i64 = 600;
 
-pub type SecurityDbResult<T> = Result<T, Box<dyn std::error::Error + Send + Sync>>;
+    pub type SecurityDbResult<T> = Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct CriticalEscalation {
-    pub occurrence: u32,
-    pub mute_seconds: i64,
-}
-
-pub fn mute_seconds_for_critical(occurrence: u32) -> i64 {
-    match occurrence {
-        0 | 1 => 10 * 60,
-        2 => 60 * 60,
-        _ => 24 * 60 * 60,
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub struct CriticalEscalation {
+        pub occurrence: u32,
+        pub mute_seconds: i64,
     }
-}
 
-#[derive(Debug, Clone)]
-pub struct NewModerationAuditEvent<'a> {
-    pub chat_id: i64,
-    pub user_id: i64,
-    pub message_id: i32,
-    pub action: &'a str,
-    pub reason: &'a str,
-    pub risk_score: u32,
-    pub risk_level: &'a str,
-    pub critical_occurrence: u32,
-    pub mute_seconds: i64,
-    pub success: bool,
-    pub created_at: i64,
-}
+    pub fn mute_seconds_for_critical(occurrence: u32) -> i64 {
+        match occurrence {
+            0 | 1 => 10 * 60,
+            2 => 60 * 60,
+            _ => 24 * 60 * 60,
+        }
+    }
 
-pub fn update_persistent_risk(
-    pool: &DbPool,
-    chat_id: i64,
-    user_id: i64,
-    reason: &str,
-    weight: u32,
-    message_id: i32,
-    now: i64,
-) -> SecurityDbResult<u32> {
-    let mut conn = get_connection(pool)?;
-    let tx = conn.transaction()?;
+    #[derive(Debug, Clone)]
+    pub struct NewModerationAuditEvent<'a> {
+        pub chat_id: i64,
+        pub user_id: i64,
+        pub message_id: i32,
+        pub action: &'a str,
+        pub reason: &'a str,
+        pub risk_score: u32,
+        pub risk_level: &'a str,
+        pub critical_occurrence: u32,
+        pub mute_seconds: i64,
+        pub success: bool,
+        pub created_at: i64,
+    }
 
-    // Same history horizon as the original B3.2 RAM engine.
-    tx.execute(
-        "
+    pub fn update_persistent_risk(
+        pool: &DbPool,
+        chat_id: i64,
+        user_id: i64,
+        reason: &str,
+        weight: u32,
+        message_id: i32,
+        now: i64,
+    ) -> SecurityDbResult<u32> {
+        let mut conn = get_connection(pool)?;
+        let tx = conn.transaction()?;
+
+        // Same history horizon as the original B3.2 RAM engine.
+        tx.execute(
+            "
         DELETE FROM security_events
         WHERE chat_id = ?1
           AND user_id = ?2
           AND created_at < ?3
         ",
-        params![chat_id, user_id, now - SECURITY_RISK_HISTORY_SECONDS],
-    )?;
+            params![chat_id, user_id, now - SECURITY_RISK_HISTORY_SECONDS],
+        )?;
 
-    let previous_decay_at: Option<i64> = tx
-        .query_row(
-            "
+        let previous_decay_at: Option<i64> = tx
+            .query_row(
+                "
             SELECT last_decay_at
             FROM security_risk_state
             WHERE chat_id = ?1
               AND user_id = ?2
             ",
-            params![chat_id, user_id],
-            |row| row.get(0),
-        )
-        .optional()?;
+                params![chat_id, user_id],
+                |row| row.get(0),
+            )
+            .optional()?;
 
-    match previous_decay_at {
-        None => {
-            tx.execute(
-                "
+        match previous_decay_at {
+            None => {
+                tx.execute(
+                    "
                 INSERT INTO security_risk_state (
                     chat_id,
                     user_id,
@@ -217,17 +217,19 @@ pub fn update_persistent_risk(
                 )
                 VALUES (?1, ?2, 0, ?3, 0, ?3)
                 ",
-                params![chat_id, user_id, now],
-            )?;
-        }
+                    params![chat_id, user_id, now],
+                )?;
+            }
 
-        Some(last_decay_at) if now.saturating_sub(last_decay_at) >= SECURITY_RISK_DECAY_SECONDS => {
-            // Preserve B3.2 semantics:
-            // after the decay interval, remove one oldest
-            // still-active violation before adding the new one.
-            let oldest_id: Option<i64> = tx
-                .query_row(
-                    "
+            Some(last_decay_at)
+                if now.saturating_sub(last_decay_at) >= SECURITY_RISK_DECAY_SECONDS =>
+            {
+                // Preserve B3.2 semantics:
+                // after the decay interval, remove one oldest
+                // still-active violation before adding the new one.
+                let oldest_id: Option<i64> = tx
+                    .query_row(
+                        "
                     SELECT id
                     FROM security_events
                     WHERE chat_id = ?1
@@ -235,35 +237,35 @@ pub fn update_persistent_risk(
                     ORDER BY created_at ASC, id ASC
                     LIMIT 1
                     ",
-                    params![chat_id, user_id],
-                    |row| row.get(0),
-                )
-                .optional()?;
+                        params![chat_id, user_id],
+                        |row| row.get(0),
+                    )
+                    .optional()?;
 
-            if let Some(oldest_id) = oldest_id {
+                if let Some(oldest_id) = oldest_id {
+                    tx.execute(
+                        "DELETE FROM security_events WHERE id = ?1",
+                        params![oldest_id],
+                    )?;
+                }
+
                 tx.execute(
-                    "DELETE FROM security_events WHERE id = ?1",
-                    params![oldest_id],
-                )?;
-            }
-
-            tx.execute(
-                "
+                    "
                 UPDATE security_risk_state
                 SET last_decay_at = ?3,
                     updated_at = ?3
                 WHERE chat_id = ?1
                   AND user_id = ?2
                 ",
-                params![chat_id, user_id, now],
-            )?;
+                    params![chat_id, user_id, now],
+                )?;
+            }
+
+            Some(_) => {}
         }
 
-        Some(_) => {}
-    }
-
-    tx.execute(
-        "
+        tx.execute(
+            "
         INSERT INTO security_events (
             chat_id,
             user_id,
@@ -275,58 +277,58 @@ pub fn update_persistent_risk(
         )
         VALUES (?1, ?2, ?3, ?4, 0, ?5, ?6)
         ",
-        params![chat_id, user_id, reason, i64::from(weight), message_id, now],
-    )?;
+            params![chat_id, user_id, reason, i64::from(weight), message_id, now],
+        )?;
 
-    let event_id = tx.last_insert_rowid();
+        let event_id = tx.last_insert_rowid();
 
-    let score_i64: i64 = tx.query_row(
-        "
+        let score_i64: i64 = tx.query_row(
+            "
         SELECT COALESCE(SUM(weight), 0)
         FROM security_events
         WHERE chat_id = ?1
           AND user_id = ?2
           AND created_at >= ?3
         ",
-        params![chat_id, user_id, now - SECURITY_RISK_HISTORY_SECONDS],
-        |row| row.get(0),
-    )?;
+            params![chat_id, user_id, now - SECURITY_RISK_HISTORY_SECONDS],
+            |row| row.get(0),
+        )?;
 
-    let score = u32::try_from(score_i64).unwrap_or(u32::MAX);
+        let score = u32::try_from(score_i64).unwrap_or(u32::MAX);
 
-    tx.execute(
-        "
+        tx.execute(
+            "
         UPDATE security_risk_state
         SET risk_score = ?3,
             updated_at = ?4
         WHERE chat_id = ?1
           AND user_id = ?2
         ",
-        params![chat_id, user_id, i64::from(score), now],
-    )?;
+            params![chat_id, user_id, i64::from(score), now],
+        )?;
 
-    tx.execute(
-        "
+        tx.execute(
+            "
         UPDATE security_events
         SET risk_score = ?2
         WHERE id = ?1
         ",
-        params![event_id, i64::from(score)],
-    )?;
+            params![event_id, i64::from(score)],
+        )?;
 
-    tx.commit()?;
+        tx.commit()?;
 
-    Ok(score)
-}
+        Ok(score)
+    }
 
-pub fn record_moderation_audit(
-    pool: &DbPool,
-    event: &NewModerationAuditEvent<'_>,
-) -> SecurityDbResult<i64> {
-    let conn = get_connection(pool)?;
+    pub fn record_moderation_audit(
+        pool: &DbPool,
+        event: &NewModerationAuditEvent<'_>,
+    ) -> SecurityDbResult<i64> {
+        let conn = get_connection(pool)?;
 
-    conn.execute(
-        "
+        conn.execute(
+            "
         INSERT INTO security_moderation_audit (
             chat_id,
             user_id,
@@ -345,35 +347,35 @@ pub fn record_moderation_audit(
             ?7, ?8, ?9, ?10, ?11
         )
         ",
-        params![
-            event.chat_id,
-            event.user_id,
-            event.message_id,
-            event.action,
-            event.reason,
-            i64::from(event.risk_score),
-            event.risk_level,
-            i64::from(event.critical_occurrence),
-            event.mute_seconds,
-            if event.success { 1_i64 } else { 0_i64 },
-            event.created_at,
-        ],
-    )?;
+            params![
+                event.chat_id,
+                event.user_id,
+                event.message_id,
+                event.action,
+                event.reason,
+                i64::from(event.risk_score),
+                event.risk_level,
+                i64::from(event.critical_occurrence),
+                event.mute_seconds,
+                if event.success { 1_i64 } else { 0_i64 },
+                event.created_at,
+            ],
+        )?;
 
-    Ok(conn.last_insert_rowid())
-}
+        Ok(conn.last_insert_rowid())
+    }
 
-pub fn claim_critical_escalation(
-    pool: &DbPool,
-    chat_id: i64,
-    user_id: i64,
-    now: i64,
-) -> SecurityDbResult<CriticalEscalation> {
-    let mut conn = get_connection(pool)?;
-    let tx = conn.transaction()?;
+    pub fn claim_critical_escalation(
+        pool: &DbPool,
+        chat_id: i64,
+        user_id: i64,
+        now: i64,
+    ) -> SecurityDbResult<CriticalEscalation> {
+        let mut conn = get_connection(pool)?;
+        let tx = conn.transaction()?;
 
-    tx.execute(
-        "
+        tx.execute(
+            "
         INSERT INTO security_moderation_state (
             chat_id,
             user_id,
@@ -390,41 +392,41 @@ pub fn claim_critical_escalation(
             last_critical_at = excluded.last_critical_at,
             updated_at = excluded.updated_at
         ",
-        params![chat_id, user_id, now],
-    )?;
+            params![chat_id, user_id, now],
+        )?;
 
-    let count_i64: i64 = tx.query_row(
-        "
+        let count_i64: i64 = tx.query_row(
+            "
         SELECT critical_count
         FROM security_moderation_state
         WHERE chat_id = ?1
           AND user_id = ?2
         ",
-        params![chat_id, user_id],
-        |row| row.get(0),
-    )?;
+            params![chat_id, user_id],
+            |row| row.get(0),
+        )?;
 
-    tx.commit()?;
+        tx.commit()?;
 
-    let occurrence = u32::try_from(count_i64).unwrap_or(u32::MAX);
+        let occurrence = u32::try_from(count_i64).unwrap_or(u32::MAX);
 
-    Ok(CriticalEscalation {
-        occurrence,
-        mute_seconds: mute_seconds_for_critical(occurrence),
-    })
-}
+        Ok(CriticalEscalation {
+            occurrence,
+            mute_seconds: mute_seconds_for_critical(occurrence),
+        })
+    }
 
-pub fn claim_warning_slot(
-    pool: &DbPool,
-    chat_id: i64,
-    user_id: i64,
-    now: i64,
-    cooldown_seconds: i64,
-) -> SecurityDbResult<bool> {
-    let conn = get_connection(pool)?;
+    pub fn claim_warning_slot(
+        pool: &DbPool,
+        chat_id: i64,
+        user_id: i64,
+        now: i64,
+        cooldown_seconds: i64,
+    ) -> SecurityDbResult<bool> {
+        let conn = get_connection(pool)?;
 
-    let changed = conn.execute(
-        "
+        let changed = conn.execute(
+            "
         UPDATE security_risk_state
         SET
             last_warning_at = ?3,
@@ -436,12 +438,11 @@ pub fn claim_warning_slot(
               OR last_warning_at <= ?4
           )
         ",
-        params![chat_id, user_id, now, now - cooldown_seconds,],
-    )?;
+            params![chat_id, user_id, now, now - cooldown_seconds,],
+        )?;
 
-    Ok(changed == 1)
-}
-
+        Ok(changed == 1)
+    }
 }
 
 #[cfg(feature = "telegram-bot")]
@@ -494,8 +495,10 @@ mod schema_tests {
 #[cfg(all(test, feature = "telegram-bot"))]
 mod tests {
     use super::*;
+    use crate::db::pool::{get_connection, DbPool};
     use r2d2::Pool;
     use r2d2_sqlite::SqliteConnectionManager;
+    use rusqlite::params;
 
     fn test_pool() -> DbPool {
         let manager = SqliteConnectionManager::memory().with_init(|conn| {

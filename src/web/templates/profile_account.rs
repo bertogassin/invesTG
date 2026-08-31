@@ -1,5 +1,5 @@
 use super::common::{
-    back_hero, back_link, bottom_nav, bottom_nav_with_badge, empty_state_card, empty_state_action,
+    back_hero, back_link, bottom_nav, bottom_nav_with_badge, empty_state_action, empty_state_card,
     empty_state_card_with_actions, escape_html, guest_locked_section, guest_mode_panel, icon,
     moderator_level_badge, navigation_card, page_document, page_shell, premium_badge_html,
     profile_resource_card, section_head, simple_hero, topbar, verified_badge_html,
@@ -1808,17 +1808,7 @@ pub fn render_favorites(
         resources
             .iter()
             .map(
-                |(
-                    id,
-                    title,
-                    category,
-                    description,
-                    address,
-                    rating,
-                    votes,
-                    verified,
-                    premium,
-                )| {
+                |(id, title, category, description, address, rating, votes, verified, premium)| {
                     let premium_badge = if *premium != 0 {
                         premium_badge_html("compact")
                     } else {

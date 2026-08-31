@@ -1,8 +1,9 @@
 use super::common::{
-    back_hero, back_link, bottom_nav, empty_state_card, empty_state_action,
-    empty_state_card_with_actions, escape_html, guest_locked_section, icon, my_resource_moderation_badge,
-    navigation_card, page_document, page_shell, premium_badge_html, resource_card_link_class,
-    resource_detail_section_class, section_head, topbar, verified_badge_html,
+    back_hero, back_link, bottom_nav, empty_state_action, empty_state_card,
+    empty_state_card_with_actions, escape_html, guest_locked_section, icon,
+    my_resource_moderation_badge, navigation_card, page_document, page_shell, premium_badge_html,
+    resource_card_link_class, resource_detail_section_class, section_head, topbar,
+    verified_badge_html,
 };
 
 pub fn render_category(
@@ -36,33 +37,34 @@ pub fn render_category(
     } else {
         resources
             .iter()
-            .map(|(id, title, description, contact, address, rating, votes, verified, premium)| {
-                            let safe_title = escape_html(title);
-                let safe_description = escape_html(description);
-                let safe_contact = escape_html(contact);
-                let safe_address = escape_html(address);
+            .map(
+                |(id, title, description, contact, address, rating, votes, verified, premium)| {
+                    let safe_title = escape_html(title);
+                    let safe_description = escape_html(description);
+                    let safe_contact = escape_html(contact);
+                    let safe_address = escape_html(address);
 
-                let verified_badge = if *verified != 0 {
-                    verified_badge_html(false)
-                } else {
-                    ""
-                };
+                    let verified_badge = if *verified != 0 {
+                        verified_badge_html(false)
+                    } else {
+                        ""
+                    };
 
-                let premium_badge = if *premium != 0 {
-                    premium_badge_html("default")
-                } else {
-                    ""
-                };
+                    let premium_badge = if *premium != 0 {
+                        premium_badge_html("default")
+                    } else {
+                        ""
+                    };
 
-                let card_class = resource_card_link_class(*premium != 0);
-                let premium_shine = if *premium != 0 {
-                    r#"<div class="rm-resource-card-shine"></div>"#
-                } else {
-                    ""
-                };
+                    let card_class = resource_card_link_class(*premium != 0);
+                    let premium_shine = if *premium != 0 {
+                        r#"<div class="rm-resource-card-shine"></div>"#
+                    } else {
+                        ""
+                    };
 
-                format!(
-                    r#"
+                    format!(
+                        r#"
                     <a href="/app/resource/{id}" class="{card_class}">
                         {premium_shine}
                         <div class="card-icon">{map_icon}</div>
@@ -101,20 +103,21 @@ pub fn render_category(
                         <div class="card-arrow">›</div>
                     </a>
                     "#,
-                    id = id,
-                    card_class = card_class,
-                    premium_shine = premium_shine,
-                    map_icon = icon("map-pin"),
-                    title = safe_title,
-                    premium_badge = premium_badge,
-                    description = safe_description,
-                    rating = rating,
-                    votes = votes,
-                    address = safe_address,
-                    contact = safe_contact,
-                    verified_badge = verified_badge,
-                )
-            })
+                        id = id,
+                        card_class = card_class,
+                        premium_shine = premium_shine,
+                        map_icon = icon("map-pin"),
+                        title = safe_title,
+                        premium_badge = premium_badge,
+                        description = safe_description,
+                        rating = rating,
+                        votes = votes,
+                        address = safe_address,
+                        contact = safe_contact,
+                        verified_badge = verified_badge,
+                    )
+                },
+            )
             .collect::<Vec<_>>()
             .join("")
     };
@@ -953,6 +956,7 @@ pub fn render_promotion_payment(
     )
 }
 
+#[allow(clippy::type_complexity)]
 pub fn render_admin_promotion_queue(
     rows: &[(i64, i64, String, String, String, String, String, i64)],
 ) -> String {
@@ -969,13 +973,23 @@ pub fn render_admin_promotion_queue(
             .to_string()
     } else {
         rows.iter()
-            .map(|(request_id, resource_id, title, category, listing_type, bot_status, bot_reason, _created_at)| {
-                let safe_title = escape_html(title);
-                let safe_category = escape_html(category);
-                let kind = escape_html(listing_kind(listing_type));
-                let safe_reason = escape_html(bot_reason);
-                format!(
-                    r#"
+            .map(
+                |(
+                    request_id,
+                    resource_id,
+                    title,
+                    category,
+                    listing_type,
+                    bot_status,
+                    bot_reason,
+                    _created_at,
+                )| {
+                    let safe_title = escape_html(title);
+                    let safe_category = escape_html(category);
+                    let kind = escape_html(listing_kind(listing_type));
+                    let safe_reason = escape_html(bot_reason);
+                    format!(
+                        r#"
 <section class="card rm-admin-promo-card">
     <div class="card-title">{safe_title}</div>
     <div class="card-meta">{kind} · {safe_category} · ID {resource_id}</div>
@@ -990,19 +1004,20 @@ pub fn render_admin_promotion_queue(
     </div>
 </section>
 "#,
-                    safe_title = safe_title,
-                    kind = kind,
-                    safe_category = safe_category,
-                    resource_id = resource_id,
-                    bot_status = escape_html(bot_status),
-                    reason = if safe_reason.is_empty() {
-                        String::new()
-                    } else {
-                        format!(" · {safe_reason}")
-                    },
-                    request_id = request_id,
-                )
-            })
+                        safe_title = safe_title,
+                        kind = kind,
+                        safe_category = safe_category,
+                        resource_id = resource_id,
+                        bot_status = escape_html(bot_status),
+                        reason = if safe_reason.is_empty() {
+                            String::new()
+                        } else {
+                            format!(" · {safe_reason}")
+                        },
+                        request_id = request_id,
+                    )
+                },
+            )
             .collect::<Vec<_>>()
             .join("")
     };
@@ -1353,7 +1368,10 @@ pub fn render_add_resource(ci: usize, si: usize, zi: usize, category: &str) -> S
     </button>
 
 </form>"####,
-        ci, si, zi, category,
+        ci,
+        si,
+        zi,
+        category,
         listing_type_field = listing_type_field,
     );
 

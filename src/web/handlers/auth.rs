@@ -1,8 +1,8 @@
-use crate::web::templates::transactional_code_email_html;
 use super::common::{
     csrf_rejected_response, rate_limit_retry_after, request_is_cross_site, unix_now,
 };
 use crate::state::app_state::AppState;
+use crate::web::templates::transactional_code_email_html;
 use axum::{
     extract::State,
     http::{header, HeaderMap, HeaderValue, StatusCode},
@@ -165,7 +165,7 @@ async fn send_email_code(email: &str, code: &str) -> Result<(), String> {
             "html": transactional_code_email_html(
                 "ResursMap",
                 "Ваш код входа:",
-                &code,
+                code,
                 "Код действует 10 минут.",
                 "Если вы не запрашивали вход, просто проигнорируйте это письмо.",
             )

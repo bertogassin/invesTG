@@ -69,9 +69,7 @@ pub use auth::{
 };
 
 mod auth_email;
-pub use auth_email::{
-    login_email, login_page, register_email, register_page,
-};
+pub use auth_email::{login_email, login_page, register_email, register_page};
 
 mod auth_email_recovery;
 pub use auth_email_recovery::{

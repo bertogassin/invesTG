@@ -76,9 +76,7 @@ async fn deliver_group(
 ) -> Result<i32, teloxide::RequestError> {
     use teloxide::prelude::*;
 
-    let message = Bot::new(token)
-        .send_message(ChatId(chat_id), text)
-        .await?;
+    let message = Bot::new(token).send_message(ChatId(chat_id), text).await?;
 
     Ok(message.id.0)
 }
