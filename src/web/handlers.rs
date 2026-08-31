@@ -30,7 +30,7 @@ mod resource_promotions;
 pub use resource_promotions::{
     admin_approve_promotion, admin_promotion_queue, admin_reject_promotion,
     confirm_promotion_payment, promotion_payment_page, request_resource_promotion,
-    resource_promotion_page,
+    resource_promotion_page, retry_promotion_publish,
 };
 
 mod admin;

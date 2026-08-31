@@ -231,9 +231,11 @@ pub async fn resource_promotion_page(
         );
     };
 
-    let existing_row: Option<(String, String, i64)> = connection
+    let existing_row: Option<(String, String, i64, String, String)> = connection
         .query_row(
-            "SELECT status, payment_status, id
+            "SELECT status, payment_status, id,
+                    COALESCE(bot_check_status, 'unknown'),
+                    COALESCE(failure_reason, '')
              FROM resource_promotion_requests
              WHERE resource_id = ?1
                AND target_id = ?2
@@ -241,18 +243,39 @@ pub async fn resource_promotion_page(
                    'pending',
                    'approved',
                    'publishing',
-                   'failed'
+                   'failed',
+                   'published'
                )
              ORDER BY id DESC
              LIMIT 1",
             rusqlite::params![resource.id, target.id,],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                ))
+            },
         )
         .ok();
 
-    let (existing_status, existing_payment_status, existing_request_id) = match existing_row {
-        Some((status, payment, id)) => (Some(status), Some(payment), Some(id)),
-        None => (None, None, None),
+    let (
+        existing_status,
+        existing_payment_status,
+        existing_request_id,
+        existing_bot_status,
+        existing_failure_reason,
+    ) = match existing_row {
+        Some((status, payment, id, bot_status, failure_reason)) => (
+            Some(status),
+            Some(payment),
+            Some(id),
+            Some(bot_status),
+            Some(failure_reason),
+        ),
+        None => (None, None, None, None, None),
     };
 
     drop(connection);
@@ -272,6 +295,8 @@ pub async fn resource_promotion_page(
             existing_status: existing_status.as_deref(),
             existing_payment_status: existing_payment_status.as_deref(),
             existing_request_id,
+            existing_bot_status: existing_bot_status.as_deref(),
+            existing_failure_reason: existing_failure_reason.as_deref(),
         },
     ))
     .into_response()
@@ -774,6 +799,92 @@ pub async fn admin_reject_promotion(
     );
 
     Redirect::temporary("/app/admin/promotions").into_response()
+}
+
+pub async fn retry_promotion_publish(
+    State(state): State<AppState>,
+    Path((resource_id, request_id)): Path<(i64, i64)>,
+    headers: HeaderMap,
+) -> Response {
+    if request_is_cross_site(&headers) {
+        return (StatusCode::FORBIDDEN, "Запрос отклонён").into_response();
+    }
+
+    let authenticated = match verify_authenticated_user(&state, &headers) {
+        Some(user) => user,
+        None => return (StatusCode::UNAUTHORIZED, "Требуется вход").into_response(),
+    };
+
+    let connection = match crate::db::pool::get_connection(&state.db_pool) {
+        Ok(connection) => connection,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "Сервис недоступен",
+            )
+                .into_response();
+        }
+    };
+
+    let row: Option<(String, String, String)> = connection
+        .query_row(
+            "SELECT pr.status, pr.payment_status, COALESCE(pr.bot_check_status, 'unknown')
+             FROM resource_promotion_requests pr
+             JOIN resources r ON r.id = pr.resource_id
+             WHERE pr.id = ?1
+               AND pr.resource_id = ?2
+               AND pr.requester_user_id = ?3
+               AND r.client_id = ?4
+             LIMIT 1",
+            rusqlite::params![
+                request_id,
+                resource_id,
+                authenticated.user_id,
+                authenticated.client_id,
+            ],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .ok();
+    drop(connection);
+
+    let Some((status, payment_status, bot_status)) = row else {
+        return status_response(
+            "Продвижение · ResursMap",
+            "⚠ Доступ",
+            "Заявка не найдена",
+            "Проверьте ссылку или создайте новую заявку.",
+            resource_id,
+        );
+    };
+
+    if payment_status != "paid" || status != "failed" || bot_status != "passed" {
+        return status_response(
+            "Продвижение · ResursMap",
+            "⚠ ResursMap",
+            "Повтор недоступен",
+            "Повторная отправка доступна только для оплаченных заявок с пройденной автопроверкой.",
+            resource_id,
+        );
+    }
+
+    match try_publish_promotion(&state, request_id, authenticated.user_id).await {
+        Ok(()) => status_response(
+            "Опубликовано · ResursMap",
+            "✓ ResursMap",
+            "Объявление опубликовано",
+            "Публикация в Telegram-группе выполнена успешно.",
+            resource_id,
+        ),
+        Err(error) => status_response(
+            "Публикация · ResursMap",
+            "⚠ ResursMap",
+            "Публикация не удалась",
+            &format!(
+                "Повторная отправка не удалась ({error}). Попробуйте позже или обратитесь к администратору."
+            ),
+            resource_id,
+        ),
+    }
 }
 
 #[cfg(test)]

@@ -2,7 +2,7 @@ use super::super::handlers::{
     add_resource, add_resource_page, api_favorite_status, api_favorite_toggle, api_report_resource,
     api_resource_vote, app_cat, confirm_promotion_payment, edit_resource, edit_resource_page,
     my_resources, promotion_payment_page, request_resource_promotion, resource_profile,
-    resource_promotion_page,
+    resource_promotion_page, retry_promotion_publish,
 };
 use crate::state::app_state::AppState;
 use axum::{
@@ -22,6 +22,10 @@ pub(super) fn routes() -> Router<AppState> {
         .route(
             "/app/resource/{resource_id}/promote/pay/{request_id}",
             get(promotion_payment_page).post(confirm_promotion_payment),
+        )
+        .route(
+            "/app/resource/{resource_id}/promote/retry/{request_id}",
+            post(retry_promotion_publish),
         )
         .route(
             "/app/resource/{id}/edit",

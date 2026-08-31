@@ -5,6 +5,8 @@ use std::time::Duration;
 const ADMIN_V2_FOUNDATION_VERSION: i64 = 1;
 const ADMIN_V2_OWNER_STEP_UP_VERSION: i64 = 2;
 pub const ADMIN_V2_SCHEMA_VERSION: i64 = 3;
+const ADMIN_V2_EMAIL_OWNER_MIGRATION_VERSION: i64 = 4;
+const LEGACY_TELEGRAM_OWNER_USER_ID: i64 = 8_775_621_311;
 pub const INITIAL_OWNER_USER_ID: i64 = 4_000_000_000_000_000_009;
 
 const ADMIN_V2_SCHEMA: &str = r#"
@@ -378,9 +380,77 @@ fn initialize_connection(connection: &mut Connection, owner_user_id: i64) -> rus
         params![ADMIN_V2_SCHEMA_VERSION],
     )?;
 
-    transaction.pragma_update(None, "user_version", ADMIN_V2_SCHEMA_VERSION)?;
+    migrate_legacy_owner_to_email_owner(&transaction)?;
+
+    transaction.pragma_update(None, "user_version", ADMIN_V2_EMAIL_OWNER_MIGRATION_VERSION)?;
 
     transaction.commit()
+}
+
+fn migrate_legacy_owner_to_email_owner(transaction: &Transaction<'_>) -> rusqlite::Result<()> {
+    let already_applied: i64 = transaction.query_row(
+        "SELECT COUNT(*)
+         FROM schema_migrations
+         WHERE version = ?1",
+        params![ADMIN_V2_EMAIL_OWNER_MIGRATION_VERSION],
+        |row| row.get(0),
+    )?;
+
+    if already_applied != 0 {
+        return Ok(());
+    }
+
+    let email_owner_exists: i64 = transaction.query_row(
+        "SELECT COUNT(*)
+         FROM users
+         WHERE id = ?1
+           AND is_active = 1",
+        params![INITIAL_OWNER_USER_ID],
+        |row| row.get(0),
+    )?;
+
+    if email_owner_exists == 1 {
+        seed_initial_owner(transaction, INITIAL_OWNER_USER_ID)?;
+
+        let legacy_assignments: i64 = transaction.query_row(
+            "SELECT COUNT(*)
+             FROM admin_assignments
+             WHERE user_id = ?1
+               AND status = 'active'",
+            params![LEGACY_TELEGRAM_OWNER_USER_ID],
+            |row| row.get(0),
+        )?;
+
+        if legacy_assignments > 0 {
+            transaction.execute(
+                "UPDATE admin_assignments
+                 SET status = 'revoked',
+                     valid_until = strftime('%s','now'),
+                     last_change_reason = 'Миграция владельца на email-аккаунт',
+                     updated_at = strftime('%s','now')
+                 WHERE user_id = ?1
+                   AND status = 'active'",
+                params![LEGACY_TELEGRAM_OWNER_USER_ID],
+            )?;
+
+            transaction.execute(
+                "UPDATE admin_sessions
+                 SET revoked_at = strftime('%s','now'),
+                     revoke_reason = 'owner_migration'
+                 WHERE user_id = ?1
+                   AND revoked_at IS NULL",
+                params![LEGACY_TELEGRAM_OWNER_USER_ID],
+            )?;
+        }
+    }
+
+    transaction.execute(
+        "INSERT OR IGNORE INTO schema_migrations (version, name)
+         VALUES (?1, 'admin_v2_email_owner')",
+        params![ADMIN_V2_EMAIL_OWNER_MIGRATION_VERSION],
+    )?;
+
+    Ok(())
 }
 
 fn seed_permissions(transaction: &Transaction<'_>) -> rusqlite::Result<()> {

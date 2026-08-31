@@ -159,7 +159,11 @@ pub async fn try_publish_promotion(
         return Ok(());
     }
 
-    if row.status != "pending" && row.status != "approved" && row.status != "publishing" {
+    if row.status != "pending"
+        && row.status != "approved"
+        && row.status != "publishing"
+        && row.status != "failed"
+    {
         return Err("invalid_status".into());
     }
 
@@ -178,7 +182,7 @@ pub async fn try_publish_promotion(
                  updated_at = ?2,
                  failure_reason = ''
              WHERE id = ?1
-               AND status IN ('pending', 'approved')",
+               AND status IN ('pending', 'approved', 'failed')",
             params![request_id, now],
         )
         .unwrap_or(0)

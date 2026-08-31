@@ -743,6 +743,8 @@ pub struct RenderResourcePromotionParams<'a> {
     pub existing_status: Option<&'a str>,
     pub existing_payment_status: Option<&'a str>,
     pub existing_request_id: Option<i64>,
+    pub existing_bot_status: Option<&'a str>,
+    pub existing_failure_reason: Option<&'a str>,
 }
 
 pub fn render_resource_promotion(params: RenderResourcePromotionParams<'_>) -> String {
@@ -756,7 +758,55 @@ pub fn render_resource_promotion(params: RenderResourcePromotionParams<'_>) -> S
     let listing_type = escape_html(params.listing_type_label);
     let price_label = escape_html(params.price_label);
 
-    let action_html = if params.existing_payment_status == Some("pending") {
+    let action_html = if params.existing_status == Some("published") {
+        r#"
+<div class="card rm-promo-pending rm-promo-published">
+    <div class="card-title">Опубликовано в группе</div>
+    <div class="card-meta rm-promo-pending-copy">
+        Объявление уже отправлено в Telegram-группу города.
+    </div>
+</div>
+"#
+        .to_string()
+    } else if params.existing_status == Some("failed")
+        && params.existing_payment_status == Some("paid")
+        && params.existing_bot_status == Some("passed")
+    {
+        if let Some(request_id) = params.existing_request_id {
+            let reason = params
+                .existing_failure_reason
+                .map(escape_html)
+                .unwrap_or_default();
+            let reason_html = if reason.is_empty() {
+                String::new()
+            } else {
+                format!(
+                    r#"<div class="card-meta rm-promo-bot-reason">Причина: {reason}</div>"#
+                )
+            };
+            format!(
+                r#"
+<div class="card rm-promo-pending rm-promo-failed">
+    <div class="card-title">Публикация не удалась</div>
+    {reason_html}
+    <div class="card-meta rm-promo-pending-copy">
+        Оплата принята, автопроверка пройдена. Можно повторить отправку в группу.
+    </div>
+</div>
+<form method="post"
+      action="/app/resource/{}/promote/retry/{}"
+      class="ui-form rm-promo-form">
+    <button type="submit" class="ui-button rm-promo-submit">
+        Повторить публикацию
+    </button>
+</form>
+"#,
+                params.resource_id, request_id
+            )
+        } else {
+            String::new()
+        }
+    } else if params.existing_payment_status == Some("pending") {
         if let Some(request_id) = params.existing_request_id {
             format!(
                 r#"
@@ -771,17 +821,25 @@ pub fn render_resource_promotion(params: RenderResourcePromotionParams<'_>) -> S
             String::new()
         }
     } else if params.existing_status.is_some() {
-        r#"
+        let status_note = match params.existing_status {
+            Some("pending") if params.existing_payment_status == Some("paid") => {
+                "Оплата принята. Заявка ожидает проверки администратором перед публикацией в группе."
+            }
+            Some("failed") => {
+                "Публикация не удалась. Администратор может помочь завершить размещение."
+            }
+            _ => {
+                "Повторная заявка не требуется. Дождитесь публикации или решения администратора."
+            }
+        };
+        format!(
+            r#"
 <div class="card rm-promo-pending">
-    <div class="card-title">
-        Заявка уже в обработке
-    </div>
-    <div class="card-meta rm-promo-pending-copy">
-        Повторная заявка не требуется. Дождитесь публикации или решения администратора.
-    </div>
+    <div class="card-title">Заявка в обработке</div>
+    <div class="card-meta rm-promo-pending-copy">{status_note}</div>
 </div>
 "#
-        .to_string()
+        )
     } else {
         format!(
             r#"
