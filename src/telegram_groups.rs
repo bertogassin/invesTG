@@ -23,10 +23,7 @@ pub async fn verify_telegram_group(
         .await
         .map_err(|error| error.to_string())?;
 
-    let payload: serde_json::Value = response
-        .json()
-        .await
-        .map_err(|error| error.to_string())?;
+    let payload: serde_json::Value = response.json().await.map_err(|error| error.to_string())?;
 
     if payload.get("ok").and_then(|value| value.as_bool()) != Some(true) {
         let description = payload

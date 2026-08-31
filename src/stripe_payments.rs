@@ -70,10 +70,7 @@ pub async fn refund_promotion_payment(payment_reference: &str) -> Result<String,
         return Err(format!("stripe_refund_failed:{body}"));
     }
 
-    let payload: serde_json::Value = response
-        .json()
-        .await
-        .map_err(|error| error.to_string())?;
+    let payload: serde_json::Value = response.json().await.map_err(|error| error.to_string())?;
 
     payload
         .get("id")
@@ -145,10 +142,7 @@ pub async fn create_promotion_checkout_session(
         return Err(format!("stripe_api_error:{body}"));
     }
 
-    let payload: serde_json::Value = response
-        .json()
-        .await
-        .map_err(|error| error.to_string())?;
+    let payload: serde_json::Value = response.json().await.map_err(|error| error.to_string())?;
 
     let id = payload
         .get("id")

@@ -222,14 +222,18 @@ fn render_city_card(row: &GeographyCityRow) -> String {
     )
 }
 
-fn render_page(
-    query: &str,
-    cities: &[GeographyCityRow],
+struct GeographyMetrics {
     continents: i64,
     countries: i64,
     total_cities: i64,
     configured_groups: i64,
     active_groups: i64,
+}
+
+fn render_page(
+    query: &str,
+    cities: &[GeographyCityRow],
+    metrics: &GeographyMetrics,
     notice: Option<&str>,
 ) -> String {
     let cards = if cities.is_empty() {
@@ -330,11 +334,11 @@ fn render_page(
     </section>
 "#,
         notice_html = notice_html,
-        continents = continents,
-        countries = countries,
-        total_cities = total_cities,
-        configured_groups = configured_groups,
-        active_groups = active_groups,
+        continents = metrics.continents,
+        countries = metrics.countries,
+        total_cities = metrics.total_cities,
+        configured_groups = metrics.configured_groups,
+        active_groups = metrics.active_groups,
         query = escape_html(query),
         result_caption = escape_html(&result_caption),
         cards = cards,
@@ -585,49 +589,46 @@ pub async fn admin_geography_page(
         .filter(|value| !value.is_empty())
     {
         Some(format!("Telegram-группа «{title}» доступна боту."))
-    } else if let Some(error) = query
-        .group_verify_error
-        .as_ref()
-        .map(|value| value.trim())
-        .filter(|value| !value.is_empty())
-    {
-        Some(format!("Проверка не пройдена: {error}"))
     } else {
-        None
+        query
+            .group_verify_error
+            .as_ref()
+            .map(|value| value.trim())
+            .filter(|value| !value.is_empty())
+            .map(|error| format!("Проверка не пройдена: {error}"))
     };
 
-    let html = render_page(
-        &search,
-        &cities,
-        scalar(
+    let metrics = GeographyMetrics {
+        continents: scalar(
             "SELECT COUNT(*)
              FROM geo_continents
              WHERE is_active = 1",
         ),
-        scalar(
+        countries: scalar(
             "SELECT COUNT(*)
              FROM geo_countries
              WHERE is_active = 1",
         ),
-        scalar(
+        total_cities: scalar(
             "SELECT COUNT(*)
              FROM geo_cities
              WHERE is_active = 1",
         ),
-        scalar(
+        configured_groups: scalar(
             "SELECT COUNT(*)
              FROM city_publication_targets
              WHERE target_kind = 'group'",
         ),
-        scalar(
+        active_groups: scalar(
             "SELECT COUNT(*)
              FROM city_publication_targets
              WHERE target_kind = 'group'
                AND telegram_chat_id < 0
                AND is_active = 1",
         ),
-        notice.as_deref(),
-    );
+    };
+
+    let html = render_page(&search, &cities, &metrics, notice.as_deref());
 
     let mut response = Html(html).into_response();
 
@@ -1072,11 +1073,7 @@ pub async fn admin_geography_group_verify(
     let connection = match crate::db::pool::get_connection(&state.db_pool) {
         Ok(connection) => connection,
         Err(_) => {
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                "База данных недоступна",
-            )
-                .into_response();
+            return (StatusCode::SERVICE_UNAVAILABLE, "База данных недоступна").into_response();
         }
     };
 
@@ -1091,11 +1088,7 @@ pub async fn admin_geography_group_verify(
     drop(connection);
 
     let Some(stable_key) = stable_key else {
-        return (
-            StatusCode::NOT_FOUND,
-            "Город не найден",
-        )
-            .into_response();
+        return (StatusCode::NOT_FOUND, "Город не найден").into_response();
     };
 
     match verify_telegram_group(state.bot_token.as_deref(), form.telegram_chat_id).await {

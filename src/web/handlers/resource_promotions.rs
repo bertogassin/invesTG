@@ -2,18 +2,18 @@ use super::auth::verify_authenticated_user;
 use super::common::{rate_limit_retry_after, request_is_cross_site, unix_now};
 use super::types::PromotionRequestForm;
 use crate::resource_publisher::{
-    finalize_paid_promotion, mark_promotion_paid_with_reference,
-    promotion_price_label, promotion_price_minor, store_checkout_session_id,
-    try_publish_promotion, PromotionFinalizeOutcome,
+    finalize_paid_promotion, mark_promotion_paid_with_reference, promotion_price_label,
+    promotion_price_minor, store_checkout_session_id, try_publish_promotion,
+    PromotionFinalizeOutcome,
 };
 use crate::resource_screening::{listing_type_label, screen_listing_content};
+use crate::state::app_state::AppState;
 use crate::stripe_payments::{
     checkout_session_is_paid, checkout_session_payment_reference, checkout_session_request_id,
     checkout_session_user_id, create_promotion_checkout_session, fetch_checkout_session,
     mock_promotion_payment_allowed, promotion_payment_available, refund_promotion_payment,
     stripe_configured, verify_webhook_signature,
 };
-use crate::state::app_state::AppState;
 use crate::web::handlers::admin::is_resource_moderation_session;
 use crate::web::handlers::admin::moderation_scope_filter;
 use crate::web::templates;
@@ -730,11 +730,7 @@ pub async fn confirm_promotion_payment(
         let connection = match crate::db::pool::get_connection(&state.db_pool) {
             Ok(connection) => connection,
             Err(_) => {
-                return (
-                    StatusCode::SERVICE_UNAVAILABLE,
-                    "Сервис недоступен",
-                )
-                    .into_response();
+                return (StatusCode::SERVICE_UNAVAILABLE, "Сервис недоступен").into_response();
             }
         };
 
@@ -931,10 +927,7 @@ pub async fn stripe_promotion_webhook(
         return StatusCode::OK.into_response();
     }
 
-    let session = match payload
-        .get("data")
-        .and_then(|data| data.get("object"))
-    {
+    let session = match payload.get("data").and_then(|data| data.get("object")) {
         Some(session) => session.clone(),
         None => return StatusCode::BAD_REQUEST.into_response(),
     };
@@ -950,13 +943,9 @@ pub async fn stripe_promotion_webhook(
     let user_id = checkout_session_user_id(&session).unwrap_or(0);
     let payment_reference = checkout_session_payment_reference(&session);
 
-    let paid = mark_promotion_paid_with_reference(
-        &state.db_pool,
-        request_id,
-        user_id,
-        &payment_reference,
-    )
-    .unwrap_or(false);
+    let paid =
+        mark_promotion_paid_with_reference(&state.db_pool, request_id, user_id, &payment_reference)
+            .unwrap_or(false);
 
     let _ = finalize_paid_promotion(&state, request_id, user_id, paid).await;
 
@@ -989,9 +978,8 @@ pub async fn admin_promotion_queue(
     let scope_filter = moderation_scope_filter(&state, &headers).replace("resources.", "r.");
 
     let rows: Vec<(i64, i64, String, String, String, String, String, i64)> = connection
-        .prepare(
-            &format!(
-                "SELECT
+        .prepare(&format!(
+            "SELECT
                 pr.id,
                 pr.resource_id,
                 r.title,
@@ -1007,8 +995,7 @@ pub async fn admin_promotion_queue(
                {scope_filter}
              ORDER BY pr.created_at ASC, pr.id ASC
              LIMIT 100"
-            ),
-        )
+        ))
         .and_then(|mut stmt| {
             stmt.query_map([], |row| {
                 Ok((
@@ -1030,18 +1017,20 @@ pub async fn admin_promotion_queue(
 
     let notice = if query.published.as_deref() == Some("1") {
         Some("Объявление опубликовано в группе.".to_string())
-    } else if let Some(error) = query
-        .error
-        .as_ref()
-        .map(|value| value.trim())
-        .filter(|value| !value.is_empty())
-    {
-        Some(format!("Ошибка: {error}"))
     } else {
-        None
+        query
+            .error
+            .as_ref()
+            .map(|value| value.trim())
+            .filter(|value| !value.is_empty())
+            .map(|error| format!("Ошибка: {error}"))
     };
 
-    Html(templates::render_admin_promotion_queue(&rows, notice.as_deref())).into_response()
+    Html(templates::render_admin_promotion_queue(
+        &rows,
+        notice.as_deref(),
+    ))
+    .into_response()
 }
 
 pub async fn admin_approve_promotion(
@@ -1210,11 +1199,7 @@ pub async fn retry_promotion_publish(
     let connection = match crate::db::pool::get_connection(&state.db_pool) {
         Ok(connection) => connection,
         Err(_) => {
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                "Сервис недоступен",
-            )
-                .into_response();
+            return (StatusCode::SERVICE_UNAVAILABLE, "Сервис недоступен").into_response();
         }
     };
 

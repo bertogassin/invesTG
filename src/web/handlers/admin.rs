@@ -87,9 +87,8 @@ pub async fn admin_reports(State(state): State<AppState>, headers: HeaderMap) ->
     let scope_filter = moderation_scope_filter(&state, &headers).replace("resources.", "r.");
 
     let rows: Vec<crate::web::view_models::AdminReportRow> = db
-        .prepare(
-            &format!(
-                "SELECT
+        .prepare(&format!(
+            "SELECT
                 rr.id,
                 rr.reporter_user_id,
                 rr.resource_id,
@@ -112,8 +111,7 @@ pub async fn admin_reports(State(state): State<AppState>, headers: HeaderMap) ->
                 END,
                 rr.created_at DESC,
                 rr.id DESC"
-            ),
-        )
+        ))
         .and_then(|mut stmt| {
             stmt.query_map([], |row| {
                 Ok((

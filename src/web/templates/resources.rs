@@ -796,9 +796,7 @@ pub fn render_resource_promotion(params: RenderResourcePromotionParams<'_>) -> S
             let reason_html = if reason.is_empty() {
                 String::new()
             } else {
-                format!(
-                    r#"<div class="card-meta rm-promo-bot-reason">Причина: {reason}</div>"#
-                )
+                format!(r#"<div class="card-meta rm-promo-bot-reason">Причина: {reason}</div>"#)
             };
             format!(
                 r#"

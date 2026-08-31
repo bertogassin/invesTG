@@ -67,11 +67,7 @@ pub async fn publish_to_telegram_group(
     send_telegram_message_http(token, chat_id, text).await
 }
 
-async fn send_telegram_message_http(
-    token: &str,
-    chat_id: i64,
-    text: &str,
-) -> Result<i64, String> {
+async fn send_telegram_message_http(token: &str, chat_id: i64, text: &str) -> Result<i64, String> {
     let response = reqwest::Client::new()
         .post(format!("https://api.telegram.org/bot{token}/sendMessage"))
         .json(&serde_json::json!({
@@ -83,10 +79,7 @@ async fn send_telegram_message_http(
         .await
         .map_err(|error| error.to_string())?;
 
-    let payload: serde_json::Value = response
-        .json()
-        .await
-        .map_err(|error| error.to_string())?;
+    let payload: serde_json::Value = response.json().await.map_err(|error| error.to_string())?;
 
     if payload.get("ok").and_then(|value| value.as_bool()) != Some(true) {
         let description = payload
