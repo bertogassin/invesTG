@@ -518,7 +518,7 @@ pub async fn login_code_page(Query(query): Query<AuthNextQuery>) -> Html<String>
         setStatus("Отправляем код...", false);
 
         try {{
-            const response = await fetch("/app/auth/email/request", {{
+            const response = await fetch("/auth/email/request", {{
                 method: "POST",
                 headers: {{ "Content-Type": "application/json" }},
                 body: JSON.stringify({{ email }})
@@ -556,7 +556,7 @@ pub async fn login_code_page(Query(query): Query<AuthNextQuery>) -> Html<String>
         setStatus("Проверяем код...", false);
 
         try {{
-            const response = await fetch("/app/auth/email/verify", {{
+            const response = await fetch("/auth/email/verify", {{
                 method: "POST",
                 headers: {{ "Content-Type": "application/json" }},
                 body: JSON.stringify({{ email, code }})

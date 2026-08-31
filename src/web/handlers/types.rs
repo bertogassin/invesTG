@@ -6,9 +6,6 @@ pub struct AddResourceForm {
     pub description: String,
     pub contact: String,
     pub address: String,
-
-    #[serde(default)]
-    pub init_data: String,
 }
 
 #[derive(Debug, Deserialize)]

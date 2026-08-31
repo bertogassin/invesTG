@@ -1,7 +1,6 @@
-use super::common::escape_html;
 use super::common::{
-    back_hero, back_link, bottom_nav, empty_state_card, icon, navigation_card, page_document,
-    page_shell, section_head, topbar,
+    back_hero, back_link, bottom_nav, empty_state_card, escape_html, guest_locked_section, icon,
+    navigation_card, page_document, page_shell, section_head, topbar,
 };
 
 pub fn render_category(
@@ -16,16 +15,22 @@ pub fn render_category(
 
     let cards = if resources.is_empty() {
         format!(
-            r#"
-        <a class="feature"
-           href="/app/{}/{}/{}/cat/{}/add"
-           style="text-decoration:none;color:inherit;">
-            <div class="card-icon">+</div>
-            <strong>Пока ресурсов нет</strong>
-            <span>Будьте первым — добавьте ресурс в эту категорию.</span>
-        </a>
-        "#,
-            ci, si, zi, category_url
+            r#"{empty}
+            <a class="feature"
+               href="/app/{ci}/{si}/{zi}/cat/{category_url}/add"
+               style="text-decoration:none;color:inherit;margin-top:12px;display:block;">
+                <div class="card-icon">+</div>
+                <strong>Добавить ресурс</strong>
+                <span>Будьте первым в этой категории.</span>
+            </a>"#,
+            ci = ci,
+            si = si,
+            zi = zi,
+            category_url = category_url,
+            empty = empty_state_card(
+                "Пока ресурсов нет",
+                "Будьте первым — добавьте ресурс в эту категорию.",
+            ),
         )
     } else {
         resources
@@ -1251,10 +1256,7 @@ pub fn render_my_resources(
     resources: Vec<crate::web::view_models::MyResourceRow>,
 ) -> String {
     let cards = if client_id.is_empty() {
-        empty_state_card(
-            "Профиль владельца не определён",
-            "Войдите в аккаунт ResursMap ещё раз.",
-        )
+        guest_locked_section("Мои ресурсы", "/app/my-resources")
     } else if resources.is_empty() {
         empty_state_card(
             "Нет опубликованных ресурсов",
@@ -1549,13 +1551,9 @@ pub fn render_my_resources(
             "Ваши объявления, компании, услуги и другие ресурсы.",
         ),
         &content,
-        "",
+        &bottom_nav("profile"),
     )
 }
-
-// ============================================================
-// РЕДАКТИРОВАНИЕ РЕСУРСА
-// ============================================================
 
 pub fn render_edit_resource(
     id: i64,
@@ -1652,7 +1650,7 @@ pub fn render_edit_resource(
             &format!("Категория: {}", category),
         ),
         &content,
-        "",
+        &bottom_nav("profile"),
     )
 }
 
@@ -1663,10 +1661,6 @@ pub fn render_add_resource(ci: usize, si: usize, zi: usize, category: &str) -> S
         r####"<form method="post"
       action="/app/{}/{}/{}/cat/{}/add"
       style="display:flex;flex-direction:column;gap:16px;" class="ui-form">
-
-    <input type="hidden" name="init_data" id="telegram-init-data" value="">
-
-
 
     <label>
         <div style="margin-bottom:7px;font-weight:600;">
@@ -1748,35 +1742,12 @@ pub fn render_add_resource(ci: usize, si: usize, zi: usize, category: &str) -> S
         content = content,
     );
 
-    let body_after = r####"<script>
-(function() {
-    const initDataField = document.getElementById("telegram-init-data");
-
-    // Передаём Telegram initData как безопасный fallback,
-    // если пользовательская session cookie ещё не создана.
-    try {
-        const tg =
-            window.Telegram && window.Telegram.WebApp
-                ? window.Telegram.WebApp
-                : null;
-
-        if (tg) {
-            tg.ready();
-
-            if (initDataField && tg.initData) {
-                initDataField.value = tg.initData;
-            }
-        }
-    } catch (_) {}
-})();
-</script>"####;
-
     page_document(
         "Добавить ресурс · ResursMap",
-        r####"<script src="https://telegram.org/js/telegram-web-app.js"></script>"####,
+        "",
         "",
         &main_html,
-        &bottom_nav("map"),
-        body_after,
+        &bottom_nav("profile"),
+        "",
     )
 }

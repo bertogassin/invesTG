@@ -21,6 +21,8 @@ pub(super) fn routes() -> Router<AppState> {
         .route("/auth/login-email", post(login_email))
         .route("/auth/forgot-password", post(forgot_password_request))
         .route("/auth/reset-password", post(reset_password))
+        .route("/auth/email/request", post(email_auth_request))
+        .route("/auth/email/verify", post(email_auth_verify))
         .route("/app/auth", get(app_auth_page).post(app_auth))
         .route("/app/logout", post(app_logout))
         .route(

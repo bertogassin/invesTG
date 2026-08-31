@@ -1,4 +1,4 @@
-use super::auth::{verify_authenticated_user, verify_telegram_init_data, verify_user_session};
+use super::auth::{verify_authenticated_user, verify_user_session};
 use super::common::{
     csrf_rejected_response, input_text_is_valid, rate_limit_retry_after, request_is_cross_site,
 };
@@ -8,7 +8,7 @@ use crate::web::templates;
 use axum::{
     extract::{Form, Path, State},
     http::{header, HeaderMap, StatusCode},
-    response::{Html, IntoResponse, Response},
+    response::{Html, IntoResponse, Redirect, Response},
     Json,
 };
 use serde_json::json;
@@ -161,9 +161,23 @@ pub async fn resource_profile(State(state): State<AppState>, Path(id): Path<i64>
 }
 
 pub async fn add_resource_page(
+    State(state): State<AppState>,
     Path((ci, si, zi, k)): Path<(usize, usize, usize, String)>,
-) -> Html<String> {
-    Html(templates::render_add_resource(ci, si, zi, &k))
+    headers: HeaderMap,
+) -> Response {
+    if verify_authenticated_user(&state, &headers).is_none() {
+        let category = k.trim();
+        let category_url = urlencoding::encode(category);
+        let next = format!("/app/{ci}/{si}/{zi}/cat/{category_url}/add");
+
+        return Redirect::temporary(&format!(
+            "/login?next={}",
+            urlencoding::encode(&next)
+        ))
+        .into_response();
+    }
+
+    Html(templates::render_add_resource(ci, si, zi, k.trim())).into_response()
 }
 
 pub async fn add_resource(
@@ -185,7 +199,6 @@ pub async fn add_resource(
     let description = form.description.trim();
     let contact = form.contact.trim();
     let address = form.address.trim();
-    let init_data = form.init_data.trim();
 
     if !input_text_is_valid(category, 1, 100) {
         return (
@@ -193,6 +206,26 @@ pub async fn add_resource(
             Html("<h1>400</h1><p>Некорректная категория.</p>".to_string()),
         )
             .into_response();
+    }
+
+    let category_url = urlencoding::encode(category);
+
+    let (owner_user_id, owner_client_id) =
+        if let Some(user) = verify_authenticated_user(&state, &headers) {
+            (user.user_id, user.client_id)
+        } else {
+            (0, String::new())
+        };
+
+    if owner_user_id <= 0 || owner_client_id.is_empty() {
+        return Html(templates::status_page(
+            "Требуется вход · ResursMap",
+            "⚠ Авторизация",
+            "Не удалось подтвердить пользователя",
+            "Войдите в аккаунт и попробуйте добавить ресурс снова.",
+            &templates::navigation_card("/login", "user", "Войти в аккаунт", ""),
+        ))
+        .into_response();
     }
 
     if !input_text_is_valid(title, 1, 120) {
@@ -233,48 +266,6 @@ pub async fn add_resource(
             .into_response();
     }
 
-    // Telegram initData обычно намного меньше.
-    // Ограничение защищает endpoint от бессмысленно огромного значения.
-    if !input_text_is_valid(init_data, 0, 8192) {
-        return (
-            StatusCode::BAD_REQUEST,
-            Html("<h1>400</h1><p>Некорректные данные Telegram.</p>".to_string()),
-        )
-            .into_response();
-    }
-
-    let category_url = urlencoding::encode(category);
-
-    let (owner_user_id, owner_client_id) =
-        if let Some(user) = verify_authenticated_user(&state, &headers) {
-            (user.user_id, user.client_id)
-        } else if !init_data.is_empty() {
-            match verify_telegram_init_data(init_data, &state.bot_token) {
-                Some(user_id) => (user_id, format!("tg:{}", user_id)),
-                None => (0, String::new()),
-            }
-        } else {
-            (0, String::new())
-        };
-
-    if owner_user_id <= 0 || owner_client_id.is_empty() {
-        return Html(templates::status_page(
-            "Требуется вход · ResursMap",
-            "⚠ Авторизация",
-            "Не удалось подтвердить пользователя",
-            "Войдите в аккаунт и попробуйте добавить ресурс снова.",
-            &templates::navigation_card("/login", "user", "Войти в аккаунт", ""),
-        ))
-        .into_response();
-    }
-
-    if owner_user_id <= 0 {
-        return (
-            StatusCode::UNAUTHORIZED,
-            Html("<h1>401</h1><p>Не удалось определить пользователя.</p>".to_string()),
-        )
-            .into_response();
-    }
 
     if let Some(retry_after) =
         rate_limit_retry_after(&state, owner_user_id, "resource_add", 10, 3600).await

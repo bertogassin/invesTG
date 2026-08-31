@@ -307,6 +307,22 @@ pub fn render_continents(
 
     let guest_hint = if guest_mode { guest_mode_hint() } else { "" };
 
+    let my_resources_href = if guest_mode {
+        format!("/login?next={}", urlencoding::encode("/app/my-resources"))
+    } else {
+        "/app/my-resources".to_string()
+    };
+    let favorites_href = if guest_mode {
+        format!("/login?next={}", urlencoding::encode("/app/favorites"))
+    } else {
+        "/app/favorites".to_string()
+    };
+    let messages_href = if guest_mode {
+        format!("/login?next={}", urlencoding::encode("/app/messages"))
+    } else {
+        "/app/messages".to_string()
+    };
+
     let hero = format!(
         r#"<section class="hero">
     <div class="eyebrow">
@@ -443,19 +459,19 @@ pub fn render_continents(
 {section_head_features}
 
 <div class="feature-grid">
-    <a href="/app/my-resources" class="feature" style="text-decoration:none;color:inherit;">
+    <a href="{my_resources_href}" class="feature" style="text-decoration:none;color:inherit;">
         {map_icon}
         <strong>Мои ресурсы</strong>
         <span>Публикации и управление.</span>
     </a>
 
-    <a href="/app/favorites" class="feature" style="text-decoration:none;color:inherit;">
+    <a href="{favorites_href}" class="feature" style="text-decoration:none;color:inherit;">
         {heart_icon}
         <strong>Избранное</strong>
         <span>Сохранённые ресурсы.</span>
     </a>
 
-    <a href="/app/messages" class="feature" style="text-decoration:none;color:inherit;">
+    <a href="{messages_href}" class="feature" style="text-decoration:none;color:inherit;">
         {message_icon}
         <strong>Сообщения</strong>
         <span>Личные диалоги.</span>
@@ -559,6 +575,9 @@ pub fn render_continents(
         topbar = topbar("Карта", "globe"),
         hero = hero,
         cards = cards,
+        my_resources_href = my_resources_href,
+        favorites_href = favorites_href,
+        messages_href = messages_href,
         map_icon = icon("map"),
         heart_icon = icon("heart"),
         message_icon = icon("message-circle"),

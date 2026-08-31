@@ -7,7 +7,7 @@ pub fn escape_html(value: &str) -> String {
         .replace('\'', "&#39;")
 }
 
-pub const STATIC_ASSET_VERSION: &str = "4.9.7";
+pub const STATIC_ASSET_VERSION: &str = "4.9.8";
 
 pub fn profession_label(raw: &str) -> String {
     match raw.trim().to_lowercase().as_str() {
@@ -1986,7 +1986,7 @@ pub(crate) fn empty_state_card(title: &str, description_html: &str) -> String {
 }
 
 pub(crate) fn guest_mode_hint() -> &'static str {
-    ""
+    r#"<p class="rm-guest-hint" style="margin:14px 0 0;padding:12px 14px;border-radius:12px;border:1px solid rgba(214,183,122,.24);background:rgba(214,183,122,.08);color:var(--muted);font-size:14px;line-height:1.5;">Вы смотрите как гость. Карта и поиск доступны без регистрации. <a href="/login" style="color:var(--gold-light);">Войти</a> · <a href="/register" style="color:var(--gold-light);">Регистрация</a></p>"#
 }
 
 pub(crate) fn guest_mode_panel(next_path: &str) -> String {

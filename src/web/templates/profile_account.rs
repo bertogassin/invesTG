@@ -1482,7 +1482,7 @@ intent_text:
 
     page_document(
         "Профиль · ResursMap",
-        r####"<script src="https://telegram.org/js/telegram-web-app.js"></script>"####,
+        "",
         "",
         &main_html,
         &bottom_nav_with_badge("profile", attention_count),
