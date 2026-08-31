@@ -11,7 +11,6 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use teloxide::prelude::*;
 
 const DEFAULT_PAGE_SIZE: i64 = 50;
 const MAX_PAGE_SIZE: i64 = 100;
@@ -963,19 +962,11 @@ pub async fn api_chat_send(
 
     if let Some(telegram_id) = telegram_id {
         if telegram_id > 0 {
-            let bot_token = state.bot_token.clone();
-
-            std::mem::drop(tokio::spawn(async move {
-                let bot = Bot::new(bot_token);
-
-                let _ =
-                    crate::bot::handler::send_notification(
-                        &bot,
-                        telegram_id,
-                        "📩 У вас новое сообщение в ResursMap!\n\nОткройте чат: https://resursmap.de/app/messages",
-                    )
-                    .await;
-            }));
+            crate::telegram_notify::notify_telegram_user(
+                state.bot_token.as_deref(),
+                telegram_id,
+                "📩 У вас новое сообщение в ResursMap!\n\nОткройте чат: https://resursmap.de/app/messages",
+            );
         }
     }
 

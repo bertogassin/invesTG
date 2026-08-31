@@ -1,5 +1,12 @@
+#[cfg(feature = "telegram-bot")]
 pub mod groups;
+#[cfg(feature = "telegram-bot")]
 pub mod handler;
+#[cfg(feature = "telegram-bot")]
 pub mod keyboard;
+#[cfg(feature = "telegram-bot")]
+pub mod runtime;
+#[cfg(feature = "telegram-bot")]
 pub mod security;
+#[cfg(feature = "telegram-bot")]
 pub mod translator;

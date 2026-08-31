@@ -123,7 +123,7 @@ pub async fn admin_login(
         .and_then(|v| v.as_str())
         .unwrap_or("");
 
-    let user_id = match verify_telegram_init_data(init_data, &state.bot_token) {
+    let user_id = match verify_telegram_init_data(init_data, state.bot_token.as_deref()) {
         Some(id) if id == state.admin_telegram_id => id,
 
         _ => {

@@ -50,7 +50,7 @@ pub struct AppState {
     // Новый SQLite connection pool.
     pub db_pool: DbPool,
 
-    pub bot_token: String,
+    pub bot_token: Option<String>,
     pub admin_key: String,
     pub admin_telegram_id: i64,
 
@@ -82,7 +82,7 @@ pub struct AppState {
 impl AppState {
     pub fn new(
         db_pool: DbPool,
-        bot_token: String,
+        bot_token: Option<String>,
         admin_key: String,
         admin_telegram_id: i64,
     ) -> Self {

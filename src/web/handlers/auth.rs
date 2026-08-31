@@ -16,7 +16,9 @@ use sha2::{Digest, Sha256};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-pub(super) fn verify_telegram_init_data(init_data: &str, bot_token: &str) -> Option<i64> {
+pub(super) fn verify_telegram_init_data(init_data: &str, bot_token: Option<&str>) -> Option<i64> {
+    let bot_token = bot_token.filter(|value| !value.is_empty())?;
+
     let mut hash_from_telegram = String::new();
     let mut pairs: Vec<(String, String)> = Vec::new();
 
@@ -1311,7 +1313,7 @@ pub async fn app_auth(
         .and_then(|v| v.as_str())
         .unwrap_or("");
 
-    let user_id = match verify_telegram_init_data(init_data, &state.bot_token) {
+    let user_id = match verify_telegram_init_data(init_data, state.bot_token.as_deref()) {
         Some(id) => id,
 
         None => {
@@ -1319,7 +1321,11 @@ pub async fn app_auth(
                 StatusCode::FORBIDDEN,
                 Json(json!({
                     "ok": false,
-                    "error": "invalid_telegram_data"
+                    "error": if state.bot_token.is_some() {
+                        "invalid_telegram_data"
+                    } else {
+                        "telegram_auth_disabled"
+                    }
                 })),
             )
                 .into_response();
