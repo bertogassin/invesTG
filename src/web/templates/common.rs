@@ -7,7 +7,7 @@ pub fn escape_html(value: &str) -> String {
         .replace('\'', "&#39;")
 }
 
-pub const STATIC_ASSET_VERSION: &str = "4.9.11";
+pub const STATIC_ASSET_VERSION: &str = "4.9.12";
 
 pub fn profession_label(raw: &str) -> String {
     match raw.trim().to_lowercase().as_str() {
@@ -2201,6 +2201,7 @@ pub(crate) fn workflow_status_label(status: &str) -> &'static str {
         "closed" => "Закрыта",
         "escalated" => "Передана выше",
         "rejected" => "Отклонена",
+        "approved" => "Одобрен",
         "active" => "Активна",
         "suspended" => "Приостановлена",
         _ => "",
@@ -2458,10 +2459,350 @@ fn admin_ops_styles() -> &'static str {
     }
     .rm-admin-ops .action-buttons { grid-template-columns: 1fr; }
 }
+.rm-admin-ops.rm-admin-ops--city {
+    width: min(1180px, 100%);
+}
+.rm-admin-ops--city .hero {
+    border-color: rgba(85, 228, 154, .28);
+    background: linear-gradient(145deg, rgba(21, 50, 38, .98), rgba(8, 20, 15, .98));
+}
+.rm-admin-ops--city .eyebrow {
+    color: #55e49a;
+    font-size: 12px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+}
+.rm-admin-ops--city .hero-top,
+.rm-admin-ops--city .row,
+.rm-admin-ops--city .list-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 14px;
+}
+.rm-admin-ops--city .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 9px;
+    margin-top: 20px;
+}
+.rm-admin-ops--city .button {
+    padding: 11px 14px;
+    border: 1px solid var(--ops-line);
+    border-radius: 13px;
+    color: var(--text);
+    background: rgba(17, 37, 28, .88);
+    text-decoration: none;
+}
+.rm-admin-ops--city .button.primary {
+    color: #062015;
+    background: #55e49a;
+    border-color: #55e49a;
+    font-weight: 800;
+}
+.rm-admin-ops--city .metrics {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+.rm-admin-ops--city .metric strong {
+    color: #55e49a;
+}
+.rm-admin-ops--city .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.rm-admin-ops--city .card,
+.rm-admin-ops--city .panel {
+    padding: 16px;
+    border: 1px solid var(--ops-line);
+    border-radius: 18px;
+    background: linear-gradient(145deg, rgba(18, 38, 29, .96), rgba(8, 19, 14, .96));
+}
+.rm-admin-ops--city .panel {
+    padding: 0;
+    overflow: hidden;
+}
+.rm-admin-ops--city .list-row {
+    align-items: center;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--ops-line);
+}
+.rm-admin-ops--city .list-row:last-child {
+    border-bottom: 0;
+}
+.rm-admin-ops--city .list-row small {
+    display: block;
+    margin-top: 5px;
+}
+.rm-admin-ops--city .right {
+    text-align: right;
+}
+.rm-admin-ops--city .badge {
+    display: inline-block;
+    padding: 5px 8px;
+    border: 1px solid var(--ops-line);
+    border-radius: 999px;
+    color: #55e49a;
+    font-size: 12px;
+}
+.rm-admin-ops--city .badge.warning {
+    color: var(--ops-gold);
+}
+.rm-admin-ops--city .badge.danger {
+    color: var(--ops-red);
+}
+.rm-admin-ops--city .meta a {
+    color: #55e49a;
+}
+.rm-admin-ops--city footer {
+    margin-top: 28px;
+    color: var(--ops-muted);
+    font-size: 12px;
+}
+.rm-admin-ops.rm-admin-ops--geo {
+    width: min(1180px, 100%);
+}
+.rm-admin-ops--geo .protected {
+    border-color: rgba(214, 183, 122, .35);
+    color: var(--ops-gold);
+    letter-spacing: .08em;
+}
+.rm-admin-ops--geo .hero {
+    position: relative;
+    overflow: hidden;
+    border-color: rgba(214, 183, 122, .25);
+    background:
+        linear-gradient(135deg, rgba(214, 183, 122, .14), rgba(17, 21, 28, .94) 48%),
+        var(--card);
+}
+.rm-admin-ops--geo .kicker {
+    color: var(--ops-gold);
+}
+.rm-admin-ops--geo .metrics {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+.rm-admin-ops--geo .metric strong {
+    color: var(--ops-gold);
+}
+.rm-admin-ops--geo .search {
+    position: sticky;
+    top: 8px;
+    z-index: 10;
+    display: flex;
+    gap: 10px;
+    padding: 12px;
+    margin: 0 0 18px;
+    border: 1px solid var(--ops-line);
+    border-radius: 18px;
+    background: rgba(7, 9, 13, .86);
+    backdrop-filter: blur(18px);
+}
+.rm-admin-ops--geo .search input {
+    flex: 1;
+    min-width: 0;
+    min-height: 48px;
+    padding: 0 16px;
+    border: 1px solid var(--ops-line);
+    border-radius: 14px;
+    color: var(--text);
+    background: rgba(22, 27, 36, .92);
+    font: inherit;
+}
+.rm-admin-ops--geo .search button {
+    min-height: 48px;
+    padding: 0 20px;
+    border: 0;
+    border-radius: 14px;
+    color: #17120a;
+    background: linear-gradient(135deg, #ead29f, var(--ops-gold));
+    font-weight: 900;
+    cursor: pointer;
+}
+.rm-admin-ops--geo .city-list {
+    display: grid;
+    gap: 12px;
+}
+.rm-admin-ops--geo .city-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 260px;
+    gap: 16px;
+    padding: 18px;
+    border: 1px solid var(--ops-line);
+    border-radius: 20px;
+    background: linear-gradient(145deg, rgba(22, 27, 36, .95), rgba(13, 17, 23, .96));
+}
+.rm-admin-ops--geo .city-title-row {
+    display: flex;
+    align-items: start;
+    justify-content: space-between;
+    gap: 12px;
+}
+.rm-admin-ops--geo .city-card h3 {
+    margin: 0;
+    font-size: 20px;
+}
+.rm-admin-ops--geo .native {
+    display: block;
+    margin-top: 3px;
+    color: var(--ops-muted);
+    font-size: 13px;
+}
+.rm-admin-ops--geo .location {
+    margin-top: 8px;
+    color: #c7ccd5;
+}
+.rm-admin-ops--geo .city-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+    margin-top: 12px;
+}
+.rm-admin-ops--geo .city-meta span {
+    padding: 5px 8px;
+    border: 1px solid var(--ops-line);
+    border-radius: 999px;
+    color: var(--ops-muted);
+    font-size: 11px;
+}
+.rm-admin-ops--geo .group-status {
+    white-space: nowrap;
+    padding: 6px 9px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 900;
+}
+.rm-admin-ops--geo .group-status.connected {
+    color: var(--ops-green);
+    background: rgba(70, 211, 154, .10);
+    border: 1px solid rgba(70, 211, 154, .30);
+}
+.rm-admin-ops--geo .group-status.disabled {
+    color: var(--ops-red);
+    background: rgba(255, 125, 125, .09);
+    border: 1px solid rgba(255, 125, 125, .28);
+}
+.rm-admin-ops--geo .group-status.missing {
+    color: var(--ops-muted);
+    background: rgba(255, 255, 255, .04);
+    border: 1px solid var(--ops-line);
+}
+.rm-admin-ops--geo .group-panel {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 14px;
+    border: 1px solid var(--ops-line);
+    border-radius: 15px;
+    background: rgba(0, 0, 0, .18);
+}
+.rm-admin-ops--geo .group-panel small {
+    margin-top: 5px;
+    color: var(--ops-muted);
+}
+.rm-admin-ops--geo .group-editor {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--ops-line);
+}
+.rm-admin-ops--geo .group-editor summary {
+    cursor: pointer;
+    color: var(--ops-gold);
+    font-size: 13px;
+    font-weight: 850;
+}
+.rm-admin-ops--geo .group-form {
+    display: grid;
+    gap: 10px;
+    margin-top: 12px;
+}
+.rm-admin-ops--geo .group-form label {
+    display: grid;
+    gap: 5px;
+    color: var(--ops-muted);
+    font-size: 11px;
+    font-weight: 750;
+}
+.rm-admin-ops--geo .group-form input:not([type="hidden"]):not([type="checkbox"]) {
+    width: 100%;
+    min-height: 42px;
+    padding: 0 11px;
+    border: 1px solid var(--ops-line);
+    border-radius: 11px;
+    color: var(--text);
+    background: #0c1016;
+    font: inherit;
+}
+.rm-admin-ops--geo .group-form .active-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text);
+}
+.rm-admin-ops--geo .group-form button {
+    min-height: 43px;
+    border: 0;
+    border-radius: 11px;
+    color: #17120a;
+    background: linear-gradient(135deg, #ead29f, var(--ops-gold));
+    font-weight: 900;
+    cursor: pointer;
+}
+.rm-admin-ops--geo .telegram-link {
+    margin-top: 12px;
+    color: var(--ops-blue);
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 800;
+}
+.rm-admin-ops--geo .empty-state {
+    padding: 42px 20px;
+    border: 1px dashed var(--ops-line);
+    border-radius: 22px;
+    text-align: center;
+    color: var(--ops-muted);
+}
+.rm-admin-ops--geo .empty-state h2 {
+    margin: 8px 0;
+    color: var(--text);
+}
+.rm-admin-ops--geo .empty-state p {
+    margin: 0;
+}
+.rm-admin-ops--geo .empty-icon {
+    font-size: 38px;
+}
+@media (max-width: 900px) {
+    .rm-admin-ops--city .metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+    .rm-admin-ops--geo .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .rm-admin-ops--geo .metric:last-child { grid-column: 1 / -1; }
+    .rm-admin-ops--geo .search { flex-direction: column; align-items: stretch; }
+    .rm-admin-ops--geo .city-card { grid-template-columns: 1fr; }
+}
+@media (max-width: 650px) {
+    .rm-admin-ops--city .metrics,
+    .rm-admin-ops--city .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .rm-admin-ops--city .list-row,
+    .rm-admin-ops--city .hero-top { align-items: flex-start; }
+}
+@media (max-width: 430px) {
+    .rm-admin-ops--city .metrics,
+    .rm-admin-ops--city .grid { grid-template-columns: 1fr; }
+    .rm-admin-ops--city .list-row { flex-direction: column; }
+    .rm-admin-ops--city .right { text-align: left; }
+}
 "#
 }
 
 pub(crate) fn admin_ops_page(title: &str, content_html: &str) -> String {
+    admin_ops_page_themed(title, "", content_html)
+}
+
+pub(crate) fn admin_ops_page_themed(title: &str, theme_modifier: &str, content_html: &str) -> String {
+    let wrapper_class = if theme_modifier.is_empty() {
+        "rm-admin-ops".to_string()
+    } else {
+        format!("rm-admin-ops {theme_modifier}")
+    };
+
     let head_extra = format!(
         r#"<meta name="robots" content="noindex,nofollow">
 <style>{styles}</style>"#,
@@ -2472,7 +2813,7 @@ pub(crate) fn admin_ops_page(title: &str, content_html: &str) -> String {
         title,
         &head_extra,
         "",
-        &format!(r#"<div class="rm-admin-ops">{content_html}</div>"#),
+        &format!(r#"<div class="{wrapper_class}">{content_html}</div>"#),
         "",
         "",
     )

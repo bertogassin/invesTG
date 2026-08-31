@@ -4,7 +4,7 @@ use super::admin_access::{
 };
 use super::auth::verify_authenticated_user;
 use crate::state::app_state::AppState;
-use crate::web::templates::escape_html;
+use crate::web::templates::{admin_ops_page_themed, escape_html, workflow_status_label_or_raw};
 use axum::{
     extract::State,
     http::{header, HeaderMap, HeaderValue, StatusCode},
@@ -85,7 +85,7 @@ fn render_page(
                         name = escape_html(name),
                         platform = escape_html(platform),
                         external_id = escape_html(external_id),
-                        status = escape_html(status),
+                        status = escape_html(&workflow_status_label_or_raw(status)),
                         active = if *active == 1 { "да" } else { "нет" },
                         link = link,
                     )
@@ -105,7 +105,7 @@ fn render_page(
                     format!(
                         r#"<div class="list-row">
                             <div>
-                                <strong>User #{user_id}</strong>
+                                <strong>Пользователь #{user_id}</strong>
                                 <small>{group_name}</small>
                             </div>
                             <div class="right">
@@ -116,7 +116,7 @@ fn render_page(
                         assignment_id = assignment_id,
                         user_id = user_id,
                         group_name = escape_html(group_name),
-                        status = escape_html(status),
+                        status = escape_html(&workflow_status_label_or_raw(status)),
                         mask = mask,
                         until = valid_until
                             .map(|value| value.to_string())
@@ -149,7 +149,7 @@ fn render_page(
                     resource_id = resource_id,
                     title = escape_html(title),
                     reason = escape_html(reason),
-                    status = escape_html(status),
+                    status = escape_html(&workflow_status_label_or_raw(status)),
                     created_at = created_at,
                 )
             })
@@ -177,7 +177,7 @@ fn render_page(
                     id = id,
                     title = escape_html(title),
                     category = escape_html(category),
-                    status = escape_html(status),
+                    status = escape_html(&workflow_status_label_or_raw(status)),
                     active = if *active == 1 { "да" } else { "нет" },
                     verified = if *verified == 1 { "да" } else { "нет" },
                 )
@@ -195,7 +195,7 @@ fn render_page(
                 format!(
                     r#"<div class="list-row">
                         <div>
-                            <strong>{action} · User #{user_id}</strong>
+                            <strong>{action} · Пользователь #{user_id}</strong>
                             <small>{reason}</small>
                         </div>
                         <div class="right">
@@ -215,109 +215,8 @@ fn render_page(
             .join("")
     };
 
-    format!(
-        r#"<!doctype html>
-<html lang="ru">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex,nofollow">
-<title>{city_name} · Управление городом · ResursMap</title>
-<style>
-:root {{
-    color-scheme:dark;
-    --bg:#07110d;
-    --panel:#0d1c16;
-    --panel2:#12251d;
-    --line:#254438;
-    --text:#eef8f2;
-    --muted:#95aa9f;
-    --green:#55e49a;
-    --gold:#e9c46a;
-    --red:#ff7b7b;
-}}
-* {{ box-sizing:border-box; }}
-body {{
-    margin:0;
-    color:var(--text);
-    background:
-      radial-gradient(circle at 15% 0%,#163d2b 0,transparent 34%),
-      radial-gradient(circle at 90% 12%,#173329 0,transparent 28%),
-      var(--bg);
-    font-family:Inter,system-ui,-apple-system,sans-serif;
-}}
-.wrap {{ width:min(1180px,calc(100% - 28px)); margin:0 auto; padding:24px 0 60px; }}
-.hero {{
-    padding:28px;
-    border:1px solid var(--line);
-    border-radius:28px;
-    background:linear-gradient(145deg,rgba(21,50,38,.98),rgba(8,20,15,.98));
-    box-shadow:0 24px 70px rgba(0,0,0,.3);
-}}
-.hero-top,.row,.section-head,.list-row {{ display:flex; justify-content:space-between; gap:14px; }}
-.eyebrow {{ color:var(--green); font-size:12px; letter-spacing:.14em; text-transform:uppercase; }}
-h1 {{ margin:10px 0 6px; font-size:clamp(30px,6vw,54px); }}
-.hero p,.card p {{ color:var(--muted); }}
-.actions {{ display:flex; flex-wrap:wrap; gap:9px; margin-top:20px; }}
-.button {{
-    padding:11px 14px;
-    border:1px solid var(--line);
-    border-radius:13px;
-    color:var(--text);
-    background:#11251c;
-    text-decoration:none;
-}}
-.button.primary {{ color:#062015; background:var(--green); border-color:var(--green); font-weight:800; }}
-.metrics {{ display:grid; grid-template-columns:repeat(6,1fr); gap:10px; margin:16px 0 26px; }}
-.metric,.card,.panel {{
-    border:1px solid var(--line);
-    background:linear-gradient(145deg,rgba(18,38,29,.96),rgba(8,19,14,.96));
-    border-radius:18px;
-}}
-.metric {{ padding:16px; }}
-.metric strong {{ display:block; color:var(--green); font-size:25px; }}
-.metric span,.meta,small {{ color:var(--muted); font-size:12px; }}
-.section-head {{ align-items:end; margin:25px 2px 11px; }}
-.section-head h2 {{ margin:0; }}
-.grid {{ display:grid; grid-template-columns:repeat(2,1fr); gap:11px; }}
-.card {{ padding:16px; }}
-.panel {{ overflow:hidden; }}
-.list-row {{ align-items:center; padding:14px 16px; border-bottom:1px solid var(--line); }}
-.list-row:last-child {{ border-bottom:0; }}
-.list-row small {{ display:block; margin-top:5px; }}
-.right {{ text-align:right; }}
-.badge {{
-    display:inline-block;
-    padding:5px 8px;
-    border:1px solid var(--line);
-    border-radius:999px;
-    color:var(--green);
-    font-size:12px;
-}}
-.badge.warning {{ color:var(--gold); }}
-.badge.danger {{ color:var(--red); }}
-.meta {{ display:flex; flex-wrap:wrap; gap:10px; }}
-.meta a {{ color:var(--green); }}
-.empty {{ padding:20px; color:var(--muted); border:1px dashed var(--line); border-radius:16px; }}
-footer {{ margin-top:28px; color:var(--muted); font-size:12px; }}
-@media(max-width:900px) {{
-    .metrics {{ grid-template-columns:repeat(3,1fr); }}
-}}
-@media(max-width:650px) {{
-    .wrap {{ width:min(100% - 18px,1180px); padding-top:10px; }}
-    .hero {{ padding:20px; border-radius:21px; }}
-    .metrics,.grid {{ grid-template-columns:1fr 1fr; }}
-    .list-row,.hero-top {{ align-items:flex-start; }}
-}}
-@media(max-width:430px) {{
-    .metrics,.grid {{ grid-template-columns:1fr; }}
-    .list-row {{ flex-direction:column; }}
-    .right {{ text-align:left; }}
-}}
-</style>
-</head>
-<body>
-<main class="wrap">
+    let content = format!(
+        r#"
 <section class="hero">
     <div class="hero-top">
         <div>
@@ -360,11 +259,9 @@ footer {{ margin-top:28px; color:var(--muted); font-size:12px; }}
 <section class="panel">{event_rows}</section>
 
 <footer>
-    Территория: {stable_key} · City ID {city_id}. Данные ограничены серверной областью назначения.
+    Территория: {stable_key} · ID города {city_id}. Данные ограничены серверной областью назначения.
 </footer>
-</main>
-</body>
-</html>"#,
+"#,
         city_name = escape_html(&city.name),
         native_name = escape_html(&city.native_name),
         country_name = escape_html(&city.country_name),
@@ -388,6 +285,12 @@ footer {{ margin-top:28px; color:var(--muted); font-size:12px; }}
         report_rows = report_rows,
         resource_rows = resource_rows,
         event_rows = event_rows,
+    );
+
+    admin_ops_page_themed(
+        &format!("{} · Управление городом · ResursMap", escape_html(&city.name)),
+        "rm-admin-ops--city",
+        &content,
     )
 }
 

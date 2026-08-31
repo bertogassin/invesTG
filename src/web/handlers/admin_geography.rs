@@ -4,7 +4,7 @@ use super::admin_access::{
 };
 use super::auth::verify_authenticated_user;
 use crate::state::app_state::AppState;
-use crate::web::templates::escape_html;
+use crate::web::templates::{admin_ops_page_themed, escape_html};
 use axum::{
     extract::{Form, Query, State},
     http::{header, HeaderMap, HeaderValue, StatusCode},
@@ -243,353 +243,15 @@ fn render_page(
         format!("Результаты поиска · найдено до {}", cities.len())
     };
 
-    format!(
-        r#"<!doctype html>
-<html lang="ru">
-<head>
-<meta charset="utf-8">
-<meta name="viewport"
-      content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="robots" content="noindex,nofollow">
-<title>География и группы · ResursMap</title>
-<style>
-:root {{
-    color-scheme:dark;
-    --bg:#07090d;
-    --panel:#11151c;
-    --panel-2:#161b24;
-    --line:rgba(255,255,255,.10);
-    --text:#f7f2e8;
-    --muted:#9ea7b5;
-    --gold:#d6b77a;
-    --green:#46d39a;
-    --red:#ff7d7d;
-    --blue:#72aaff;
-}}
-* {{ box-sizing:border-box; }}
-body {{
-    margin:0;
-    min-height:100vh;
-    color:var(--text);
-    background:
-        radial-gradient(circle at 15% 0%,rgba(214,183,122,.13),transparent 32%),
-        radial-gradient(circle at 100% 20%,rgba(94,120,255,.10),transparent 28%),
-        var(--bg);
-    font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-}}
-.page {{
-    width:min(1180px,100%);
-    margin:0 auto;
-    padding:
-        max(18px,env(safe-area-inset-top))
-        16px
-        calc(80px + env(safe-area-inset-bottom));
-}}
-.topbar {{
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    gap:12px;
-    margin-bottom:18px;
-}}
-.back {{
-    color:var(--text);
-    text-decoration:none;
-    font-weight:800;
-}}
-.protected {{
-    padding:8px 11px;
-    border:1px solid rgba(214,183,122,.35);
-    border-radius:999px;
-    color:var(--gold);
-    font-size:11px;
-    font-weight:900;
-    letter-spacing:.08em;
-}}
-.hero {{
-    position:relative;
-    overflow:hidden;
-    padding:28px;
-    border:1px solid rgba(214,183,122,.25);
-    border-radius:26px;
-    background:
-        linear-gradient(135deg,rgba(214,183,122,.14),rgba(17,21,28,.94) 48%),
-        var(--panel);
-    box-shadow:0 24px 70px rgba(0,0,0,.32);
-}}
-.hero::after {{
-    content:"";
-    position:absolute;
-    width:230px;
-    height:230px;
-    right:-80px;
-    top:-100px;
-    border-radius:50%;
-    border:1px solid rgba(214,183,122,.20);
-    box-shadow:0 0 80px rgba(214,183,122,.11);
-}}
-.kicker {{
-    color:var(--gold);
-    font-size:12px;
-    font-weight:900;
-    letter-spacing:.12em;
-    text-transform:uppercase;
-}}
-h1 {{
-    max-width:760px;
-    margin:10px 0;
-    font-size:clamp(30px,6vw,58px);
-    line-height:.98;
-    letter-spacing:-.045em;
-}}
-.hero p {{
-    max-width:720px;
-    margin:0;
-    color:#c5cad2;
-    line-height:1.6;
-}}
-.metrics {{
-    display:grid;
-    grid-template-columns:repeat(5,minmax(0,1fr));
-    gap:10px;
-    margin:16px 0 22px;
-}}
-.metric {{
-    padding:16px;
-    border:1px solid var(--line);
-    border-radius:18px;
-    background:rgba(17,21,28,.84);
-}}
-.metric strong {{
-    display:block;
-    font-size:24px;
-    color:var(--gold);
-}}
-.metric span {{
-    display:block;
-    margin-top:5px;
-    color:var(--muted);
-    font-size:12px;
-}}
-.search {{
-    position:sticky;
-    top:8px;
-    z-index:10;
-    display:flex;
-    gap:10px;
-    padding:12px;
-    margin:0 0 18px;
-    border:1px solid var(--line);
-    border-radius:18px;
-    background:rgba(7,9,13,.86);
-    backdrop-filter:blur(18px);
-}}
-.search input {{
-    flex:1;
-    min-width:0;
-    min-height:48px;
-    padding:0 16px;
-    border:1px solid var(--line);
-    border-radius:14px;
-    color:var(--text);
-    background:var(--panel-2);
-    font:inherit;
-}}
-.search button {{
-    min-height:48px;
-    padding:0 20px;
-    border:0;
-    border-radius:14px;
-    color:#17120a;
-    background:linear-gradient(135deg,#ead29f,var(--gold));
-    font-weight:900;
-}}
-.section-head {{
-    display:flex;
-    align-items:end;
-    justify-content:space-between;
-    gap:12px;
-    margin:22px 2px 12px;
-}}
-.section-head h2 {{
-    margin:0;
-    font-size:20px;
-}}
-.section-head span {{
-    color:var(--muted);
-    font-size:12px;
-}}
-.city-list {{
-    display:grid;
-    gap:12px;
-}}
-.city-card {{
-    display:grid;
-    grid-template-columns:minmax(0,1fr) 260px;
-    gap:16px;
-    padding:18px;
-    border:1px solid var(--line);
-    border-radius:20px;
-    background:linear-gradient(145deg,rgba(22,27,36,.95),rgba(13,17,23,.96));
-}}
-.city-title-row {{
-    display:flex;
-    align-items:start;
-    justify-content:space-between;
-    gap:12px;
-}}
-.city-card h3 {{
-    margin:0;
-    font-size:20px;
-}}
-.native {{
-    display:block;
-    margin-top:3px;
-    color:var(--muted);
-    font-size:13px;
-}}
-.location {{
-    margin-top:8px;
-    color:#c7ccd5;
-}}
-.city-meta {{
-    display:flex;
-    flex-wrap:wrap;
-    gap:7px;
-    margin-top:12px;
-}}
-.city-meta span {{
-    padding:5px 8px;
-    border:1px solid var(--line);
-    border-radius:999px;
-    color:var(--muted);
-    font-size:11px;
-}}
-.group-status {{
-    white-space:nowrap;
-    padding:6px 9px;
-    border-radius:999px;
-    font-size:11px;
-    font-weight:900;
-}}
-.group-status.connected {{
-    color:var(--green);
-    background:rgba(70,211,154,.10);
-    border:1px solid rgba(70,211,154,.30);
-}}
-.group-status.disabled {{
-    color:var(--red);
-    background:rgba(255,125,125,.09);
-    border:1px solid rgba(255,125,125,.28);
-}}
-.group-status.missing {{
-    color:var(--muted);
-    background:rgba(255,255,255,.04);
-    border:1px solid var(--line);
-}}
-.group-panel {{
-    display:flex;
-    flex-direction:column;
-    justify-content:center;
-    padding:14px;
-    border:1px solid var(--line);
-    border-radius:15px;
-    background:rgba(0,0,0,.18);
-}}
-.group-panel small {{
-    margin-top:5px;
-    color:var(--muted);
-}}
-.group-editor {{
-    margin-top:14px;
-    padding-top:12px;
-    border-top:1px solid var(--line);
-}}
-.group-editor summary {{
-    cursor:pointer;
-    color:var(--gold);
-    font-size:13px;
-    font-weight:850;
-}}
-.group-form {{
-    display:grid;
-    gap:10px;
-    margin-top:12px;
-}}
-.group-form label {{
-    display:grid;
-    gap:5px;
-    color:var(--muted);
-    font-size:11px;
-    font-weight:750;
-}}
-.group-form input:not([type="hidden"]):not([type="checkbox"]) {{
-    width:100%;
-    min-height:42px;
-    padding:0 11px;
-    border:1px solid var(--line);
-    border-radius:11px;
-    color:var(--text);
-    background:#0c1016;
-    font:inherit;
-}}
-.group-form .active-control {{
-    display:flex;
-    align-items:center;
-    grid-template-columns:auto 1fr;
-    gap:8px;
-    color:var(--text);
-}}
-.group-form button {{
-    min-height:43px;
-    border:0;
-    border-radius:11px;
-    color:#17120a;
-    background:linear-gradient(135deg,#ead29f,var(--gold));
-    font-weight:900;
-    cursor:pointer;
-}}
-.telegram-link {{
-    margin-top:12px;
-    color:var(--blue);
-    text-decoration:none;
-    font-size:13px;
-    font-weight:800;
-}}
-.empty-state {{
-    padding:42px 20px;
-    border:1px dashed var(--line);
-    border-radius:22px;
-    text-align:center;
-    color:var(--muted);
-}}
-.empty-state h2 {{
-    margin:8px 0;
-    color:var(--text);
-}}
-.empty-state p {{ margin:0; }}
-.empty-icon {{ font-size:38px; }}
-@media (max-width:760px) {{
-    .page {{ padding-left:12px;padding-right:12px; }}
-    .hero {{ padding:22px 18px; }}
-    .metrics {{ grid-template-columns:repeat(2,minmax(0,1fr)); }}
-    .metric:last-child {{ grid-column:1/-1; }}
-    .search {{ align-items:stretch; }}
-    .search button {{ padding:0 14px; }}
-    .city-card {{ grid-template-columns:1fr; }}
-    .section-head {{ align-items:start;flex-direction:column; }}
-}}
-</style>
-</head>
-<body>
-<main class="page">
+    let content = format!(
+        r#"
     <div class="topbar">
         <a class="back" href="/app/center">← Центр управления</a>
-        <span class="protected">TERRITORIAL · PROTECTED</span>
+        <span class="protected">ТЕРРИТОРИИ · ЗАЩИЩЕНО</span>
     </div>
 
     <section class="hero">
-        <div class="kicker">ResursMap · Global Geography</div>
+        <div class="kicker">ResursMap · Глобальная география</div>
         <h1>География и группы</h1>
         <p>
             Единый центр территорий ResursMap:
@@ -642,9 +304,7 @@ h1 {{
     <section class="city-list">
         {cards}
     </section>
-</main>
-</body>
-</html>"#,
+"#,
         continents = continents,
         countries = countries,
         total_cities = total_cities,
@@ -653,6 +313,12 @@ h1 {{
         query = escape_html(query),
         result_caption = escape_html(&result_caption),
         cards = cards,
+    );
+
+    admin_ops_page_themed(
+        "География и группы · ResursMap",
+        "rm-admin-ops--geo",
+        &content,
     )
 }
 
