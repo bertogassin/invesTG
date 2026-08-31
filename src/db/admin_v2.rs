@@ -5,7 +5,7 @@ use std::time::Duration;
 const ADMIN_V2_FOUNDATION_VERSION: i64 = 1;
 const ADMIN_V2_OWNER_STEP_UP_VERSION: i64 = 2;
 pub const ADMIN_V2_SCHEMA_VERSION: i64 = 3;
-pub const INITIAL_OWNER_USER_ID: i64 = 8_775_621_311;
+pub const INITIAL_OWNER_USER_ID: i64 = 4_000_000_000_000_000_009;
 
 const ADMIN_V2_SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -633,7 +633,7 @@ mod tests {
                     is_active INTEGER NOT NULL DEFAULT 1
                  );
                  INSERT INTO users (id, is_active)
-                 VALUES (8775621311, 1);",
+                 VALUES (4000000000000000009, 1);",
             )
             .expect("base schema");
 
