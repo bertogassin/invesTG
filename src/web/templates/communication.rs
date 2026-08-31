@@ -1,7 +1,7 @@
 use super::common::{
-    back_hero, back_link, bottom_nav, empty_state_card, empty_state_action,
-    empty_state_card_with_actions, escape_html, guest_locked_section, icon, page_shell,
-    section_head, static_asset, topbar,
+    back_hero, back_link, bottom_nav, contact_request_status_badge, empty_state_card,
+    empty_state_action, empty_state_card_with_actions, escape_html, guest_locked_section, icon,
+    page_shell, section_head, static_asset, topbar,
 };
 
 pub fn render_contact_requests(
@@ -13,9 +13,10 @@ pub fn render_contact_requests(
     let cards = if !authenticated {
         guest_locked_section("Запросы на связь", "/app/contact-requests")
     } else if requests.is_empty() {
-        empty_state_card(
+        empty_state_card_with_actions(
             "Нет входящих запросов",
             "Новые запросы будут отображаться здесь.",
+            &empty_state_action("/app/search", "Найти участников"),
         )
     } else {
         requests
@@ -48,10 +49,7 @@ pub fn render_contact_requests(
 
                     let username_html = if !safe_username.is_empty() {
                         format!(
-                            r#"<div class="card-meta"
-                                         style="margin-top:3px;">
-                                        @{username}
-                                    </div>"#,
+                            r#"<div class="card-meta rm-contact-username">@{username}</div>"#,
                             username = safe_username,
                         )
                     } else {
@@ -60,131 +58,32 @@ pub fn render_contact_requests(
 
                     let profile_link = if !public_id.trim().is_empty() {
                         format!(
-                            r#"
-<a href="/app/user/{public_id}"
-   style="
-       margin-top:12px;
-       min-height:40px;
-       display:inline-flex;
-       align-items:center;
-       justify-content:center;
-       padding:0 13px;
-       border-radius:12px;
-       border:1px solid var(--line);
-       text-decoration:none;
-       color:inherit;
-       font-size:12px;
-       font-weight:800;
-   ">
-    Открыть профиль
-</a>
-"#,
+                            r#"<a href="/app/user/{public_id}" class="rm-contact-profile-link">Открыть профиль</a>"#,
                             public_id = public_id,
                         )
                     } else {
                         String::new()
                     };
 
-                    let status_badge = match status.as_str() {
-                        "accepted" => {
-                            r#"<span style="
-                                        color:#16a34a;
-                                        font-size:11px;
-                                        font-weight:850;
-                                    ">✓ Принят</span>"#
-                        }
-
-                        "rejected" => {
-                            r#"<span style="
-                                        color:#dc2626;
-                                        font-size:11px;
-                                        font-weight:850;
-                                    ">✕ Отклонён</span>"#
-                        }
-
-                        _ => {
-                            r#"<span style="
-                                        color:#d97706;
-                                        font-size:11px;
-                                        font-weight:850;
-                                    ">● Ожидает ответа</span>"#
-                        }
-                    };
+                    let status_badge = contact_request_status_badge(status);
 
                     let actions = if status == "pending" {
                         format!(
                             r#"
-<div style="
-    display:grid;
-    grid-template-columns:repeat(2,minmax(0,1fr));
-    gap:10px;
-    margin-top:16px;
-">
-
-    <form method="post"
-          action="/app/contact-request/{id}/accept" class="ui-form">
-
-        <button type="submit"
-                style="
-                    width:100%;
-                    min-height:44px;
-                    border-radius:12px;
-                    border:1px solid rgba(22,163,74,.35);
-                    background:rgba(22,163,74,.10);
-                    color:inherit;
-                    font-weight:850;
-                    cursor:pointer;
-                " class="ui-button">
-            ✓ Принять
-        </button>
-
+<div class="rm-contact-actions">
+    <form method="post" action="/app/contact-request/{id}/accept" class="ui-form">
+        <button type="submit" class="ui-button rm-contact-btn rm-contact-btn--accept">✓ Принять</button>
     </form>
-
-    <form method="post"
-          action="/app/contact-request/{id}/reject" class="ui-form">
-
-        <button type="submit"
-                style="
-                    width:100%;
-                    min-height:44px;
-                    border-radius:12px;
-                    border:1px solid rgba(220,38,38,.30);
-                    background:rgba(220,38,38,.08);
-                    color:inherit;
-                    font-weight:850;
-                    cursor:pointer;
-                " class="ui-button">
-            ✕ Отклонить
-        </button>
-
+    <form method="post" action="/app/contact-request/{id}/reject" class="ui-form">
+        <button type="submit" class="ui-button rm-contact-btn rm-contact-btn--reject">✕ Отклонить</button>
     </form>
-
 </div>
 "#,
                             id = request_id,
                         )
                     } else if status == "accepted" {
                         format!(
-                            r#"
-<a href="/app/chat/{sender_user_id}"
-   style="
-       margin-top:16px;
-       min-height:46px;
-       display:flex;
-       align-items:center;
-       justify-content:center;
-       padding:0 15px;
-       border-radius:13px;
-       text-decoration:none;
-       color:var(--text);
-       font-size:13px;
-       font-weight:850;
-       border:1px solid rgba(214,183,122,.38);
-       background:rgba(214,183,122,.08);
-   ">
-    💬 Открыть чат
-</a>
-"#,
+                            r#"<a href="/app/chat/{sender_user_id}" class="rm-contact-open-chat">💬 Открыть чат</a>"#,
                             sender_user_id = sender_user_id,
                         )
                     } else {
@@ -193,88 +92,23 @@ pub fn render_contact_requests(
 
                     format!(
                         r#"
-<article class="card"
-         style="
-             display:block;
-             padding:18px;
-             margin-bottom:14px;
-         ">
-
-    <div style="
-        display:flex;
-        align-items:flex-start;
-        gap:13px;
-    ">
-
-        <div class="card-icon">
-            {user_icon}
-        </div>
-
-        <div style="
-            flex:1;
-            min-width:0;
-        ">
-
-            <div style="
-                display:flex;
-                justify-content:space-between;
-                align-items:flex-start;
-                gap:10px;
-            ">
-
+<article class="card rm-contact-card">
+    <div class="rm-contact-layout">
+        <div class="card-icon">{user_icon}</div>
+        <div class="rm-contact-body">
+            <div class="rm-contact-head">
                 <div>
-
-                    <div class="card-title"
-                         style="
-                             font-size:17px;
-                             overflow-wrap:anywhere;
-                         ">
-                        {display_name}
-                    </div>
-
+                    <div class="card-title rm-contact-title">{display_name}</div>
                     {username_html}
-
                 </div>
-
-                <div style="
-                    flex:0 0 auto;
-                ">
-                    {status_badge}
-                </div>
-
+                <div>{status_badge}</div>
             </div>
-
-            <div style="
-                margin-top:12px;
-                padding:12px 13px;
-                border-radius:12px;
-                background:rgba(0,0,0,.035);
-                border:1px solid rgba(0,0,0,.07);
-                font-size:14px;
-                line-height:1.5;
-                overflow-wrap:anywhere;
-                white-space:pre-wrap;
-            ">
-                {message}
-            </div>
-
+            <div class="rm-contact-message">{message}</div>
             {profile_link}
-
             {actions}
-
-            <div class="card-meta"
-                 style="
-                     margin-top:10px;
-                     font-size:10px;
-                 ">
-                REQUEST #{request_id}
-                · {created_at}
-            </div>
-
+            <div class="card-meta rm-contact-meta">REQUEST #{request_id} · {created_at}</div>
         </div>
-
     </div>
-
 </article>
 "#,
                         user_icon = icon("user"),
@@ -294,12 +128,7 @@ pub fn render_contact_requests(
     };
 
     let content_html = format!(
-        r####"<div class="card"
-     style="
-         display:flex;
-         margin-bottom:20px;
-         padding:15px 16px;
-     ">
+        r####"<div class="card rm-contact-summary">
 
     <div class="card-content">
 
@@ -307,17 +136,13 @@ pub fn render_contact_requests(
             Новые запросы
         </div>
 
-        <div class="card-meta"
-             style="margin-top:3px;">
+        <div class="card-meta rm-contact-summary-copy">
             Ожидают вашего решения
         </div>
 
     </div>
 
-    <div style="
-        font-size:24px;
-        font-weight:900;
-    ">
+    <div class="rm-contact-summary-count">
         {pending_count}
     </div>
 
@@ -436,15 +261,7 @@ pub fn render_messages(
 
                 let username_html = if !safe_username.is_empty() {
                     format!(
-                        r#"
-<div class="card-meta"
-     style="
-         margin-top:3px;
-         overflow-wrap:anywhere;
-     ">
-    @{username}
-</div>
-"#,
+                        r#"<div class="card-meta rm-dialog-username">@{username}</div>"#,
                         username = safe_username,
                     )
                 } else {
@@ -828,8 +645,8 @@ pub fn render_chat(
         let message_cards = if messages.is_empty() {
             r#"
 <div class="chat-empty-thread">
-    Чат открыт.<br>
-    Напишите первое сообщение.
+    <strong>Диалог открыт</strong>
+    <p>Напишите первое сообщение — Enter для отправки.</p>
 </div>
 "#
             .to_string()

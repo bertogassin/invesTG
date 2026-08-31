@@ -7,7 +7,7 @@ pub fn escape_html(value: &str) -> String {
         .replace('\'', "&#39;")
 }
 
-pub const STATIC_ASSET_VERSION: &str = "4.9.15";
+pub const STATIC_ASSET_VERSION: &str = "4.9.16";
 
 pub fn profession_label(raw: &str) -> String {
     match raw.trim().to_lowercase().as_str() {
@@ -2574,6 +2574,151 @@ a.feature.rm-feature-add {
     border-radius: 18px;
 }
 
+.rm-status-badge {
+    font-size: 11px;
+    font-weight: 850;
+}
+
+.rm-status-badge--ok {
+    color: #16a34a;
+}
+
+.rm-status-badge--bad {
+    color: #dc2626;
+}
+
+.rm-status-badge--pending {
+    color: #d97706;
+}
+
+.rm-contact-summary {
+    display: flex;
+    margin-bottom: 20px;
+    padding: 15px 16px;
+}
+
+.rm-contact-summary-count {
+    font-size: 24px;
+    font-weight: 900;
+}
+
+.rm-contact-summary-copy {
+    margin-top: 3px;
+}
+
+.rm-contact-card {
+    display: block;
+    padding: 18px;
+    margin-bottom: 14px;
+}
+
+.rm-contact-layout {
+    display: flex;
+    align-items: flex-start;
+    gap: 13px;
+}
+
+.rm-contact-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.rm-contact-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.rm-contact-title {
+    font-size: 17px;
+    overflow-wrap: anywhere;
+}
+
+.rm-contact-username {
+    margin-top: 3px;
+}
+
+.rm-contact-message {
+    margin-top: 12px;
+    padding: 12px 13px;
+    border-radius: 12px;
+    background: rgba(0, 0, 0, .035);
+    border: 1px solid rgba(0, 0, 0, .07);
+    font-size: 14px;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+}
+
+.rm-contact-meta {
+    margin-top: 10px;
+    font-size: 10px;
+}
+
+.rm-contact-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 16px;
+}
+
+.rm-contact-btn {
+    width: 100%;
+    min-height: 44px;
+    border-radius: 12px;
+    color: inherit;
+    font-weight: 850;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.rm-contact-btn--accept {
+    border: 1px solid rgba(22, 163, 74, .35);
+    background: rgba(22, 163, 74, .10);
+}
+
+.rm-contact-btn--reject {
+    border: 1px solid rgba(220, 38, 38, .30);
+    background: rgba(220, 38, 38, .08);
+}
+
+.rm-contact-open-chat {
+    margin-top: 16px;
+    min-height: 46px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 15px;
+    border-radius: 13px;
+    text-decoration: none;
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 850;
+    border: 1px solid rgba(214, 183, 122, .38);
+    background: rgba(214, 183, 122, .08);
+}
+
+.rm-contact-profile-link {
+    margin-top: 12px;
+    min-height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 13px;
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    text-decoration: none;
+    color: inherit;
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.rm-dialog-username {
+    margin-top: 3px;
+    overflow-wrap: anywhere;
+}
+
 @media (hover:hover) {
     .ui-button:hover {
         opacity: .94;
@@ -3340,6 +3485,14 @@ pub(crate) fn moderator_level_badge(level: i64) -> String {
         class = class,
         text = text,
     )
+}
+
+pub(crate) fn contact_request_status_badge(status: &str) -> &'static str {
+    match status {
+        "accepted" => r#"<span class="rm-status-badge rm-status-badge--ok">✓ Принят</span>"#,
+        "rejected" => r#"<span class="rm-status-badge rm-status-badge--bad">✕ Отклонён</span>"#,
+        _ => r#"<span class="rm-status-badge rm-status-badge--pending">● Ожидает ответа</span>"#,
+    }
 }
 
 fn admin_ops_styles() -> &'static str {
