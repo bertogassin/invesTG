@@ -7,7 +7,7 @@ pub fn escape_html(value: &str) -> String {
         .replace('\'', "&#39;")
 }
 
-pub const STATIC_ASSET_VERSION: &str = "4.9.13";
+pub const STATIC_ASSET_VERSION: &str = "4.9.14";
 
 pub fn profession_label(raw: &str) -> String {
     match raw.trim().to_lowercase().as_str() {
@@ -1467,6 +1467,194 @@ body::before {
     letter-spacing: normal;
 }
 
+a.feature {
+    text-decoration: none;
+    color: inherit;
+}
+
+a.feature.rm-feature-add {
+    margin-top: 12px;
+    display: block;
+}
+
+.rm-empty-state {
+    display: block;
+    margin-top: 18px;
+    padding: 28px 24px;
+    text-align: center;
+}
+
+.rm-empty-state .card-title {
+    font-size: 17px;
+    margin-bottom: 8px;
+}
+
+.rm-empty-state .card-meta {
+    margin-top: 5px;
+    line-height: 1.6;
+}
+
+.rm-empty-state-actions {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 18px;
+}
+
+.rm-empty-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    padding: 0 16px;
+    border-radius: 14px;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 850;
+}
+
+.rm-empty-professions {
+    margin: 0;
+    padding: 16px 18px;
+    border: 1px dashed var(--line);
+    border-radius: 16px;
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.55;
+}
+
+.rm-guest-hint {
+    margin: 14px 0 0;
+    padding: 12px 14px;
+    border-radius: 12px;
+    border: 1px solid rgba(214, 183, 122, .24);
+    background: rgba(214, 183, 122, .08);
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.rm-guest-hint a {
+    color: var(--gold-light);
+}
+
+.rm-verified-badge {
+    font-size: 11px;
+    font-weight: 800;
+    color: #16a34a;
+}
+
+.rm-verified-badge--compact {
+    font-size: 10px;
+}
+
+.rm-notif-card {
+    display: block;
+    padding: 18px;
+    margin-bottom: 14px;
+    border-left: 3px solid var(--gold-light);
+}
+
+.rm-notif-card--approved,
+.rm-notif-card--contact {
+    border-left-color: #16a34a;
+}
+
+.rm-notif-card--rejected {
+    border-left-color: #dc2626;
+}
+
+.rm-notif-card--chat {
+    border-left-color: var(--gold);
+}
+
+.rm-notif-layout {
+    display: flex;
+    gap: 13px;
+    align-items: flex-start;
+}
+
+.rm-notif-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    font-size: 19px;
+    font-weight: 900;
+    border: 1px solid rgba(214, 183, 122, .20);
+    background: rgba(0, 0, 0, .03);
+}
+
+.rm-notif-icon--approved,
+.rm-notif-icon--contact {
+    color: #16a34a;
+}
+
+.rm-notif-icon--rejected {
+    color: #dc2626;
+}
+
+.rm-notif-icon--chat {
+    color: var(--gold);
+}
+
+.rm-notif-icon--default {
+    color: var(--gold-light);
+}
+
+.rm-notif-body {
+    min-width: 0;
+    flex: 1;
+}
+
+.rm-notif-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.rm-notif-message {
+    margin-top: 7px;
+    line-height: 1.55;
+    overflow-wrap: anywhere;
+}
+
+.rm-notif-new {
+    font-size: 10px;
+    font-weight: 900;
+    color: var(--gold);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+}
+
+.rm-notif-action {
+    display: inline-flex;
+    align-items: center;
+    min-height: 40px;
+    padding: 0 13px;
+    border-radius: 12px;
+    text-decoration: none;
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 800;
+    margin-top: 13px;
+}
+
+.rm-notif-action--gold {
+    border: 1px solid rgba(214, 183, 122, .28);
+    background: rgba(214, 183, 122, .07);
+}
+
+.rm-notif-action--neutral {
+    border: 1px solid var(--line);
+    background: rgba(0, 0, 0, .03);
+}
+
 .ui-button {
     font-family: inherit;
     -webkit-tap-highlight-color: transparent;
@@ -2193,6 +2381,53 @@ pub(crate) fn premium_badge_html(variant: &str) -> &'static str {
         "admin" => r#"<span class="rm-premium-badge rm-premium-badge--admin">★ Премиум</span>"#,
         _ => r#"<span class="rm-premium-badge">★ Премиум</span>"#,
     }
+}
+
+pub(crate) fn verified_badge_html(compact: bool) -> &'static str {
+    if compact {
+        r#"<span class="rm-verified-badge rm-verified-badge--compact">✓ Проверен</span>"#
+    } else {
+        r#"<span class="rm-verified-badge">✓ Проверен</span>"#
+    }
+}
+
+pub(crate) fn empty_state_action(href: &str, label: &str) -> String {
+    format!(
+        r#"<a class="rm-empty-action ui-button" href="{href}">{label}</a>"#,
+        href = escape_html(href),
+        label = escape_html(label),
+    )
+}
+
+pub(crate) fn empty_state_card(title: &str, description_html: &str) -> String {
+    empty_state_card_with_actions(title, description_html, "")
+}
+
+pub(crate) fn empty_state_card_with_actions(
+    title: &str,
+    description_html: &str,
+    actions_html: &str,
+) -> String {
+    let actions = if actions_html.is_empty() {
+        String::new()
+    } else {
+        format!(r#"<div class="rm-empty-state-actions">{actions_html}</div>"#)
+    };
+
+    format!(
+        r#"
+<div class="card rm-empty-state">
+    <div class="card-content">
+        <div class="card-title">{title}</div>
+        <div class="card-meta">{description}</div>
+        {actions}
+    </div>
+</div>
+"#,
+        title = escape_html(title),
+        description = description_html,
+        actions = actions,
+    )
 }
 
 pub(crate) fn workflow_status_label(status: &str) -> &'static str {
@@ -2994,25 +3229,8 @@ pub(crate) fn admin_ops_page_styled(
     )
 }
 
-pub(crate) fn empty_state_card(title: &str, description_html: &str) -> String {
-    format!(
-        r#"
-<div class="card" style="display:block;margin-top:18px;padding:28px 24px;text-align:center;">
-    <div class="card-content">
-        <div class="card-title" style="font-size:17px;margin-bottom:8px;">{title}</div>
-        <div class="card-meta" style="margin-top:5px;line-height:1.6;">
-            {description}
-        </div>
-    </div>
-</div>
-"#,
-        title = escape_html(title),
-        description = description_html,
-    )
-}
-
 pub(crate) fn guest_mode_hint() -> &'static str {
-    r#"<p class="rm-guest-hint" style="margin:14px 0 0;padding:12px 14px;border-radius:12px;border:1px solid rgba(214,183,122,.24);background:rgba(214,183,122,.08);color:var(--muted);font-size:14px;line-height:1.5;">Вы смотрите как гость. Карта и поиск доступны без регистрации. <a href="/login" style="color:var(--gold-light);">Войти</a> · <a href="/register" style="color:var(--gold-light);">Регистрация</a></p>"#
+    r#"<p class="rm-guest-hint">Вы смотрите как гость. Карта и поиск доступны без регистрации. <a href="/login">Войти</a> · <a href="/register">Регистрация</a></p>"#
 }
 
 pub(crate) fn guest_mode_panel(next_path: &str) -> String {

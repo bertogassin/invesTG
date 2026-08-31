@@ -1,7 +1,7 @@
 use super::common::{
     bottom_nav, empty_state_card, escape_html, guest_mode_hint, icon, navigation_card,
     page_document, page_shell, people_result_card, premium_badge_html, profession_label,
-    resource_result_card, search_form_hero, section_head, simple_hero, topbar,
+    resource_result_card, search_form_hero, section_head, simple_hero, topbar, verified_badge_html,
 };
 use crate::geography::world;
 
@@ -1028,11 +1028,7 @@ pub fn render_search(
                     };
 
                     let verified_badge = if *verified != 0 {
-                        r#"<span style="
-                            color:#16a34a;
-                            font-size:11px;
-                            font-weight:800;
-                        ">✓ Проверен</span>"#
+                        verified_badge_html(true)
                     } else {
                         ""
                     };

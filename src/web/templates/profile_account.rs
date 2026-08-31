@@ -1,7 +1,8 @@
 use super::common::{
-    back_hero, back_link, bottom_nav, bottom_nav_with_badge, empty_state_card, escape_html,
-    guest_locked_section, guest_mode_panel, icon, navigation_card, page_document, page_shell,
-    premium_badge_html, profile_resource_card, section_head, simple_hero, topbar,
+    back_hero, back_link, bottom_nav, bottom_nav_with_badge, empty_state_card, empty_state_action,
+    empty_state_card_with_actions, escape_html, guest_locked_section, guest_mode_panel, icon,
+    navigation_card, page_document, page_shell, premium_badge_html, profile_resource_card,
+    section_head, simple_hero, topbar, verified_badge_html,
 };
 
 pub struct RenderMeParams<'a> {
@@ -1514,78 +1515,27 @@ pub fn render_notifications(
 
                     let safe_message = escape_html(message);
 
-                    let (icon_text, accent) = match kind.as_str() {
-                        "resource_approved" => ("✓", "#16a34a"),
-
-                        "resource_rejected" => ("!", "#dc2626"),
-
-                        "chat_message" => ("💬", "var(--gold)"),
-
-                        "contact_accepted" => ("✓", "#16a34a"),
-
-                        "contact_rejected" => ("×", "#dc2626"),
-
-                        _ => ("🔔", "var(--gold-light)"),
+                    let (icon_text, card_class, icon_class) = match kind.as_str() {
+                        "resource_approved" => ("✓", "rm-notif-card--approved", "rm-notif-icon--approved"),
+                        "resource_rejected" => ("!", "rm-notif-card--rejected", "rm-notif-icon--rejected"),
+                        "chat_message" => ("💬", "rm-notif-card--chat", "rm-notif-icon--chat"),
+                        "contact_accepted" => ("✓", "rm-notif-card--contact", "rm-notif-icon--contact"),
+                        "contact_rejected" => ("×", "rm-notif-card--rejected", "rm-notif-icon--rejected"),
+                        _ => ("🔔", "", "rm-notif-icon--default"),
                     };
 
                     let unread_badge = if *is_read == 0 {
-                        r#"
-                            <span style="
-                                font-size:10px;
-                                font-weight:900;
-                                color:var(--gold);
-                                text-transform:uppercase;
-                                letter-spacing:.06em;
-                            ">
-                                Новое
-                            </span>
-                            "#
+                        r#"<span class="rm-notif-new">Новое</span>"#
                     } else {
                         ""
                     };
 
                     let open_link = if kind == "chat_message" || kind == "contact_accepted" {
-                        r#"
-                            <a href="/app/messages"
-                               style="
-                                   display:inline-flex;
-                                   align-items:center;
-                                   min-height:40px;
-                                   padding:0 13px;
-                                   border-radius:12px;
-                                   text-decoration:none;
-                                   color:var(--text);
-                                   font-size:13px;
-                                   font-weight:800;
-                                   border:1px solid rgba(214,183,122,.28);
-                                   background:rgba(214,183,122,.07);
-                                   margin-top:13px;
-                               ">
-                                Открыть сообщения
-                            </a>
-                            "#
-                        .to_string()
+                        r#"<a href="/app/messages" class="rm-notif-action rm-notif-action--gold">Открыть сообщения</a>"#
+                            .to_string()
                     } else if let Some(id) = resource_id {
                         format!(
-                            r#"
-                                <a href="/app/resource/{id}"
-                                   style="
-                                       display:inline-flex;
-                                       align-items:center;
-                                       min-height:40px;
-                                       padding:0 13px;
-                                       border-radius:12px;
-                                       text-decoration:none;
-                                       color:var(--text);
-                                       font-size:13px;
-                                       font-weight:800;
-                                       border:1px solid var(--line);
-                                       background:rgba(0,0,0,.03);
-                                       margin-top:13px;
-                                   ">
-                                    Открыть ресурс
-                                </a>
-                                "#,
+                            r#"<a href="/app/resource/{id}" class="rm-notif-action rm-notif-action--neutral">Открыть ресурс</a>"#,
                             id = id
                         )
                     } else {
@@ -1594,75 +1544,22 @@ pub fn render_notifications(
 
                     format!(
                         r#"
-<article class="card"
-         style="
-             display:block;
-             padding:18px;
-             margin-bottom:14px;
-             border-left:3px solid {accent};
-         ">
-
-    <div style="
-        display:flex;
-        gap:13px;
-        align-items:flex-start;
-    ">
-
-        <div style="
-            width:42px;
-            height:42px;
-            border-radius:13px;
-            display:flex;
-            align-items:center;
-            justify-content:center;
-            flex:0 0 auto;
-            font-size:19px;
-            font-weight:900;
-            color:{accent};
-            border:1px solid rgba(214,183,122,.20);
-            background:rgba(0,0,0,.03);
-        ">
-            {icon_text}
-        </div>
-
-        <div style="
-            min-width:0;
-            flex:1;
-        ">
-
-            <div style="
-                display:flex;
-                justify-content:space-between;
-                align-items:flex-start;
-                gap:10px;
-            ">
-
-                <div class="card-title">
-                    {title}
-                </div>
-
+<article class="card rm-notif-card {card_class}">
+    <div class="rm-notif-layout">
+        <div class="rm-notif-icon {icon_class}">{icon_text}</div>
+        <div class="rm-notif-body">
+            <div class="rm-notif-head">
+                <div class="card-title">{title}</div>
                 {unread_badge}
-
             </div>
-
-            <div class="card-meta"
-                 style="
-                     margin-top:7px;
-                     line-height:1.55;
-                     overflow-wrap:anywhere;
-                 ">
-                {message}
-            </div>
-
+            <div class="card-meta rm-notif-message">{message}</div>
             {open_link}
-
         </div>
-
     </div>
-
 </article>
 "#,
-                        accent = accent,
+                        card_class = card_class,
+                        icon_class = icon_class,
                         icon_text = icon_text,
                         title = safe_title,
                         message = safe_message,
@@ -1983,11 +1880,7 @@ pub fn render_public_user_profile(params: RenderPublicUserProfileParams<'_>) -> 
                     let description = escape_html(description);
 
                     let verified_badge = if *verified != 0 {
-                        r#"<span style="
-                                font-size:11px;
-                                font-weight:800;
-                                color:#16a34a;
-                            ">✓ Проверен</span>"#
+                        verified_badge_html(true)
                     } else {
                         ""
                     };
@@ -2350,9 +2243,14 @@ pub fn render_favorites(
     let cards = if !authenticated {
         guest_locked_section("Избранное", "/app/favorites")
     } else if resources.is_empty() {
-        empty_state_card(
+        empty_state_card_with_actions(
             "Избранное пока пустое",
             "Откройте любой ресурс и нажмите ♡.",
+            &format!(
+                "{}{}",
+                empty_state_action("/app/search", "Найти ресурсы"),
+                empty_state_action("/app", "На карту"),
+            ),
         )
     } else {
         resources
@@ -2376,7 +2274,7 @@ pub fn render_favorites(
                     };
 
                     let verified_badge = if *verified != 0 {
-                        r#"<span style="font-size:11px;font-weight:800;color:#16a34a;">✓ Проверен</span>"#
+                        verified_badge_html(true)
                     } else {
                         ""
                     };

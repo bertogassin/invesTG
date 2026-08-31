@@ -1,6 +1,7 @@
 use super::common::{
-    back_hero, back_link, bottom_nav, empty_state_card, escape_html, guest_locked_section, icon,
-    page_shell, section_head, static_asset, topbar,
+    back_hero, back_link, bottom_nav, empty_state_card, empty_state_action,
+    empty_state_card_with_actions, escape_html, guest_locked_section, icon, page_shell,
+    section_head, static_asset, topbar,
 };
 
 pub fn render_contact_requests(
@@ -410,9 +411,10 @@ pub fn render_messages(
     let content = if !authenticated {
         guest_locked_section("Сообщения", "/app/messages")
     } else if conversations.is_empty() {
-        empty_state_card(
+        empty_state_card_with_actions(
             "Нет диалогов",
             "Откройте профиль участника, чтобы начать диалог.",
+            &empty_state_action("/app/search", "Найти участников"),
         )
     } else {
         conversations

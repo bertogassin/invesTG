@@ -1,6 +1,7 @@
 use super::common::{
-    back_hero, back_link, bottom_nav, empty_state_card, escape_html, guest_locked_section, icon,
-    navigation_card, page_document, page_shell, premium_badge_html, section_head, topbar,
+    back_hero, back_link, bottom_nav, empty_state_card, empty_state_action,
+    empty_state_card_with_actions, escape_html, guest_locked_section, icon, navigation_card,
+    page_document, page_shell, premium_badge_html, section_head, topbar, verified_badge_html,
 };
 
 pub fn render_category(
@@ -16,9 +17,8 @@ pub fn render_category(
     let cards = if resources.is_empty() {
         format!(
             r#"{empty}
-            <a class="feature"
-               href="/app/{ci}/{si}/{zi}/cat/{category_url}/add"
-               style="text-decoration:none;color:inherit;margin-top:12px;display:block;">
+            <a class="feature rm-feature-add"
+               href="/app/{ci}/{si}/{zi}/cat/{category_url}/add">
                 <div class="card-icon">+</div>
                 <strong>Добавить ресурс</strong>
                 <span>Будьте первым в этой категории.</span>
@@ -42,11 +42,7 @@ pub fn render_category(
                 let safe_address = escape_html(address);
 
                 let verified_badge = if *verified != 0 {
-                    r#"<span style="
-                        color:#16a34a;
-                        font-size:12px;
-                        font-weight:700;
-                    ">✓ Проверен</span>"#
+                    verified_badge_html(false)
                 } else {
                     ""
                 };
@@ -223,14 +219,7 @@ pub fn render_resource_profile(params: RenderResourceProfileParams<'_>) -> Strin
     };
 
     let verified_badge = if verified != 0 {
-        r#"<span style="
-            display:inline-flex;
-            align-items:center;
-            gap:5px;
-            color:#16a34a;
-            font-size:12px;
-            font-weight:700;
-        ">✓ Проверен</span>"#
+        verified_badge_html(false)
     } else {
         ""
     };
@@ -1234,9 +1223,10 @@ pub fn render_my_resources(
     let cards = if client_id.is_empty() {
         guest_locked_section("Мои ресурсы", "/app/my-resources")
     } else if resources.is_empty() {
-        empty_state_card(
+        empty_state_card_with_actions(
             "Нет опубликованных ресурсов",
             "Добавьте ресурс в выбранном городе и категории.",
+            &empty_state_action("/app", "Открыть карту"),
         )
     } else {
         resources
