@@ -27,6 +27,8 @@
         var retryAttempt = 0;
         var stopped = false;
         var lastSnapshot = "";
+        var activeTyping = Object.create(null);
+        var typingTimers = Object.create(null);
 
         function escapeHtml(value) {
             return String(value || "")
@@ -34,6 +36,16 @@
                 .replace(/</g, "&lt;")
                 .replace(/>/g, "&gt;")
                 .replace(/"/g, "&quot;");
+        }
+
+        function typingPreviewHtml() {
+            return (
+                '<span class="chat-dialog-typing">' +
+                '<span class="chat-typing-dots" aria-hidden="true">' +
+                "<i></i><i></i><i></i></span>" +
+                "печатает…" +
+                "</span>"
+            );
         }
 
         function setLiveState(online) {
@@ -56,15 +68,16 @@
             ].join("|");
         }
 
-    var MESSAGE_ICON =
-        '<svg class="icon" viewBox="0 0 24 24"><path d="M21 11.5c0 4.7-4 8.5-9 8.5-1 0-2-.2-2.9-.5L4 21l1.5-4.5C4.5 15.4 3 13.6 3 11.5 3 6.8 7 3 12 3s9 3.8 9 8.5Z"/></svg>';
-    var CHEVRON_ICON =
-        '<svg class="icon small-icon" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>';
+        var MESSAGE_ICON =
+            '<svg class="icon" viewBox="0 0 24 24"><path d="M21 11.5c0 4.7-4 8.5-9 8.5-1 0-2-.2-2.9-.5L4 21l1.5-4.5C4.5 15.4 3 13.6 3 11.5 3 6.8 7 3 12 3s9 3.8 9 8.5Z"/></svg>';
+        var CHEVRON_ICON =
+            '<svg class="icon small-icon" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>';
 
-    function renderConversation(conversation) {
+        function renderConversation(conversation) {
+            var userId = String(conversation.other_user_id || "").trim();
             var username = String(conversation.username || "").trim();
             var usernameHtml = username
-                ? '<div class="card-meta" style="margin-top:3px;overflow-wrap:anywhere;">@'
+                ? '<div class="card-meta rm-dialog-username">@'
                   + escapeHtml(username)
                   + "</div>"
                 : "";
@@ -79,20 +92,25 @@
                   + escapeHtml(conversation.last_time)
                   + "</div>"
                 : '<div class="chat-dialog-time"></div>';
+            var previewText = activeTyping[userId]
+                ? typingPreviewHtml()
+                : escapeHtml(
+                    conversation.last_message || "Новый диалог"
+                );
 
             return (
                 '<a href="/app/chat/'
-                + encodeURIComponent(conversation.other_user_id)
+                + encodeURIComponent(userId)
                 + '#chat-end" class="card chat-dialog-card" data-other-user-id="'
-                + escapeHtml(conversation.other_user_id)
+                + escapeHtml(userId)
                 + '"><div class="card-icon">'
                 + MESSAGE_ICON
                 + '</div><div class="card-content"><div class="card-title">'
                 + escapeHtml(conversation.display_name)
                 + "</div>"
                 + usernameHtml
-                + '<div class="card-meta">'
-                + escapeHtml(conversation.last_message)
+                + '<div class="card-meta chat-dialog-preview">'
+                + previewText
                 + '</div></div><div class="chat-dialog-side">'
                 + lastTime
                 + unreadHtml
@@ -106,6 +124,69 @@
             return (
                 '<div class="card empty-state-card"><div class="card-content"><div class="card-title">Диалогов пока нет</div><div class="card-meta">После принятия запроса на связь здесь появится внутренний чат.</div></div></div>'
             );
+        }
+
+        function updateDialogTyping(userId, active) {
+            if (active) {
+                activeTyping[userId] = true;
+            } else {
+                delete activeTyping[userId];
+            }
+
+            var card = list.querySelector(
+                '.chat-dialog-card[data-other-user-id="' + userId + '"]'
+            );
+
+            if (!card) {
+                return;
+            }
+
+            var preview = card.querySelector(".chat-dialog-preview");
+
+            if (!preview) {
+                return;
+            }
+
+            if (active) {
+                if (!preview.dataset.savedPreview) {
+                    preview.dataset.savedPreview = preview.innerHTML;
+                }
+
+                preview.innerHTML = typingPreviewHtml();
+                preview.classList.add("is-typing");
+                card.classList.add("is-peer-typing");
+                return;
+            }
+
+            preview.classList.remove("is-typing");
+            card.classList.remove("is-peer-typing");
+
+            if (preview.dataset.savedPreview) {
+                preview.innerHTML = preview.dataset.savedPreview;
+                delete preview.dataset.savedPreview;
+            }
+        }
+
+        function markTyping(userId) {
+            updateDialogTyping(userId, true);
+
+            if (typingTimers[userId]) {
+                window.clearTimeout(typingTimers[userId]);
+            }
+
+            typingTimers[userId] = window.setTimeout(function () {
+                typingTimers[userId] = null;
+                updateDialogTyping(userId, false);
+            }, 5200);
+        }
+
+        function stopTyping(userId) {
+            if (typingTimers[userId]) {
+                window.clearTimeout(typingTimers[userId]);
+                typingTimers[userId] = null;
+            }
+
+            updateDialogTyping(userId, false);
         }
 
         function applySnapshot(data) {
@@ -212,6 +293,29 @@
             }, delay);
         }
 
+        function handleTypingPayload(payload) {
+            if (
+                !payload ||
+                payload.type !== "typing_event" ||
+                !payload.event
+            ) {
+                return;
+            }
+
+            var event = payload.event;
+            var actorId = String(event.actor_user_id || "").trim();
+
+            if (!actorId) {
+                return;
+            }
+
+            if (event.kind === "typing.start") {
+                markTyping(actorId);
+            } else if (event.kind === "typing.stop") {
+                stopTyping(actorId);
+            }
+        }
+
         function connectRealtime() {
             if (stopped || !window.WebSocket) {
                 setLiveState(false);
@@ -257,6 +361,8 @@
                 } catch (_) {
                     return;
                 }
+
+                handleTypingPayload(payload);
 
                 if (
                     payload.type === "chat_event" ||
@@ -308,6 +414,10 @@
             window.clearInterval(pollTimer);
             window.clearTimeout(syncTimer);
             clearSocketTimers();
+
+            Object.keys(typingTimers).forEach(function (userId) {
+                window.clearTimeout(typingTimers[userId]);
+            });
 
             if (socket) {
                 socket.close();

@@ -309,7 +309,7 @@ pub fn render_messages(
 
         {username_html}
 
-        <div class="card-meta">
+        <div class="card-meta chat-dialog-preview">
             {last_message}
         </div>
 
@@ -423,8 +423,27 @@ fn chat_message_display_body(message: &crate::web::view_models::ChatMessageRow) 
     }
 }
 
+fn chat_reply_author_label(
+    reply_sender_user_id: i64,
+    viewer_user_id: i64,
+    other_user_id: i64,
+) -> &'static str {
+    if reply_sender_user_id <= 0 {
+        return "Сообщение";
+    }
+
+    if reply_sender_user_id == viewer_user_id {
+        "Вы"
+    } else if reply_sender_user_id == other_user_id {
+        "Собеседник"
+    } else {
+        "Сообщение"
+    }
+}
+
 fn render_chat_message_row(
     message: &crate::web::view_models::ChatMessageRow,
+    viewer_user_id: i64,
     other_user_id: i64,
     last_date_key: &mut String,
 ) -> String {
@@ -509,13 +528,11 @@ fn render_chat_message_row(
 
     let reply_html = if message.reply_to_message_id > 0 {
         let reply_preview = escape_html(&message.reply_message);
-        let reply_author = if message.reply_sender_user_id > 0
-            && message.reply_sender_user_id == message.sender_user_id
-        {
-            "Сообщение"
-        } else {
-            "Ответ"
-        };
+        let reply_author = chat_reply_author_label(
+            message.reply_sender_user_id,
+            viewer_user_id,
+            other_user_id,
+        );
 
         format!(
             r#"
@@ -597,6 +614,7 @@ fn render_chat_message_row(
 
 pub fn render_chat(
     authenticated: bool,
+    viewer_user_id: i64,
     other_user_id: i64,
     username: &str,
     first_name: &str,
@@ -655,7 +673,14 @@ pub fn render_chat(
 
             messages
                 .iter()
-                .map(|message| render_chat_message_row(message, other_user_id, &mut last_date_key))
+                .map(|message| {
+                    render_chat_message_row(
+                        message,
+                        viewer_user_id,
+                        other_user_id,
+                        &mut last_date_key,
+                    )
+                })
                 .collect::<Vec<_>>()
                 .join("")
         };
@@ -718,6 +743,22 @@ pub fn render_chat(
 
 <form id="chat-form"
       class="ui-form chat-composer">
+
+    <div id="chat-reply-bar"
+         class="chat-reply-bar"
+         hidden>
+        <div class="chat-reply-accent"></div>
+        <div class="chat-reply-copy">
+            <strong>Ответ</strong>
+            <span id="chat-reply-text"></span>
+        </div>
+        <button id="chat-reply-close"
+                type="button"
+                aria-label="Отменить ответ">
+            ×
+        </button>
+    </div>
+
     <div class="chat-composer-main">
         <textarea
             id="chat-input"
@@ -795,7 +836,8 @@ pub fn render_chat(
             </h1>
 
             <div id="chat-header-status"
-                 class="chat-header-status">
+                 class="chat-header-status"
+                 data-default-subtitle="{subtitle}">
                 {subtitle}
             </div>
 

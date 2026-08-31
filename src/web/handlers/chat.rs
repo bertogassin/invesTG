@@ -121,13 +121,14 @@ pub async fn chat_page(
     let user_id = match verify_user_session(&state, &headers) {
         Some(id) => id,
         None => {
-            return Html(templates::render_chat(false, 0, "", "", "", vec![]));
+            return Html(templates::render_chat(false, 0, 0, "", "", "", vec![]));
         }
     };
 
     if other_user_id <= 0 || other_user_id == user_id {
         return Html(templates::render_chat(
             true,
+            user_id,
             other_user_id,
             "",
             "",
@@ -176,6 +177,7 @@ pub async fn chat_page(
 
             return Html(templates::render_chat(
                 true,
+                user_id,
                 other_user_id,
                 "",
                 "",
@@ -281,6 +283,7 @@ pub async fn chat_page(
 
     Html(templates::render_chat(
         true,
+        user_id,
         other_user_id,
         &other_username,
         &other_first_name,

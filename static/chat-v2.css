@@ -923,6 +923,22 @@
 .chat-dialog-card:has(.chat-dialog-unread) .card-title {
     color: var(--gold-light);
 }
+.chat-dialog-card.is-peer-typing {
+    border-color: rgba(214, 183, 122, .28) !important;
+}
+.chat-dialog-preview.is-typing,
+.chat-dialog-typing {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--gold-light);
+    font-weight: 750;
+}
+.chat-dialog-preview.is-typing .chat-typing-dots i,
+.chat-dialog-typing .chat-typing-dots i {
+    width: 4px;
+    height: 4px;
+}
 .chat-dialog-card .card-arrow {
     flex:0 0 auto;
 }

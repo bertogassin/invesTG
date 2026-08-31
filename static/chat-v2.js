@@ -217,8 +217,17 @@
                 return;
             }
 
+            var defaultSubtitle =
+                headerStatus.dataset.defaultSubtitle || "";
+
+            if (peerLastSeenAt > 0) {
+                headerStatus.textContent =
+                    "был(а) " + formatLastSeen(peerLastSeenAt);
+                return;
+            }
+
             headerStatus.textContent =
-                "был(а) " + formatLastSeen(peerLastSeenAt);
+                defaultSubtitle || "не в сети";
         }
 
         function updatePeerState() {
@@ -1502,22 +1511,30 @@
         var refreshDebounceTimer = null;
         var refreshFallbackTimer = null;
 
-        var replyBar = document.createElement("div");
-        replyBar.id = "chat-reply-bar";
-        replyBar.className = "chat-reply-bar";
-        replyBar.hidden = true;
-        replyBar.innerHTML =
-            '<div class="chat-reply-accent"></div>' +
-            '<div class="chat-reply-copy">' +
-                '<strong>Ответ</strong>' +
-                '<span id="chat-reply-text"></span>' +
-            '</div>' +
-            '<button id="chat-reply-close" ' +
-                'type="button" aria-label="Отменить ответ">' +
-                '×' +
-            '</button>';
+        var replyBar = document.getElementById("chat-reply-bar");
+        var replyText =
+            document.getElementById("chat-reply-text");
 
-        form.insertBefore(replyBar, input);
+        if (!replyBar) {
+            replyBar = document.createElement("div");
+            replyBar.id = "chat-reply-bar";
+            replyBar.className = "chat-reply-bar";
+            replyBar.hidden = true;
+            replyBar.innerHTML =
+                '<div class="chat-reply-accent"></div>' +
+                '<div class="chat-reply-copy">' +
+                    '<strong>Ответ</strong>' +
+                    '<span id="chat-reply-text"></span>' +
+                '</div>' +
+                '<button id="chat-reply-close" ' +
+                    'type="button" aria-label="Отменить ответ">' +
+                    '×' +
+                '</button>';
+
+            form.insertBefore(replyBar, form.firstChild);
+            replyText =
+                document.getElementById("chat-reply-text");
+        }
 
         var sheet = document.createElement("div");
         sheet.id = "chat-action-sheet";
@@ -1603,8 +1620,11 @@
 
         document.body.appendChild(confirmBox);
 
-        var replyText =
-            document.getElementById("chat-reply-text");
+        if (!replyText) {
+            replyText =
+                document.getElementById("chat-reply-text");
+        }
+
         var editorInput =
             document.getElementById("chat-editor-input");
         var editorSave =
@@ -1772,12 +1792,16 @@
                 quote.dataset.targetMessageId =
                     String(message.reply_to_message_id);
 
-                var author =
-                    Number(message.reply_sender_user_id) > 0 &&
-                    Number(message.reply_sender_user_id) ===
-                        Number(message.sender_user_id)
-                        ? "Сообщение"
-                        : "Ответ";
+                var replySender =
+                    Number(message.reply_sender_user_id || 0);
+                var author = "Сообщение";
+
+                if (replySender > 0) {
+                    author =
+                        String(replySender) === otherUserId
+                            ? "Собеседник"
+                            : "Вы";
+                }
 
                 var authorNode =
                     document.createElement("strong");
@@ -2130,6 +2154,17 @@
         document.getElementById(
             "chat-reply-close"
         ).addEventListener("click", clearReply);
+
+        input.addEventListener("keydown", function (event) {
+            if (
+                event.key === "Escape" &&
+                replyBar &&
+                !replyBar.hidden
+            ) {
+                event.preventDefault();
+                clearReply();
+            }
+        });
 
         editor.addEventListener(
             "click",
