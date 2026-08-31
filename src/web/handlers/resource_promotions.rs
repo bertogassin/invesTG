@@ -2,17 +2,26 @@ use super::auth::verify_authenticated_user;
 use super::common::{rate_limit_retry_after, request_is_cross_site, unix_now};
 use super::types::PromotionRequestForm;
 use crate::resource_publisher::{
-    mark_promotion_paid, promotion_price_label, promotion_price_minor, try_publish_promotion,
+    finalize_paid_promotion, mark_promotion_paid_with_reference,
+    promotion_price_label, promotion_price_minor, store_checkout_session_id,
+    try_publish_promotion, PromotionFinalizeOutcome,
 };
 use crate::resource_screening::{listing_type_label, screen_listing_content};
+use crate::stripe_payments::{
+    checkout_session_is_paid, checkout_session_payment_reference, checkout_session_request_id,
+    checkout_session_user_id, create_promotion_checkout_session, fetch_checkout_session,
+    stripe_configured, verify_webhook_signature,
+};
 use crate::state::app_state::AppState;
 use crate::web::handlers::admin::is_resource_moderation_session;
 use crate::web::templates;
 use axum::{
-    extract::{Form, Path, State},
+    body::Bytes,
+    extract::{Form, Path, Query, State},
     http::{header, HeaderMap, StatusCode},
     response::{Html, IntoResponse, Redirect, Response},
 };
+use serde::Deserialize;
 
 struct PromotionResource {
     id: i64,
@@ -149,6 +158,93 @@ fn status_response(
         ),
     ))
     .into_response()
+}
+
+fn finalize_status_response(
+    resource_id: i64,
+    outcome: PromotionFinalizeOutcome,
+    publish_error: Option<&str>,
+) -> Response {
+    match outcome {
+        PromotionFinalizeOutcome::AlreadyPublished | PromotionFinalizeOutcome::Published => {
+            status_response(
+                "Опубликовано · ResursMap",
+                "✓ ResursMap",
+                "Объявление опубликовано",
+                "Платёж принят, объявление отправлено в городскую Telegram-группу.",
+                resource_id,
+            )
+        }
+        PromotionFinalizeOutcome::AwaitingModeration => {
+            if let Some(error) = publish_error {
+                status_response(
+                    "Публикация · ResursMap",
+                    "⚠ ResursMap",
+                    "Оплата принята, публикация отложена",
+                    &format!(
+                        "Оплата прошла успешно, но отправка в группу временно недоступна ({error}). Администратор поможет завершить публикацию."
+                    ),
+                    resource_id,
+                )
+            } else {
+                status_response(
+                    "Модерация · ResursMap",
+                    "✓ ResursMap",
+                    "Оплата принята",
+                    "Заявка передана администратору. После проверки объявление будет опубликовано в группе.",
+                    resource_id,
+                )
+            }
+        }
+    }
+}
+
+async fn complete_paid_promotion(
+    state: &AppState,
+    resource_id: i64,
+    request_id: i64,
+    user_id: i64,
+    payment_reference: &str,
+) -> Response {
+    let paid = match mark_promotion_paid_with_reference(
+        &state.db_pool,
+        request_id,
+        user_id,
+        payment_reference,
+    ) {
+        Ok(paid) => paid,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "Не удалось подтвердить оплату",
+            )
+                .into_response();
+        }
+    };
+
+    if !paid {
+        match finalize_paid_promotion(state, request_id, user_id).await {
+            Ok(outcome) => return finalize_status_response(resource_id, outcome, None),
+            Err(_) => {
+                return status_response(
+                    "Оплата · ResursMap",
+                    "⚠ ResursMap",
+                    "Оплата уже подтверждена",
+                    "Повторная оплата не требуется.",
+                    resource_id,
+                );
+            }
+        }
+    }
+
+    match finalize_paid_promotion(state, request_id, user_id).await {
+        Ok(outcome) => finalize_status_response(resource_id, outcome, None),
+        Err(error) => finalize_status_response(
+            resource_id,
+            PromotionFinalizeOutcome::AwaitingModeration,
+            Some(&error),
+        ),
+    }
 }
 
 pub async fn resource_promotion_page(
@@ -592,6 +688,7 @@ pub async fn promotion_payment_page(
         } else {
             Some(bot_reason.as_str())
         },
+        stripe_configured(),
     ))
     .into_response()
 }
@@ -610,75 +707,230 @@ pub async fn confirm_promotion_payment(
         None => return (StatusCode::UNAUTHORIZED, "Требуется вход").into_response(),
     };
 
-    let paid = match mark_promotion_paid(&state.db_pool, request_id, authenticated.user_id) {
-        Ok(paid) => paid,
-        Err(_) => {
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                "Не удалось подтвердить оплату",
+    if stripe_configured() {
+        let connection = match crate::db::pool::get_connection(&state.db_pool) {
+            Ok(connection) => connection,
+            Err(_) => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    "Сервис недоступен",
+                )
+                    .into_response();
+            }
+        };
+
+        let row: Option<(i64, String)> = connection
+            .query_row(
+                "SELECT pr.price_minor, r.title
+                 FROM resource_promotion_requests pr
+                 JOIN resources r ON r.id = pr.resource_id
+                 WHERE pr.id = ?1
+                   AND pr.resource_id = ?2
+                   AND pr.requester_user_id = ?3
+                   AND pr.payment_status = 'pending'
+                 LIMIT 1",
+                rusqlite::params![request_id, resource_id, authenticated.user_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
             )
-                .into_response();
+            .ok();
+        drop(connection);
+
+        let Some((price_minor, title)) = row else {
+            return status_response(
+                "Оплата · ResursMap",
+                "⚠ ResursMap",
+                "Оплата недоступна",
+                "Заявка не найдена или уже оплачена.",
+                resource_id,
+            );
+        };
+
+        let product_name = format!("ResursMap · {}", title.trim());
+        let session = match create_promotion_checkout_session(
+            resource_id,
+            request_id,
+            authenticated.user_id,
+            price_minor,
+            "EUR",
+            &product_name,
+        )
+        .await
+        {
+            Ok(session) => session,
+            Err(error) => {
+                return status_response(
+                    "Оплата · ResursMap",
+                    "⚠ Stripe",
+                    "Не удалось создать оплату",
+                    &format!("Платёжный сервис временно недоступен ({error})."),
+                    resource_id,
+                );
+            }
+        };
+
+        let _ = store_checkout_session_id(
+            &state.db_pool,
+            request_id,
+            authenticated.user_id,
+            &session.id,
+        );
+
+        return Redirect::temporary(&session.url).into_response();
+    }
+
+    complete_paid_promotion(
+        &state,
+        resource_id,
+        request_id,
+        authenticated.user_id,
+        "dev_mock_payment",
+    )
+    .await
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PromotionPaidQuery {
+    session_id: Option<String>,
+}
+
+pub async fn promotion_payment_return(
+    State(state): State<AppState>,
+    Path((resource_id, request_id)): Path<(i64, i64)>,
+    Query(query): Query<PromotionPaidQuery>,
+    headers: HeaderMap,
+) -> Response {
+    let authenticated = match verify_authenticated_user(&state, &headers) {
+        Some(user) => user,
+        None => {
+            return Redirect::temporary(&format!(
+                "/login?next={}",
+                urlencoding::encode(&format!(
+                    "/app/resource/{resource_id}/promote/paid/{request_id}"
+                ))
+            ))
+            .into_response();
         }
     };
 
-    if !paid {
+    let Some(session_id) = query
+        .session_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    else {
         return status_response(
             "Оплата · ResursMap",
             "⚠ ResursMap",
-            "Оплата уже подтверждена",
-            "Повторная оплата не требуется.",
+            "Сессия оплаты не найдена",
+            "Вернитесь на страницу оплаты и повторите попытку.",
             resource_id,
         );
-    }
-
-    let connection = match crate::db::pool::get_connection(&state.db_pool) {
-        Ok(connection) => connection,
-        Err(_) => {
-            return (StatusCode::SERVICE_UNAVAILABLE, "Сервис недоступен").into_response();
-        }
     };
 
-    let bot_status: String = connection
-        .query_row(
-            "SELECT COALESCE(bot_check_status, 'unknown')
-             FROM resource_promotion_requests
-             WHERE id = ?1
-             LIMIT 1",
-            rusqlite::params![request_id],
-            |row| row.get(0),
-        )
-        .unwrap_or_else(|_| "unknown".to_string());
-    drop(connection);
-
-    if bot_status == "passed" {
-        if let Err(error) = try_publish_promotion(&state, request_id, authenticated.user_id).await {
+    let session = match fetch_checkout_session(session_id).await {
+        Ok(session) => session,
+        Err(error) => {
             return status_response(
-                "Публикация · ResursMap",
-                "⚠ ResursMap",
-                "Оплата принята, публикация отложена",
-                &format!(
-                    "Оплата прошла успешно, но отправка в группу временно недоступна ({error}). Администратор поможет завершить публикацию."
-                ),
+                "Оплата · ResursMap",
+                "⚠ Stripe",
+                "Не удалось проверить оплату",
+                &format!("Stripe вернул ошибку ({error})."),
                 resource_id,
             );
         }
+    };
 
+    if checkout_session_request_id(&session) != Some(request_id) {
         return status_response(
-            "Опубликовано · ResursMap",
-            "✓ ResursMap",
-            "Объявление опубликовано",
-            "Платёж принят, объявление отправлено в городскую Telegram-группу.",
+            "Оплата · ResursMap",
+            "⚠ ResursMap",
+            "Неверная сессия оплаты",
+            "Платёж не соответствует этой заявке.",
             resource_id,
         );
     }
 
-    status_response(
-        "Модерация · ResursMap",
-        "✓ ResursMap",
-        "Оплата принята",
-        "Заявка передана администратору. После проверки объявление будет опубликовано в группе.",
+    if checkout_session_user_id(&session) != Some(authenticated.user_id) {
+        return (StatusCode::FORBIDDEN, "Нет доступа к этой оплате").into_response();
+    }
+
+    if !checkout_session_is_paid(&session) {
+        return status_response(
+            "Оплата · ResursMap",
+            "⚠ ResursMap",
+            "Оплата ещё не подтверждена",
+            "Дождитесь завершения платежа в Stripe или повторите попытку.",
+            resource_id,
+        );
+    }
+
+    complete_paid_promotion(
+        &state,
         resource_id,
+        request_id,
+        authenticated.user_id,
+        &checkout_session_payment_reference(&session),
     )
+    .await
+}
+
+pub async fn stripe_promotion_webhook(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    let secret = match crate::stripe_payments::stripe_webhook_secret() {
+        Some(secret) => secret,
+        None => return StatusCode::NOT_FOUND.into_response(),
+    };
+
+    let signature = headers
+        .get("stripe-signature")
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default();
+
+    if !verify_webhook_signature(body.as_ref(), signature, &secret) {
+        return StatusCode::BAD_REQUEST.into_response();
+    }
+
+    let payload: serde_json::Value = match serde_json::from_slice(body.as_ref()) {
+        Ok(value) => value,
+        Err(_) => return StatusCode::BAD_REQUEST.into_response(),
+    };
+
+    if payload.get("type").and_then(|value| value.as_str()) != Some("checkout.session.completed") {
+        return StatusCode::OK.into_response();
+    }
+
+    let session = match payload
+        .get("data")
+        .and_then(|data| data.get("object"))
+    {
+        Some(session) => session.clone(),
+        None => return StatusCode::BAD_REQUEST.into_response(),
+    };
+
+    if !checkout_session_is_paid(&session) {
+        return StatusCode::OK.into_response();
+    }
+
+    let Some(request_id) = checkout_session_request_id(&session) else {
+        return StatusCode::OK.into_response();
+    };
+
+    let user_id = checkout_session_user_id(&session).unwrap_or(0);
+    let payment_reference = checkout_session_payment_reference(&session);
+
+    let _ = mark_promotion_paid_with_reference(
+        &state.db_pool,
+        request_id,
+        user_id,
+        &payment_reference,
+    );
+
+    let _ = finalize_paid_promotion(&state, request_id, user_id).await;
+
+    StatusCode::OK.into_response()
 }
 
 #[allow(clippy::type_complexity)]

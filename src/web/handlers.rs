@@ -29,8 +29,9 @@ pub use resources::*;
 mod resource_promotions;
 pub use resource_promotions::{
     admin_approve_promotion, admin_promotion_queue, admin_reject_promotion,
-    confirm_promotion_payment, promotion_payment_page, request_resource_promotion,
-    resource_promotion_page, retry_promotion_publish,
+    confirm_promotion_payment, promotion_payment_page, promotion_payment_return,
+    request_resource_promotion, resource_promotion_page, retry_promotion_publish,
+    stripe_promotion_webhook,
 };
 
 mod admin;
@@ -46,7 +47,9 @@ mod city_admin;
 mod city_helper_actions;
 mod group_helper;
 pub use admin::*;
-pub use admin_geography::{admin_geography_group_save, admin_geography_page};
+pub use admin_geography::{
+    admin_geography_group_save, admin_geography_group_verify, admin_geography_page,
+};
 pub use admin_v2::*;
 pub use city_admin::city_admin_panel;
 pub use city_helper_actions::{city_helper_create, city_helper_lifecycle, city_helpers_page};

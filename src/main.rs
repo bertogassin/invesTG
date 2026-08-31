@@ -5,6 +5,8 @@ mod geography;
 mod resource_publisher;
 mod resource_screening;
 mod state;
+mod stripe_payments;
+mod telegram_groups;
 mod telegram_notify;
 mod utils;
 mod web;
@@ -17,6 +19,9 @@ mod bot;
 #[tokio::main]
 async fn main() {
     drop(db::queries::init_db().expect("Не удалось инициализировать базу данных"));
+
+    db::owner_bootstrap::bootstrap_owner_from_env()
+        .expect("Не удалось создать начального владельца из окружения");
 
     db::admin_v2::initialize().expect("Не удалось применить миграцию административной системы V2");
 

@@ -5,7 +5,7 @@ use super::super::handlers::revoke_admin_session;
 use super::super::handlers::{
     admin_approve_promotion, admin_promotion_queue, admin_reject_promotion,
 };
-use super::super::handlers::{admin_geography_group_save, admin_geography_page};
+use super::super::handlers::{admin_geography_group_save, admin_geography_group_verify, admin_geography_page};
 use super::super::handlers::{admin_security_page, admin_step_up_request, admin_step_up_verify};
 use super::super::handlers::{
     center_panel, moderate_resource, moderator_panel,
@@ -48,6 +48,10 @@ pub(super) fn routes() -> Router<AppState> {
         .route(
             "/app/center/geography/group",
             post(admin_geography_group_save),
+        )
+        .route(
+            "/app/center/geography/group/verify",
+            post(admin_geography_group_verify),
         )
         .route(
             "/app/center/administrators",

@@ -954,6 +954,7 @@ pub fn render_promotion_payment(
     price_label: &str,
     bot_note: &str,
     bot_reason: Option<&str>,
+    stripe_enabled: bool,
 ) -> String {
     let price = escape_html(price_label);
     let note = escape_html(bot_note);
@@ -967,6 +968,40 @@ pub fn render_promotion_payment(
         })
         .unwrap_or_default();
 
+    let (payment_form, payment_footnote) = if stripe_enabled {
+        (
+            format!(
+                r#"<form method="post"
+          action="/app/resource/{resource_id}/promote/pay/{request_id}"
+          class="ui-form rm-promo-form">
+        <button type="submit" class="ui-button rm-promo-submit">
+            Перейти к оплате Stripe · {price}
+        </button>
+    </form>"#,
+                resource_id = resource_id,
+                request_id = request_id,
+                price = price,
+            ),
+            "Оплата проходит через Stripe Checkout. После успешной оплаты объявление будет опубликовано автоматически.",
+        )
+    } else {
+        (
+            format!(
+                r#"<form method="post"
+          action="/app/resource/{resource_id}/promote/pay/{request_id}"
+          class="ui-form rm-promo-form">
+        <button type="submit" class="ui-button rm-promo-submit">
+            Подтвердить оплату · {price}
+        </button>
+    </form>"#,
+                resource_id = resource_id,
+                request_id = request_id,
+                price = price,
+            ),
+            "Тестовый контур: кнопка фиксирует оплату без Stripe. Для продакшена задайте STRIPE_SECRET_KEY.",
+        )
+    };
+
     let content = format!(
         r#"
 <section class="card rm-promo-payment-card">
@@ -976,23 +1011,17 @@ pub fn render_promotion_payment(
     </div>
     <div class="card-meta">{note}</div>
     {reason_html}
-    <form method="post"
-          action="/app/resource/{resource_id}/promote/pay/{request_id}"
-          class="ui-form rm-promo-form">
-        <button type="submit" class="ui-button rm-promo-submit">
-            Подтвердить оплату · {price}
-        </button>
-    </form>
+    {payment_form}
     <div class="card-meta rm-promo-payment-footnote">
-        Платёжный шлюз подключается отдельно. Сейчас кнопка фиксирует оплату для тестового контура.
+        {payment_footnote}
     </div>
 </section>
 "#,
         price = price,
         note = note,
         reason_html = reason_html,
-        resource_id = resource_id,
-        request_id = request_id,
+        payment_form = payment_form,
+        payment_footnote = escape_html(payment_footnote),
     );
 
     page_shell(

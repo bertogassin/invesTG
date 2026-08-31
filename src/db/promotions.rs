@@ -240,6 +240,20 @@ fn apply_promotion_flow_migrations(connection: &Connection) -> Result<()> {
         "ALTER TABLE resources ADD COLUMN listing_type TEXT NOT NULL DEFAULT 'general'",
     )?;
 
+    add_column_if_missing(
+        connection,
+        "resource_promotion_requests",
+        "stripe_checkout_session_id",
+        "ALTER TABLE resource_promotion_requests ADD COLUMN stripe_checkout_session_id TEXT NOT NULL DEFAULT ''",
+    )?;
+
+    add_column_if_missing(
+        connection,
+        "resource_promotion_requests",
+        "stripe_payment_reference",
+        "ALTER TABLE resource_promotion_requests ADD COLUMN stripe_payment_reference TEXT NOT NULL DEFAULT ''",
+    )?;
+
     Ok(())
 }
 

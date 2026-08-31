@@ -262,6 +262,15 @@ pub fn mark_promotion_paid(
     request_id: i64,
     owner_user_id: i64,
 ) -> Result<bool, String> {
+    mark_promotion_paid_with_reference(pool, request_id, owner_user_id, "")
+}
+
+pub fn mark_promotion_paid_with_reference(
+    pool: &DbPool,
+    request_id: i64,
+    owner_user_id: i64,
+    payment_reference: &str,
+) -> Result<bool, String> {
     let connection = pool.get().map_err(|_| "database_unavailable".to_string())?;
 
     let now = chrono::Utc::now().timestamp();
@@ -269,11 +278,15 @@ pub fn mark_promotion_paid(
         .execute(
             "UPDATE resource_promotion_requests
              SET payment_status = 'paid',
+                 stripe_payment_reference = CASE
+                     WHEN ?4 != '' THEN ?4
+                     ELSE stripe_payment_reference
+                 END,
                  updated_at = ?3
              WHERE id = ?1
                AND requester_user_id = ?2
                AND payment_status = 'pending'",
-            params![request_id, owner_user_id, now],
+            params![request_id, owner_user_id, now, payment_reference],
         )
         .unwrap_or(0);
 
@@ -288,9 +301,87 @@ pub fn mark_promotion_paid(
         "payment_confirmed",
         "pending",
         "pending",
-        "paid",
+        if payment_reference.is_empty() {
+            "paid"
+        } else {
+            payment_reference
+        },
         now,
     );
 
     Ok(true)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PromotionFinalizeOutcome {
+    Published,
+    AwaitingModeration,
+    AlreadyPublished,
+}
+
+pub async fn finalize_paid_promotion(
+    state: &AppState,
+    request_id: i64,
+    actor_user_id: i64,
+) -> Result<PromotionFinalizeOutcome, String> {
+    let connection = state
+        .db_pool
+        .get()
+        .map_err(|_| "database_unavailable".to_string())?;
+
+    let row: Option<(String, String)> = connection
+        .query_row(
+            "SELECT status, COALESCE(bot_check_status, 'unknown')
+             FROM resource_promotion_requests
+             WHERE id = ?1
+               AND payment_status = 'paid'
+             LIMIT 1",
+            params![request_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .ok();
+
+    drop(connection);
+
+    let Some((status, bot_status)) = row else {
+        return Err("promotion_not_paid".into());
+    };
+
+    if status == "published" {
+        return Ok(PromotionFinalizeOutcome::AlreadyPublished);
+    }
+
+    if bot_status == "passed" {
+        try_publish_promotion(state, request_id, actor_user_id).await?;
+        Ok(PromotionFinalizeOutcome::Published)
+    } else {
+        Ok(PromotionFinalizeOutcome::AwaitingModeration)
+    }
+}
+
+pub fn store_checkout_session_id(
+    pool: &DbPool,
+    request_id: i64,
+    owner_user_id: i64,
+    session_id: &str,
+) -> Result<bool, String> {
+    let connection = pool.get().map_err(|_| "database_unavailable".to_string())?;
+    let updated = connection
+        .execute(
+            "UPDATE resource_promotion_requests
+             SET stripe_checkout_session_id = ?3,
+                 updated_at = ?4
+             WHERE id = ?1
+               AND requester_user_id = ?2
+               AND payment_status = 'pending'",
+            params![
+                request_id,
+                owner_user_id,
+                session_id,
+                chrono::Utc::now().timestamp()
+            ],
+        )
+        .unwrap_or(0);
+
+    Ok(updated == 1)
 }

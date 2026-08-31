@@ -4,11 +4,12 @@ use super::admin_access::{
 };
 use super::auth::verify_authenticated_user;
 use crate::state::app_state::AppState;
+use crate::telegram_groups::verify_telegram_group;
 use crate::web::templates::{admin_ops_page_themed, escape_html};
 use axum::{
     extract::{Form, Query, State},
     http::{header, HeaderMap, HeaderValue, StatusCode},
-    response::{Html, IntoResponse, Response},
+    response::{Html, IntoResponse, Redirect, Response},
 };
 use rusqlite::{params, OptionalExtension};
 use serde::Deserialize;
@@ -19,6 +20,9 @@ const SEARCH_MAX_CHARS: usize = 80;
 #[derive(Debug, Default, Deserialize)]
 pub struct GeographyQuery {
     q: Option<String>,
+    saved: Option<String>,
+    group_verified: Option<String>,
+    group_verify_error: Option<String>,
 }
 
 #[derive(Debug)]
@@ -187,6 +191,13 @@ fn render_city_card(row: &GeographyCityRow) -> String {
                 <button type="submit">
                     Сохранить группу
                 </button>
+
+                <button type="submit"
+                        class="verify-button"
+                        formaction="/app/center/geography/group/verify"
+                        formmethod="post">
+                    Проверить доступ бота
+                </button>
             </form>
         </details>
     </div>
@@ -219,6 +230,7 @@ fn render_page(
     total_cities: i64,
     configured_groups: i64,
     active_groups: i64,
+    notice: Option<&str>,
 ) -> String {
     let cards = if cities.is_empty() {
         r#"
@@ -243,12 +255,24 @@ fn render_page(
         format!("Результаты поиска · найдено до {}", cities.len())
     };
 
+    let notice_html = notice
+        .filter(|value| !value.trim().is_empty())
+        .map(|value| {
+            format!(
+                r#"<div class="geo-notice" role="status">{}</div>"#,
+                escape_html(value)
+            )
+        })
+        .unwrap_or_default();
+
     let content = format!(
         r#"
     <div class="topbar">
         <a class="back" href="/app/center">← Центр управления</a>
         <span class="protected">ТЕРРИТОРИИ · ЗАЩИЩЕНО</span>
     </div>
+
+    {notice_html}
 
     <section class="hero">
         <div class="kicker">ResursMap · Глобальная география</div>
@@ -305,6 +329,7 @@ fn render_page(
         {cards}
     </section>
 "#,
+        notice_html = notice_html,
         continents = continents,
         countries = countries,
         total_cities = total_cities,
@@ -551,6 +576,26 @@ pub async fn admin_geography_page(
     let scalar =
         |sql: &str| -> i64 { connection.query_row(sql, [], |row| row.get(0)).unwrap_or(0) };
 
+    let notice = if query.saved.as_deref() == Some("1") {
+        Some("Группа сохранена.".to_string())
+    } else if let Some(title) = query
+        .group_verified
+        .as_ref()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+    {
+        Some(format!("Telegram-группа «{title}» доступна боту."))
+    } else if let Some(error) = query
+        .group_verify_error
+        .as_ref()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+    {
+        Some(format!("Проверка не пройдена: {error}"))
+    } else {
+        None
+    };
+
     let html = render_page(
         &search,
         &cities,
@@ -581,6 +626,7 @@ pub async fn admin_geography_page(
                AND telegram_chat_id < 0
                AND is_active = 1",
         ),
+        notice.as_deref(),
     );
 
     let mut response = Html(html).into_response();
@@ -964,6 +1010,108 @@ pub async fn admin_geography_group_save(
         )],
     )
         .into_response()
+}
+
+pub async fn admin_geography_group_verify(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Form(form): Form<GeographyGroupForm>,
+) -> Response {
+    let user = match verify_authenticated_user(&state, &headers) {
+        Some(user) => user,
+        None => {
+            return (
+                StatusCode::UNAUTHORIZED,
+                "Требуется вход в аккаунт ResursMap",
+            )
+                .into_response();
+        }
+    };
+
+    let context = match load_admin_context(&state, user.user_id) {
+        Some(context) => context,
+        None => {
+            record_denied_access(
+                &state,
+                user.user_id,
+                "admin_group_verify_denied",
+                "Нет активного назначения",
+            );
+
+            return (StatusCode::NOT_FOUND, "404").into_response();
+        }
+    };
+
+    if !context.has_permission(AdminPermission::GroupsManage) {
+        record_denied_access(
+            &state,
+            user.user_id,
+            "admin_group_verify_permission_denied",
+            "Нет права GroupsManage",
+        );
+
+        return (StatusCode::FORBIDDEN, "Управление группами недоступно").into_response();
+    }
+
+    if !verify_admin_session(&state, &headers, context.user_id, context.assignment_id) {
+        return (
+            StatusCode::UNAUTHORIZED,
+            "Административная сессия недействительна",
+        )
+            .into_response();
+    }
+
+    if form.city_id <= 0 || form.telegram_chat_id >= 0 {
+        return Redirect::temporary(&format!(
+            "/app/center/geography?group_verify_error={}",
+            urlencoding::encode("Telegram Chat ID должен быть отрицательным")
+        ))
+        .into_response();
+    }
+
+    let connection = match crate::db::pool::get_connection(&state.db_pool) {
+        Ok(connection) => connection,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "База данных недоступна",
+            )
+                .into_response();
+        }
+    };
+
+    let stable_key: Option<String> = connection
+        .query_row(
+            "SELECT stable_key FROM geo_cities WHERE id = ?1 AND is_active = 1",
+            params![form.city_id],
+            |row| row.get(0),
+        )
+        .optional()
+        .unwrap_or(None);
+    drop(connection);
+
+    let Some(stable_key) = stable_key else {
+        return (
+            StatusCode::NOT_FOUND,
+            "Город не найден",
+        )
+            .into_response();
+    };
+
+    match verify_telegram_group(state.bot_token.as_deref(), form.telegram_chat_id).await {
+        Ok(info) => Redirect::temporary(&format!(
+            "/app/center/geography?q={}&group_verified={}",
+            urlencoding::encode(&stable_key),
+            urlencoding::encode(&info.title),
+        ))
+        .into_response(),
+        Err(error) => Redirect::temporary(&format!(
+            "/app/center/geography?q={}&group_verify_error={}",
+            urlencoding::encode(&stable_key),
+            urlencoding::encode(&error),
+        ))
+        .into_response(),
+    }
 }
 
 #[cfg(test)]
