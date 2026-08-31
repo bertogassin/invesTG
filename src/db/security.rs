@@ -1,40 +1,4 @@
-use crate::db::pool::{get_connection, DbPool};
-use rusqlite::{params, Connection, OptionalExtension};
-
-pub const DEFAULT_WARNING_COOLDOWN_SECONDS: i64 = 60;
-pub const SECURITY_RISK_HISTORY_SECONDS: i64 = 3600;
-pub const SECURITY_RISK_DECAY_SECONDS: i64 = 600;
-
-pub type SecurityDbResult<T> = Result<T, Box<dyn std::error::Error + Send + Sync>>;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct CriticalEscalation {
-    pub occurrence: u32,
-    pub mute_seconds: i64,
-}
-
-pub fn mute_seconds_for_critical(occurrence: u32) -> i64 {
-    match occurrence {
-        0 | 1 => 10 * 60,
-        2 => 60 * 60,
-        _ => 24 * 60 * 60,
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct NewModerationAuditEvent<'a> {
-    pub chat_id: i64,
-    pub user_id: i64,
-    pub message_id: i32,
-    pub action: &'a str,
-    pub reason: &'a str,
-    pub risk_score: u32,
-    pub risk_level: &'a str,
-    pub critical_occurrence: u32,
-    pub mute_seconds: i64,
-    pub success: bool,
-    pub created_at: i64,
-}
+use rusqlite::Connection;
 
 pub fn init_security_schema(conn: &Connection) -> rusqlite::Result<()> {
     conn.execute_batch(
@@ -161,6 +125,46 @@ pub fn init_security_schema(conn: &Connection) -> rusqlite::Result<()> {
         );
         ",
     )
+}
+
+#[cfg(feature = "telegram-bot")]
+mod bot_moderation {
+use crate::db::pool::{get_connection, DbPool};
+use rusqlite::{params, OptionalExtension};
+
+pub const DEFAULT_WARNING_COOLDOWN_SECONDS: i64 = 60;
+pub const SECURITY_RISK_HISTORY_SECONDS: i64 = 3600;
+pub const SECURITY_RISK_DECAY_SECONDS: i64 = 600;
+
+pub type SecurityDbResult<T> = Result<T, Box<dyn std::error::Error + Send + Sync>>;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CriticalEscalation {
+    pub occurrence: u32,
+    pub mute_seconds: i64,
+}
+
+pub fn mute_seconds_for_critical(occurrence: u32) -> i64 {
+    match occurrence {
+        0 | 1 => 10 * 60,
+        2 => 60 * 60,
+        _ => 24 * 60 * 60,
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct NewModerationAuditEvent<'a> {
+    pub chat_id: i64,
+    pub user_id: i64,
+    pub message_id: i32,
+    pub action: &'a str,
+    pub reason: &'a str,
+    pub risk_score: u32,
+    pub risk_level: &'a str,
+    pub critical_occurrence: u32,
+    pub mute_seconds: i64,
+    pub success: bool,
+    pub created_at: i64,
 }
 
 pub fn update_persistent_risk(
@@ -438,13 +442,19 @@ pub fn claim_warning_slot(
     Ok(changed == 1)
 }
 
+}
+
+#[cfg(feature = "telegram-bot")]
+pub use bot_moderation::*;
+
 #[cfg(test)]
-mod tests {
-    use super::*;
+mod schema_tests {
+    use super::init_security_schema;
+    use crate::db::pool::get_connection;
     use r2d2::Pool;
     use r2d2_sqlite::SqliteConnectionManager;
 
-    fn test_pool() -> DbPool {
+    fn test_pool() -> crate::db::pool::DbPool {
         let manager = SqliteConnectionManager::memory().with_init(|conn| {
             init_security_schema(conn)?;
             Ok(())
@@ -478,6 +488,25 @@ mod tests {
             .expect("table count");
 
         assert_eq!(count, 2);
+    }
+}
+
+#[cfg(all(test, feature = "telegram-bot"))]
+mod tests {
+    use super::*;
+    use r2d2::Pool;
+    use r2d2_sqlite::SqliteConnectionManager;
+
+    fn test_pool() -> DbPool {
+        let manager = SqliteConnectionManager::memory().with_init(|conn| {
+            super::init_security_schema(conn)?;
+            Ok(())
+        });
+
+        Pool::builder()
+            .max_size(1)
+            .build(manager)
+            .expect("test sqlite pool")
     }
 
     #[test]

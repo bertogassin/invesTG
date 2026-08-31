@@ -16,20 +16,13 @@ use sha2::{Digest, Sha256};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-pub(super) fn verify_telegram_init_data(init_data: &str, bot_token: Option<&str>) -> Option<i64> {
-    let bot_token = bot_token.filter(|value| !value.is_empty())?;
-
+fn parse_telegram_init_data(init_data: &str) -> (String, Vec<(String, String)>) {
     let mut hash_from_telegram = String::new();
-    let mut pairs: Vec<(String, String)> = Vec::new();
+    let mut pairs = Vec::new();
 
-    for part in init_data.split('&') {
-        let mut iter = part.splitn(2, '=');
-
-        let key = iter.next().unwrap_or("");
-        let value = iter.next().unwrap_or("");
-
-        let key = urlencoding::decode(key).ok()?.to_string();
-        let value = urlencoding::decode(value).ok()?.to_string();
+    for (key, value) in url::form_urlencoded::parse(init_data.as_bytes()) {
+        let key = key.into_owned();
+        let value = value.into_owned();
 
         if key == "hash" {
             hash_from_telegram = value;
@@ -37,6 +30,14 @@ pub(super) fn verify_telegram_init_data(init_data: &str, bot_token: Option<&str>
             pairs.push((key, value));
         }
     }
+
+    (hash_from_telegram, pairs)
+}
+
+pub(super) fn verify_telegram_init_data(init_data: &str, bot_token: Option<&str>) -> Option<i64> {
+    let bot_token = bot_token.filter(|value| !value.is_empty())?;
+
+    let (hash_from_telegram, mut pairs) = parse_telegram_init_data(init_data);
 
     if hash_from_telegram.is_empty() {
         return None;
@@ -91,11 +92,9 @@ pub(super) fn verify_telegram_init_data(init_data: &str, bot_token: Option<&str>
 }
 
 fn telegram_profile_from_init_data(init_data: &str) -> (String, String, String) {
-    let params: Vec<(String, String)> = url::form_urlencoded::parse(init_data.as_bytes())
-        .into_owned()
-        .collect();
+    let (_, pairs) = parse_telegram_init_data(init_data);
 
-    let user_json = params
+    let user_json = pairs
         .iter()
         .find(|(key, _)| key == "user")
         .map(|(_, value)| value.as_str())

@@ -332,8 +332,8 @@ fn load_user_sessions(
             session_public_id: session_public_id.clone(),
             ip_address: row.get(1)?,
             user_agent: row.get(2)?,
-            created_at: row.get(3)?,
-            last_seen_at: row.get(4)?,
+            _created_at: row.get(3)?,
+            _last_seen_at: row.get(4)?,
             is_current: !current_public_id.is_empty() && session_public_id == current_public_id,
         })
     })

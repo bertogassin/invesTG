@@ -1,14 +1,10 @@
 use super::auth::verify_user_session;
-use super::common::{
-    csrf_rejected_response, input_text_is_valid, rate_limit_retry_after, request_is_cross_site,
-};
-use super::types::ChatMessageForm;
 use crate::state::app_state::AppState;
 use crate::web::templates;
 use axum::{
-    extract::{Form, Path, State},
-    http::{header, HeaderMap, StatusCode},
-    response::{Html, IntoResponse, Response},
+    extract::{Path, State},
+    http::HeaderMap,
+    response::Html,
 };
 
 pub(super) fn load_user_conversations(
@@ -74,7 +70,7 @@ pub(super) fn load_user_conversations(
     .and_then(|mut stmt| {
         stmt.query_map(rusqlite::params![user_id], |row| {
             Ok(crate::web::view_models::ConversationRow {
-                id: row.get(0)?,
+                _id: row.get(0)?,
                 other_user_id: row.get(1)?,
                 username: row.get(2)?,
                 first_name: row.get(3)?,
@@ -305,210 +301,4 @@ pub async fn chat_page(
         &other_last_name,
         messages,
     ))
-}
-
-#[allow(dead_code)]
-pub async fn send_chat_message(
-    State(state): State<AppState>,
-    Path(other_user_id): Path<i64>,
-    headers: HeaderMap,
-    Form(form): Form<ChatMessageForm>,
-) -> Response {
-    if request_is_cross_site(&headers) {
-        return csrf_rejected_response();
-    }
-
-    let user_id = match verify_user_session(&state, &headers) {
-        Some(id) => id,
-
-        None => {
-            return (StatusCode::UNAUTHORIZED, "Требуется вход в аккаунт").into_response();
-        }
-    };
-
-    if other_user_id <= 0 || other_user_id == user_id {
-        return (StatusCode::BAD_REQUEST, "Некорректный пользователь").into_response();
-    }
-
-    let message = form.message.trim();
-
-    if message.is_empty() {
-        return (
-            StatusCode::SEE_OTHER,
-            [(
-                header::LOCATION,
-                format!("/app/chat/{}#chat-end", other_user_id),
-            )],
-        )
-            .into_response();
-    }
-
-    if !input_text_is_valid(message, 1, 2000) {
-        return (
-            StatusCode::BAD_REQUEST,
-            "Сообщение слишком длинное или содержит недопустимые символы",
-        )
-            .into_response();
-    }
-
-    if let Some(retry_after) = rate_limit_retry_after(&state, user_id, "chat_send", 30, 60).await {
-        return (
-            StatusCode::TOO_MANY_REQUESTS,
-            [(header::RETRY_AFTER, retry_after.to_string())],
-            "Слишком много сообщений. Попробуйте немного позже.",
-        )
-            .into_response();
-    }
-
-    let (user1_id, user2_id) = if user_id < other_user_id {
-        (user_id, other_user_id)
-    } else {
-        (other_user_id, user_id)
-    };
-
-    let db = match crate::db::pool::get_connection(&state.db_pool) {
-        Ok(db) => db,
-        Err(_) => {
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                "База данных временно недоступна",
-            )
-                .into_response();
-        }
-    };
-
-    let conversation_id: Option<i64> = db
-        .query_row(
-            "SELECT id
-             FROM conversations
-             WHERE user1_id = ?1
-               AND user2_id = ?2
-             LIMIT 1",
-            rusqlite::params![user1_id, user2_id,],
-            |row| row.get(0),
-        )
-        .ok();
-
-    let conversation_id = match conversation_id {
-        Some(id) => id,
-
-        None => {
-            drop(db);
-
-            return (StatusCode::FORBIDDEN, "Чат между пользователями не открыт").into_response();
-        }
-    };
-
-    let transaction_result = (|| -> rusqlite::Result<usize> {
-        let tx = db.unchecked_transaction()?;
-
-        let inserted = tx.execute(
-            "INSERT INTO messages (
-                conversation_id,
-                sender_user_id,
-                message,
-                is_read,
-                created_at
-             )
-             VALUES (
-                ?1,
-                ?2,
-                ?3,
-                0,
-                strftime('%s','now')
-             )",
-            rusqlite::params![conversation_id, user_id, message],
-        )?;
-
-        if inserted == 1 {
-            tx.execute(
-                "UPDATE conversations
-                 SET updated_at = strftime('%s','now')
-                 WHERE id = ?1",
-                rusqlite::params![conversation_id],
-            )?;
-        }
-
-        tx.commit()?;
-        Ok(inserted)
-    })();
-
-    let inserted = match transaction_result {
-        Ok(inserted) => inserted,
-        Err(err) => {
-            drop(db);
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Ошибка сохранения сообщения: {}", err),
-            )
-                .into_response();
-        }
-    };
-
-    if inserted == 1 {
-        let existing_chat_notification = db
-            .execute(
-                "UPDATE user_notifications
-                 SET created_at = strftime('%s','now')
-                 WHERE user_id = ?1
-                   AND kind = 'chat_message'
-                   AND is_read = 0",
-                rusqlite::params![other_user_id],
-            )
-            .unwrap_or(0);
-
-        if existing_chat_notification == 0 {
-            let _ = db.execute(
-                "INSERT INTO user_notifications (
-                    user_id,
-                    resource_id,
-                    kind,
-                    title,
-                    message,
-                    is_read,
-                    created_at
-                 )
-                 VALUES (
-                    ?1,
-                    ?2,
-                    'chat_message',
-                    'Новое сообщение',
-                    'У вас новое сообщение в ResursMap.',
-                    0,
-                    strftime('%s','now')
-                 )",
-                rusqlite::params![other_user_id, user_id],
-            );
-
-            // Отправим уведомление в Telegram, если привязан
-            let telegram_id: Option<i64> = db
-                .query_row(
-                    "SELECT telegram_id FROM users WHERE id = ?1",
-                    rusqlite::params![other_user_id],
-                    |row| row.get(0),
-                )
-                .ok();
-
-            if let Some(tg_id) = telegram_id {
-                if tg_id > 0 {
-                    crate::telegram_notify::notify_telegram_user(
-                        state.bot_token.as_deref(),
-                        tg_id,
-                        "📩 У вас новое сообщение в ResursMap!\n\nОткройте чат: https://resursmap.de/app/messages",
-                    );
-                }
-            }
-        }
-    }
-
-    drop(db);
-
-    (
-        StatusCode::SEE_OTHER,
-        [(
-            header::LOCATION,
-            format!("/app/chat/{}#chat-end", other_user_id),
-        )],
-    )
-        .into_response()
 }

@@ -9,11 +9,6 @@ pub struct AddResourceForm {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct ChatMessageForm {
-    pub message: String,
-}
-
-#[derive(Debug, Deserialize)]
 pub struct EditResourceForm {
     pub title: String,
     pub description: String,
@@ -24,13 +19,6 @@ pub struct EditResourceForm {
 #[derive(Debug, Deserialize)]
 pub struct ReportResourcePayload {
     pub reason: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[allow(dead_code)]
-pub struct ContactRequestPayload {
-    pub public_id: String,
-    pub message: String,
 }
 
 #[derive(Debug, Deserialize)]

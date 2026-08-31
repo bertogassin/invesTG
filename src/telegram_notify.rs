@@ -8,12 +8,12 @@ pub fn notify_telegram_user(bot_token: Option<&str>, telegram_id: i64, text: &st
         return;
     }
 
-    let Some(token) = bot_token.filter(|value| !value.is_empty()) else {
-        return;
-    };
-
     #[cfg(feature = "telegram-bot")]
     {
+        let Some(token) = bot_token.filter(|value| !value.is_empty()) else {
+            return;
+        };
+
         let token = token.to_string();
         let text = text.to_string();
 
@@ -26,7 +26,7 @@ pub fn notify_telegram_user(bot_token: Option<&str>, telegram_id: i64, text: &st
 
     #[cfg(not(feature = "telegram-bot"))]
     {
-        let _ = text;
+        let _ = (bot_token, text);
     }
 }
 

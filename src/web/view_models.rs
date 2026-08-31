@@ -6,8 +6,7 @@ pub type NotificationRow = (i64, Option<i64>, String, String, String, i64, i64);
 pub type ContactRequestRow = (i64, i64, String, String, String, String, String, i64, i64);
 
 pub struct ConversationRow {
-    #[allow(dead_code)]
-    pub id: i64,
+    pub _id: i64,
     pub other_user_id: i64,
     pub username: String,
     pub first_name: String,
@@ -21,10 +20,8 @@ pub struct UserSessionRow {
     pub session_public_id: String,
     pub ip_address: String,
     pub user_agent: String,
-    #[allow(dead_code)]
-    pub created_at: i64,
-    #[allow(dead_code)]
-    pub last_seen_at: i64,
+    pub _created_at: i64,
+    pub _last_seen_at: i64,
     pub is_current: bool,
 }
 
