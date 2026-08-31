@@ -770,6 +770,15 @@ pub fn render_chat(
                 🔊
             </button>
 
+            <button id="chat-haptic-toggle"
+                    type="button"
+                    class="chat-sound-toggle chat-haptic-toggle"
+                    aria-label="Вибрация чата"
+                    aria-pressed="true"
+                    title="Вибрация чата">
+                📳
+            </button>
+
             <button id="chat-block-toggle"
                     type="button"
                     class="chat-block-toggle"

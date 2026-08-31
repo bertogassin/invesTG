@@ -1497,6 +1497,37 @@
             });
         }
 
+        var hapticToggle = document.getElementById("chat-haptic-toggle");
+        if (hapticToggle) {
+            function syncHapticToggle() {
+                var enabled = true;
+                try {
+                    enabled =
+                        localStorage.getItem("resursmap-chat-haptics") !==
+                        "off";
+                } catch (_) {}
+                hapticToggle.setAttribute(
+                    "aria-pressed",
+                    enabled ? "true" : "false"
+                );
+                hapticToggle.textContent = enabled ? "📳" : "🔕";
+                hapticToggle.classList.toggle("is-muted", !enabled);
+            }
+
+            syncHapticToggle();
+            hapticToggle.addEventListener("click", function () {
+                var enabled =
+                    hapticToggle.getAttribute("aria-pressed") !== "true";
+                try {
+                    localStorage.setItem(
+                        "resursmap-chat-haptics",
+                        enabled ? "on" : "off"
+                    );
+                } catch (_) {}
+                syncHapticToggle();
+            });
+        }
+
         form.addEventListener(
             "submit",
             function (event) {
@@ -1987,6 +2018,13 @@
             }
 
             if (
+                message.attachment_kind === "voice" &&
+                message.attachment_url
+            ) {
+                return "🎤 Голосовое сообщение";
+            }
+
+            if (
                 message.attachment_kind === "image" &&
                 message.attachment_url
             ) {
@@ -2138,7 +2176,8 @@
 
                                     try {
                                         sessionStorage.setItem(
-                                            forwardDraftKey,
+                                            "resursmap-chat-forward:" +
+                                                targetId,
                                             JSON.stringify(payload)
                                         );
                                     } catch (_) {
@@ -2196,6 +2235,104 @@
             clearForward();
             input.value = "";
             input.dispatchEvent(new Event("input", { bubbles: true }));
+
+            if (
+                payload.attachment_kind === "voice" &&
+                payload.attachment_url
+            ) {
+                setSendState("Пересылка голосового…");
+
+                fetch(payload.attachment_url, {
+                    credentials: "same-origin"
+                })
+                    .then(function (response) {
+                        if (!response.ok) {
+                            throw new Error("forward_fetch_failed");
+                        }
+
+                        return response.blob();
+                    })
+                    .then(function (blob) {
+                        var formData = new FormData();
+                        formData.append("voice", blob, "forward.webm");
+                        formData.append(
+                            "client_message_id",
+                            createForwardClientMessageId()
+                        );
+
+                        return fetch(
+                            "/api/chat/" + otherUserId + "/send-voice",
+                            {
+                                method: "POST",
+                                body: formData,
+                                credentials: "same-origin"
+                            }
+                        );
+                    })
+                    .then(function (response) {
+                        return response.json().then(function (data) {
+                            return { response: response, data: data };
+                        });
+                    })
+                    .then(function (pack) {
+                        if (!pack.response.ok || !pack.data.ok) {
+                            throw new Error("forward_send_failed");
+                        }
+
+                        if (pack.data.message) {
+                            document.dispatchEvent(
+                                new CustomEvent(
+                                    "resursmap:chat-sync-messages",
+                                    {
+                                        detail: {
+                                            messages: [pack.data.message],
+                                            peer_read_through_id: 0
+                                        }
+                                    }
+                                )
+                            );
+                        }
+
+                        if (comment) {
+                            return requestJson(
+                                "/api/chat/" + otherUserId + "/send",
+                                {
+                                    method: "POST",
+                                    headers: {
+                                        "Content-Type": "application/json"
+                                    },
+                                    body: JSON.stringify({
+                                        message: comment,
+                                        client_message_id:
+                                            createForwardClientMessageId()
+                                    })
+                                }
+                            ).then(function (data) {
+                                if (data.message) {
+                                    document.dispatchEvent(
+                                        new CustomEvent(
+                                            "resursmap:chat-sync-messages",
+                                            {
+                                                detail: {
+                                                    messages: [data.message],
+                                                    peer_read_through_id: 0
+                                                }
+                                            }
+                                        )
+                                    );
+                                }
+                            });
+                        }
+                    })
+                    .then(function () {
+                        setSendState("Переслано · Enter — отправить");
+                    })
+                    .catch(function () {
+                        setSendState("Не удалось переслать голосовое");
+                    });
+
+                return;
+            }
 
             if (
                 payload.attachment_kind === "image" &&
@@ -2383,6 +2520,32 @@
             }
 
             return String(message.message || "");
+        }
+
+        function messageIsTextOnly(message) {
+            var kind = String(message.attachment_kind || "");
+
+            return !kind || kind === "text";
+        }
+
+        function messageCanBeEdited(message) {
+            if (!message.is_mine || Number(message.deleted_at) > 0) {
+                return false;
+            }
+
+            if (!messageIsTextOnly(message)) {
+                return false;
+            }
+
+            var createdAt = Number(message.created_at || 0);
+
+            if (!createdAt) {
+                return true;
+            }
+
+            return (
+                Math.floor(Date.now() / 1000) - createdAt <= 86400
+            );
         }
 
         function shortText(value, limit) {
@@ -2829,7 +2992,7 @@
             var deleted =
                 Number(message.deleted_at) > 0;
 
-            editButton.hidden = !mine || deleted;
+            editButton.hidden = !messageCanBeEdited(message);
             deleteButton.hidden = !mine || deleted;
 
             if (forwardButton) {
