@@ -10,8 +10,8 @@ use crate::resource_screening::{listing_type_label, screen_listing_content};
 use crate::stripe_payments::{
     checkout_session_is_paid, checkout_session_payment_reference, checkout_session_request_id,
     checkout_session_user_id, create_promotion_checkout_session, fetch_checkout_session,
-    mock_promotion_payment_allowed, refund_promotion_payment, stripe_configured,
-    verify_webhook_signature,
+    mock_promotion_payment_allowed, promotion_payment_available, refund_promotion_payment,
+    stripe_configured, verify_webhook_signature,
 };
 use crate::state::app_state::AppState;
 use crate::web::handlers::admin::is_resource_moderation_session;
@@ -121,7 +121,7 @@ fn load_target_for_resource(
                AND city_index = ?3
                AND telegram_chat_id < 0
                AND is_active = 1
-             ORDER BY id ASC
+             ORDER BY updated_at DESC, id ASC
              LIMIT 1",
             rusqlite::params![
                 resource.continent_index,
@@ -377,6 +377,11 @@ pub async fn resource_promotion_page(
 
     drop(connection);
 
+    let telegram_ready = state
+        .bot_token
+        .as_deref()
+        .is_some_and(|token| !token.trim().is_empty());
+
     Html(templates::render_resource_promotion(
         templates::RenderResourcePromotionParams {
             resource_id: resource.id,
@@ -389,6 +394,7 @@ pub async fn resource_promotion_page(
             target_id: target.id,
             listing_type_label: listing_type_label(&resource.listing_type),
             price_label: &promotion_price_label(),
+            telegram_ready,
             existing_status: existing_status.as_deref(),
             existing_payment_status: existing_payment_status.as_deref(),
             existing_request_id,
@@ -668,6 +674,16 @@ pub async fn promotion_payment_page(
             } else {
                 "Заявка передана администратору для модерации перед публикацией в группе."
             },
+            resource_id,
+        );
+    }
+
+    if !promotion_payment_available() {
+        return status_response(
+            "Оплата · ResursMap",
+            "⚠ ResursMap",
+            "Оплата недоступна",
+            "Платёжный сервис не настроен. Обратитесь к администратору.",
             resource_id,
         );
     }

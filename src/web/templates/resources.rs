@@ -740,6 +740,7 @@ pub struct RenderResourcePromotionParams<'a> {
     pub target_id: i64,
     pub listing_type_label: &'a str,
     pub price_label: &'a str,
+    pub telegram_ready: bool,
     pub existing_status: Option<&'a str>,
     pub existing_payment_status: Option<&'a str>,
     pub existing_request_id: Option<i64>,
@@ -757,6 +758,21 @@ pub fn render_resource_promotion(params: RenderResourcePromotionParams<'_>) -> S
 
     let listing_type = escape_html(params.listing_type_label);
     let price_label = escape_html(params.price_label);
+
+    let telegram_warning_html = if params.telegram_ready {
+        String::new()
+    } else {
+        r#"
+<div class="card rm-promo-pending">
+    <div class="card-title">Telegram не настроен</div>
+    <div class="card-meta rm-promo-pending-copy">
+        Оплата и заявка возможны, но автоматическая публикация в группу
+        заработает только после настройки TELEGRAM_BOT_TOKEN на сервере.
+    </div>
+</div>
+"#
+        .to_string()
+    };
 
     let action_html = if params.existing_status == Some("published") {
         r#"
@@ -917,6 +933,8 @@ pub fn render_resource_promotion(params: RenderResourcePromotionParams<'_>) -> S
     </div>
 </section>
 
+{telegram_warning_html}
+
 {action_html}
 "#,
         city_name = city_name,
@@ -926,6 +944,7 @@ pub fn render_resource_promotion(params: RenderResourcePromotionParams<'_>) -> S
         description = description,
         address = address,
         target_name = target_name,
+        telegram_warning_html = telegram_warning_html,
         action_html = action_html,
     );
 

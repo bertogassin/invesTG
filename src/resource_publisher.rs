@@ -315,14 +315,6 @@ pub async fn try_publish_promotion(
     }
 }
 
-pub fn mark_promotion_paid(
-    pool: &DbPool,
-    request_id: i64,
-    owner_user_id: i64,
-) -> Result<bool, String> {
-    mark_promotion_paid_with_reference(pool, request_id, owner_user_id, "")
-}
-
 pub fn mark_promotion_paid_with_reference(
     pool: &DbPool,
     request_id: i64,

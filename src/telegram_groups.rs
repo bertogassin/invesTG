@@ -1,7 +1,7 @@
 #[derive(Debug, Clone)]
 pub struct TelegramGroupInfo {
     pub title: String,
-    pub chat_type: String,
+    pub _chat_type: String,
 }
 
 pub async fn verify_telegram_group(
@@ -53,5 +53,8 @@ pub async fn verify_telegram_group(
         .unwrap_or("unknown")
         .to_string();
 
-    Ok(TelegramGroupInfo { title, chat_type })
+    Ok(TelegramGroupInfo {
+        title,
+        _chat_type: chat_type,
+    })
 }

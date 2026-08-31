@@ -6,10 +6,6 @@ use axum::{
 };
 use serde_json::json;
 
-pub(super) fn telegram_owner_user_id(client_id: &str) -> Option<i64> {
-    resource_owner_user_id(client_id)
-}
-
 pub(super) fn resource_owner_user_id(client_id: &str) -> Option<i64> {
     if let Some(value) = client_id.strip_prefix("user:") {
         return value.parse::<i64>().ok();
