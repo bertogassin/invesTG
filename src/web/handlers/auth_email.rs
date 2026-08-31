@@ -28,7 +28,15 @@ pub struct AuthNextQuery {
     pub next: Option<String>,
 }
 
-fn validate_password(password: &str) -> Result<(), &'static str> {
+pub(super) fn auth_related_href(base: &str, redirect_target: &str) -> String {
+    if redirect_target == "/app" {
+        base.to_string()
+    } else {
+        format!("{base}?next={}", urlencoding::encode(redirect_target))
+    }
+}
+
+pub(super) fn validate_password(password: &str) -> Result<(), &'static str> {
     let password = password.trim();
 
     if password.len() < 8 {
@@ -42,7 +50,7 @@ fn validate_password(password: &str) -> Result<(), &'static str> {
     Ok(())
 }
 
-fn hash_password(password: &str) -> Result<String, &'static str> {
+pub(super) fn hash_password(password: &str) -> Result<String, &'static str> {
     let salt = SaltString::generate(&mut OsRng);
     let argon2 = Argon2::default();
 
@@ -168,7 +176,7 @@ fn provision_email_account(
     Ok(next_id)
 }
 
-fn email_password_auth_response(
+pub(super) fn email_password_auth_response(
     state: &AppState,
     user_id: i64,
     headers: &HeaderMap,
@@ -446,14 +454,9 @@ pub async fn app_auth_page(Query(query): Query<AuthNextQuery>) -> Redirect {
 
 pub async fn login_page(Query(query): Query<AuthNextQuery>) -> Html<String> {
     let redirect_target = auth_redirect_target(query.next.as_deref());
-    let register_href = if redirect_target == "/app" {
-        "/register".to_string()
-    } else {
-        format!(
-            "/register?next={}",
-            urlencoding::encode(&redirect_target)
-        )
-    };
+    let register_href = auth_related_href("/register", &redirect_target);
+    let forgot_href = auth_related_href("/login/forgot", &redirect_target);
+    let code_href = auth_related_href("/login/code", &redirect_target);
 
     let main_html = format!(
         r##"
@@ -469,6 +472,11 @@ pub async fn login_page(Query(query): Query<AuthNextQuery>) -> Html<String> {
 
         <label for="password-input" style="display:block;margin:16px 0 8px;color:var(--text);font-size:14px;font-weight:750;">Пароль</label>
         <input id="password-input" class="ui-input" type="password" autocomplete="current-password" maxlength="128" placeholder="********" style="width:100%;min-height:52px;padding:0 15px;border-radius:14px;">
+
+        <div style="display:flex;justify-content:space-between;gap:12px;margin-top:10px;font-size:13px;">
+            <a href="{forgot_href}" style="color:var(--gold-light);text-decoration:none;">Забыли пароль?</a>
+            <a href="{code_href}" style="color:var(--muted);text-decoration:none;">Войти по коду</a>
+        </div>
 
         <button id="login-button" type="button" class="ui-button" style="width:100%;min-height:52px;margin-top:16px;border-radius:14px;font-size:16px;font-weight:850;cursor:pointer;">
             Войти

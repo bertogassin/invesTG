@@ -69,6 +69,11 @@ pub use auth_email::{
     app_auth_page, login_email, login_page, register_email, register_page,
 };
 
+mod auth_email_recovery;
+pub use auth_email_recovery::{
+    forgot_password_page, forgot_password_request, login_code_page, reset_password,
+};
+
 pub use admin_administrators::administrators_panel;
 
 pub use admin_assignment_actions::{create_admin_assignment, new_admin_assignment_page};

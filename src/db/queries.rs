@@ -135,6 +135,22 @@ pub fn init_db() -> Result<Connection> {
         [],
     )?;
 
+    let email_code_columns: Vec<String> = {
+        let mut stmt = conn.prepare("PRAGMA table_info(email_login_codes)")?;
+        let columns = stmt
+            .query_map([], |row| row.get::<_, String>(1))?
+            .collect::<Result<Vec<_>, _>>()?;
+        columns
+    };
+
+    if !email_code_columns.iter().any(|name| name == "purpose") {
+        conn.execute(
+            "ALTER TABLE email_login_codes
+             ADD COLUMN purpose TEXT NOT NULL DEFAULT 'login'",
+            [],
+        )?;
+    }
+
     conn.execute(
         "CREATE TABLE IF NOT EXISTS user_sessions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -477,9 +477,10 @@ pub async fn email_auth_request(
             expires_at,
             attempts,
             consumed_at,
-            created_at
+            created_at,
+            purpose
          )
-         VALUES (?1, ?2, ?3, 0, 0, ?4)",
+         VALUES (?1, ?2, ?3, 0, 0, ?4, 'login')",
         rusqlite::params![&email, &code_hash, expires_at, unix_now(),],
     );
 
@@ -603,6 +604,7 @@ pub async fn email_auth_verify(
                 consumed_at
              FROM email_login_codes
              WHERE email = ?1
+               AND purpose = 'login'
              ORDER BY id DESC
              LIMIT 1",
             rusqlite::params![&email],
