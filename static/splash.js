@@ -9,7 +9,7 @@
             return meta.content;
         }
 
-        return "4.9.22";
+        return "4.9.23";
     }
 
     try {

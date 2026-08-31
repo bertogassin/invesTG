@@ -16,7 +16,6 @@ pub fn render_continents(
     _categories: Vec<(String, i64)>,
     people_by_category: Vec<(String, i64)>,
     guest_mode: bool,
-    telegram_auth_enabled: bool,
 ) -> String {
     let w = world();
     let mut cards = String::new();
@@ -559,28 +558,10 @@ pub fn render_continents(
         message_icon = icon("message-circle"),
     );
 
-    let body_after = {
-        let mut scripts = format!(
-            r####"<script src="{pwa_install_js}" defer></script>"####,
-            pwa_install_js = crate::web::templates::common::static_asset("pwa-install.js"),
-        );
-
-        if guest_mode && telegram_auth_enabled {
-            scripts.push_str(crate::web::templates::common::telegram_webapp_script_tag());
-            scripts.push_str(&format!(
-                r####"<script src="{telegram_auth_js}" defer></script>
-<script>document.documentElement.dataset.telegramAutoAuth='1';document.documentElement.dataset.authenticated='0';</script>"####,
-                telegram_auth_js =
-                    crate::web::templates::common::static_asset("telegram-auth.js"),
-            ));
-        } else if !guest_mode {
-            scripts.push_str(
-                r####"<script>document.documentElement.dataset.authenticated='1';</script>"####,
-            );
-        }
-
-        scripts
-    };
+    let body_after = format!(
+        r####"<script src="{pwa_install_js}" defer></script>"####,
+        pwa_install_js = crate::web::templates::common::static_asset("pwa-install.js"),
+    );
 
     page_document(
         "ResursMap",
@@ -640,7 +621,7 @@ pub fn render_continent(ci: usize) -> String {
         );
     }
 
-    render_continents(0, 0, 0, Vec::new(), Vec::new(), false, false)
+    render_continents(0, 0, 0, Vec::new(), Vec::new(), false)
 }
 
 // ============================================================
@@ -693,7 +674,7 @@ pub fn render_country(ci: usize, si: usize) -> String {
         }
     }
 
-    render_continents(0, 0, 0, Vec::new(), Vec::new(), false, false)
+    render_continents(0, 0, 0, Vec::new(), Vec::new(), false)
 }
 
 // ============================================================
@@ -771,7 +752,7 @@ pub fn render_city(ci: usize, si: usize, zi: usize) -> String {
         }
     }
 
-    render_continents(0, 0, 0, Vec::new(), Vec::new(), false, false)
+    render_continents(0, 0, 0, Vec::new(), Vec::new(), false)
 }
 
 // ============================================================

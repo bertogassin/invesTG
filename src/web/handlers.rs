@@ -60,13 +60,13 @@ mod common;
 
 mod auth;
 pub use auth::{
-    app_auth, app_logout, app_revoke_other_sessions, app_revoke_session, email_auth_request,
+    app_logout, app_revoke_other_sessions, app_revoke_session, email_auth_request,
     email_auth_verify,
 };
 
 mod auth_email;
 pub use auth_email::{
-    app_auth_page, login_email, login_page, register_email, register_page,
+    login_email, login_page, register_email, register_page,
 };
 
 mod auth_email_recovery;

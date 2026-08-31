@@ -32,12 +32,7 @@ async fn main() {
 
     let admin_key = env::var("ADMIN_KEY").expect("ADMIN_KEY не задан");
 
-    let admin_telegram_id: i64 = env::var("ADMIN_TELEGRAM_ID")
-        .expect("ADMIN_TELEGRAM_ID не задан")
-        .parse()
-        .expect("ADMIN_TELEGRAM_ID должен быть числом");
-
-    let state = AppState::new(db_pool.clone(), bot_token.clone(), admin_key, admin_telegram_id);
+    let state = AppState::new(db_pool.clone(), bot_token.clone(), admin_key);
 
     #[cfg(feature = "telegram-bot")]
     match bot_token {

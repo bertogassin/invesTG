@@ -1,11 +1,9 @@
 use super::admin_access::{
     load_admin_context, verify_admin_session as verify_admin_v2_session, AdminPermission,
 };
-use super::auth::{
-    create_admin_session, is_admin_session, verify_authenticated_user, verify_telegram_init_data,
-};
+use super::auth::verify_authenticated_user;
 use super::common::{
-    csrf_rejected_response, input_text_is_valid, rate_limit_retry_after, request_is_cross_site,
+    csrf_rejected_response, input_text_is_valid, request_is_cross_site,
     telegram_owner_user_id,
 };
 use super::types::RejectResourceForm;
@@ -13,20 +11,15 @@ use crate::state::app_state::AppState;
 use crate::web::templates;
 use axum::{
     extract::{Form, Path, Query, State},
-    http::{header, HeaderMap, HeaderValue, StatusCode},
-    response::{Html, IntoResponse, Response},
+    http::{header, HeaderMap, StatusCode},
+    response::{Html, IntoResponse, Redirect, Response},
     Json,
 };
 use serde_json::json;
 use std::collections::BTreeMap;
 
 fn is_resource_moderation_session(state: &AppState, headers: &HeaderMap) -> bool {
-    // Сохраняем поддержку старой административной панели.
-    if is_admin_session(state, headers) {
-        return true;
-    }
-
-    // Admin V2 использует отдельную короткую серверную сессию.
+    // Admin V2 uses email session + short-lived admin app cookie.
     let Some(user) = verify_authenticated_user(state, headers) else {
         return false;
     };
@@ -40,139 +33,32 @@ fn is_resource_moderation_session(state: &AppState, headers: &HeaderMap) -> bool
         && verify_admin_v2_session(state, headers, context.user_id, context.assignment_id)
 }
 
-pub async fn admin_login_page() -> Html<String> {
-    let head_extra = r####"<script src="https://telegram.org/js/telegram-web-app.js"></script>
-<style>
-body {
-    margin: 0;
-    padding: 28px;
-    background: #0b0e12;
-    color: #f5f5f5;
-    font-family: system-ui;
-}
-</style>"####;
-
-    let main_html = r####"<div class="rm-mod-login-wrap">
-    <h1>ResursMap · Модерация</h1>
-    <p id="status">Проверяем Telegram…</p>
-</div>"####;
-
-    let body_after = r####"<script>
-(async function () {
-    const status = document.getElementById("status");
-
-    try {
-        const tg = window.Telegram && window.Telegram.WebApp
-            ? window.Telegram.WebApp
-            : null;
-
-        if (!tg || !tg.initData) {
-            status.textContent =
-                "Откройте эту страницу через Telegram Mini App.";
-            return;
-        }
-
-        tg.ready();
-
-        const response = await fetch("/app/admin/login", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                init_data: tg.initData
-            })
-        });
-
-        const data = await response.json();
-
-        if (!data.ok) {
-            status.textContent = "Доступ запрещён.";
-            return;
-        }
-
-        status.textContent = "✓ Вход выполнен";
-
-        window.location.replace("/app/admin/resources");
-    } catch (_) {
-        status.textContent = "Ошибка авторизации.";
-    }
-})();
-</script>"####;
-
-    Html(templates::page_document(
-        "Вход администратора · ResursMap",
-        head_extra,
-        "",
-        main_html,
-        "",
-        body_after,
-    ))
+pub async fn admin_login_page() -> Redirect {
+    Redirect::temporary("/login?next=%2Fapp%2Fadmin%2Fresources")
 }
 
 pub async fn admin_login(
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
     headers: HeaderMap,
-    Json(payload): Json<serde_json::Value>,
+    Json(_payload): Json<serde_json::Value>,
 ) -> Response {
     if request_is_cross_site(&headers) {
         return csrf_rejected_response();
     }
-    let init_data = payload
-        .get("init_data")
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
 
-    let user_id = match verify_telegram_init_data(init_data, state.bot_token.as_deref()) {
-        Some(id) if id == state.admin_telegram_id => id,
-
-        _ => {
-            return (
-                StatusCode::FORBIDDEN,
-                Json(json!({
-                    "ok": false,
-                    "error": "forbidden"
-                })),
-            )
-                .into_response();
-        }
-    };
-
-    if let Some(retry_after) = rate_limit_retry_after(&state, user_id, "admin_auth", 10, 600).await
-    {
-        return (
-            StatusCode::TOO_MANY_REQUESTS,
-            [(header::RETRY_AFTER, retry_after.to_string())],
-            Json(json!({
-                "ok": false,
-                "error": "rate_limited",
-                "retry_after": retry_after
-            })),
-        )
-            .into_response();
-    }
-
-    let session = create_admin_session(&state, user_id);
-
-    let cookie = format!(
-        "resursmap_admin={}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=43200",
-        session
-    );
-
-    let mut response = Json(json!({
-        "ok": true
-    }))
-    .into_response();
-
-    if let Ok(value) = HeaderValue::from_str(&cookie) {
-        response.headers_mut().insert(header::SET_COOKIE, value);
-    }
-
-    response
+    (
+        StatusCode::GONE,
+        Json(json!({
+            "ok": false,
+            "error": "telegram_auth_removed",
+            "message": "Вход через Telegram отключён. Используйте email и пароль на /login."
+        })),
+    )
+        .into_response()
 }
 
 pub async fn admin_reports(State(state): State<AppState>, headers: HeaderMap) -> Html<String> {
-    if !is_admin_session(&state, &headers) {
+    if !is_resource_moderation_session(&state, &headers) {
         return Html(
             r#"<h1>403</h1>
 <p>Доступ запрещён.</p>
@@ -458,7 +344,7 @@ pub async fn admin_close_report(
         return csrf_rejected_response();
     }
 
-    if !is_admin_session(&state, &headers) {
+    if !is_resource_moderation_session(&state, &headers) {
         return (StatusCode::UNAUTHORIZED, "Доступ запрещён").into_response();
     }
 
@@ -499,7 +385,7 @@ pub async fn admin_hide_reported_resource(
         return csrf_rejected_response();
     }
 
-    if !is_admin_session(&state, &headers) {
+    if !is_resource_moderation_session(&state, &headers) {
         return (StatusCode::UNAUTHORIZED, "Доступ запрещён").into_response();
     }
 
@@ -575,7 +461,7 @@ pub async fn admin_reject_reported_resource(
         return csrf_rejected_response();
     }
 
-    if !is_admin_session(&state, &headers) {
+    if !is_resource_moderation_session(&state, &headers) {
         return (StatusCode::UNAUTHORIZED, "Доступ запрещён").into_response();
     }
 

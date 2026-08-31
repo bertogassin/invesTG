@@ -7,7 +7,7 @@ pub fn escape_html(value: &str) -> String {
         .replace('\'', "&#39;")
 }
 
-pub const STATIC_ASSET_VERSION: &str = "4.9.22";
+pub const STATIC_ASSET_VERSION: &str = "4.9.23";
 
 pub fn profession_label(raw: &str) -> String {
     match raw.trim().to_lowercase().as_str() {
@@ -1464,29 +1464,6 @@ body::before {
     font-size: 14px;
     font-weight: 650;
     cursor: pointer;
-}
-
-.rm-auth-divider {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin: 22px 0 18px;
-    color: var(--muted);
-    font-size: 13px;
-}
-
-.rm-auth-divider::before,
-.rm-auth-divider::after {
-    content: "";
-    flex: 1;
-    height: 1px;
-    background: rgba(214, 183, 122, .18);
-}
-
-.rm-auth-button--telegram {
-    background: linear-gradient(135deg, #2aabee, #229ed9);
-    border-color: rgba(42, 171, 238, .45);
-    color: #fff;
 }
 
 .rm-auth-links {
@@ -3596,7 +3573,7 @@ pub(crate) fn page_document(
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="resursmap-asset-version" content="{asset_version}">
 {site_head}
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://telegram.org; style-src 'self' 'unsafe-inline'; img-src 'self' data:;">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;">
 <meta name="referrer" content="no-referrer">
 <meta http-equiv="X-Content-Type-Options" content="nosniff">
 <meta http-equiv="X-Frame-Options" content="DENY">
@@ -3649,35 +3626,13 @@ pub(crate) struct AuthPageParams<'a> {
     pub body_html: &'a str,
     pub footer_html: &'a str,
     pub script_html: &'a str,
-    pub telegram_auth_enabled: bool,
-    pub redirect_target: &'a str,
 }
 
-pub(crate) fn telegram_webapp_script_tag() -> &'static str {
-    r#"<script src="https://telegram.org/js/telegram-web-app.js"></script>"#
-}
-
-pub(crate) fn auth_support_scripts(
-    telegram_auth_enabled: bool,
-    redirect_target: &str,
-) -> String {
-    let auth_forms_js = static_asset("auth-forms.js");
-    let mut scripts = format!(r#"<script src="{auth_forms_js}" defer></script>"#);
-
-    if telegram_auth_enabled {
-        scripts.push_str(telegram_webapp_script_tag());
-        let telegram_auth_js = static_asset("telegram-auth.js");
-        scripts.push_str(&format!(
-            r#"<script src="{telegram_auth_js}" defer></script>"#,
-        ));
-        scripts.push_str(&format!(
-            r#"<script>document.documentElement.dataset.authRedirect={redirect_target_json};</script>"#,
-            redirect_target_json =
-                serde_json::to_string(redirect_target).unwrap_or_else(|_| "\"/app\"".to_string()),
-        ));
-    }
-
-    scripts
+pub(crate) fn auth_support_scripts() -> String {
+    format!(
+        r#"<script src="{auth_forms_js}" defer></script>"#,
+        auth_forms_js = static_asset("auth-forms.js"),
+    )
 }
 
 pub(crate) fn render_auth_page(params: AuthPageParams<'_>) -> String {
@@ -3708,10 +3663,7 @@ pub(crate) fn render_auth_page(params: AuthPageParams<'_>) -> String {
         "",
         &format!(
             "{support_scripts}{script_html}",
-            support_scripts = auth_support_scripts(
-                params.telegram_auth_enabled,
-                params.redirect_target,
-            ),
+            support_scripts = auth_support_scripts(),
             script_html = params.script_html,
         ),
     )

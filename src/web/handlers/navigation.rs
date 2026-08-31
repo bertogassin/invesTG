@@ -131,10 +131,6 @@ pub async fn app_root(State(state): State<AppState>, headers: HeaderMap) -> Html
         categories,
         people_by_category,
         guest_mode,
-        state
-            .bot_token
-            .as_deref()
-            .is_some_and(|value| !value.is_empty()),
     ))
 }
 

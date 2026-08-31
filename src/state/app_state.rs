@@ -52,7 +52,6 @@ pub struct AppState {
 
     pub bot_token: Option<String>,
     pub admin_key: String,
-    pub admin_telegram_id: i64,
 
     // Быстрый process-local rate limiter.
     //
@@ -80,12 +79,7 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn new(
-        db_pool: DbPool,
-        bot_token: Option<String>,
-        admin_key: String,
-        admin_telegram_id: i64,
-    ) -> Self {
+    pub fn new(db_pool: DbPool, bot_token: Option<String>, admin_key: String) -> Self {
         let (chat_events, _) = broadcast::channel(2_048);
         let (chat_typing_events, _) = broadcast::channel(1_024);
 
@@ -93,7 +87,6 @@ impl AppState {
             db_pool,
             bot_token,
             admin_key,
-            admin_telegram_id,
             rate_limits: Arc::new(Mutex::new(HashMap::new())),
             chat_events,
             chat_event_sequence: Arc::new(AtomicU64::new(0)),

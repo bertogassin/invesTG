@@ -1,4 +1,4 @@
-use super::auth::{
+﻿use super::auth::{
     append_user_session_cookie, auth_redirect_target, create_user_session, email_rate_limit_id,
     ensure_profile_public_id, normalize_email, EMAIL_USER_ID_BASE,
 };
@@ -11,7 +11,7 @@ use argon2::{
 use axum::{
     extract::{Query, State},
     http::{HeaderMap, StatusCode},
-    response::{Html, IntoResponse, Redirect, Response},
+    response::{Html, IntoResponse, Response},
     Json,
 };
 use serde::Deserialize;
@@ -56,20 +56,6 @@ pub(super) fn validate_password(password: &str) -> Result<(), &'static str> {
     }
 
     Ok(())
-}
-
-fn telegram_auth_enabled(state: &AppState) -> bool {
-    state
-        .bot_token
-        .as_deref()
-        .is_some_and(|value| !value.is_empty())
-}
-
-fn telegram_auth_section_html() -> &'static str {
-    r##"
-        <div class="rm-auth-divider">или</div>
-        <button id="telegram-login-button" type="button" class="ui-button rm-auth-button rm-auth-button--telegram">Войти через Telegram</button>
-"##
 }
 
 pub(super) fn hash_password(password: &str) -> Result<String, &'static str> {
@@ -478,28 +464,11 @@ pub async fn login_email(
     email_password_auth_response(&state, user_id, &headers)
 }
 
-pub async fn app_auth_page(Query(query): Query<AuthNextQuery>) -> Redirect {
-    let target = auth_redirect_target(query.next.as_deref());
-
-    if target == "/app" {
-        Redirect::temporary("/login")
-    } else {
-        Redirect::temporary(&format!(
-            "/login?next={}",
-            urlencoding::encode(&target)
-        ))
-    }
-}
-
-pub async fn login_page(
-    State(state): State<AppState>,
-    Query(query): Query<AuthNextQuery>,
-) -> Html<String> {
+pub async fn login_page(Query(query): Query<AuthNextQuery>) -> Html<String> {
     let redirect_target = auth_redirect_target(query.next.as_deref());
     let register_href = auth_related_href("/register", &redirect_target);
     let forgot_href = auth_related_href("/login/forgot", &redirect_target);
     let code_href = auth_related_href("/login/code", &redirect_target);
-    let telegram_enabled = telegram_auth_enabled(&state);
 
     let body_html = format!(
         r##"
@@ -518,15 +487,9 @@ pub async fn login_page(
         </div>
 
         <button id="login-button" type="button" class="ui-button rm-auth-button">Войти</button>
-        {telegram_section}
 "##,
         forgot_href = forgot_href,
         code_href = code_href,
-        telegram_section = if telegram_enabled {
-            telegram_auth_section_html()
-        } else {
-            ""
-        },
     );
 
     let footer_html = format!(
@@ -543,7 +506,6 @@ pub async fn login_page(
     const passwordInput = document.getElementById("password-input");
     const passwordToggle = document.getElementById("password-toggle");
     const loginButton = document.getElementById("login-button");
-    const telegramButton = document.getElementById("telegram-login-button");
     const authStatus = document.getElementById("auth-status");
 
     function setStatus(message, isError) {{
@@ -607,30 +569,11 @@ pub async fn login_page(
         }}
     }}
 
-    document.addEventListener("resursmap:telegram-auth-status", function (event) {{
-        const detail = event.detail || {{}};
-        setStatus(detail.message || "", Boolean(detail.error));
-    }});
+    loginButton.addEventListener("click", login);
 
     if (window.resursmapAuthForms) {{
         window.resursmapAuthForms.bindPasswordToggle(passwordToggle, passwordInput);
         window.resursmapAuthForms.bindEnterSubmit([emailInput, passwordInput], login);
-    }} else {{
-        passwordInput.addEventListener("keydown", function (event) {{
-            if (event.key === "Enter") login();
-        }});
-    }}
-
-    loginButton.addEventListener("click", login);
-
-    if (telegramButton && window.resursmapTelegramAuth) {{
-        telegramButton.addEventListener("click", function () {{
-            window.resursmapTelegramAuth.login({{ redirectTarget }});
-        }});
-
-        if (window.resursmapTelegramAuth.hasInitData()) {{
-            setStatus("Telegram обнаружен — можно войти одним нажатием.", false);
-        }}
     }}
 
     emailInput.focus();
@@ -648,44 +591,30 @@ pub async fn login_page(
             body_html: &body_html,
             footer_html: &footer_html,
             script_html: &body_after,
-            telegram_auth_enabled: telegram_enabled,
-            redirect_target: &redirect_target,
         },
     ))
 }
 
-pub async fn register_page(
-    State(state): State<AppState>,
-    Query(query): Query<AuthNextQuery>,
-) -> Html<String> {
+pub async fn register_page(Query(query): Query<AuthNextQuery>) -> Html<String> {
     let redirect_target = auth_redirect_target(query.next.as_deref());
     let login_href = auth_related_href("/login", &redirect_target);
     let forgot_href = auth_related_href("/login/forgot", &redirect_target);
-    let telegram_enabled = telegram_auth_enabled(&state);
 
-    let body_html = format!(
-        r##"
+    let body_html = r##"
         <label class="rm-auth-label" for="email-input">Email</label>
         <input id="email-input" class="ui-input rm-auth-input" type="email" autocomplete="email" maxlength="254" placeholder="name@example.com">
 
         <label class="rm-auth-label" for="password-input">Пароль</label>
         <div class="rm-auth-password-row">
             <input id="password-input" class="ui-input rm-auth-input" type="password" autocomplete="new-password" maxlength="128" placeholder="Минимум 8 символов">
-            <button id="password-toggle" type="button" class="rm-auth-password-toggle" aria-label="Показать пароль">Показать</button>
+            <button id="password-toggle" type="button" class="rm-auth-password-toggle" aria-label="ПShow пароль">Показать</button>
         </div>
 
         <label class="rm-auth-label" for="password-confirm-input">Повторите пароль</label>
         <input id="password-confirm-input" class="ui-input rm-auth-input" type="password" autocomplete="new-password" maxlength="128" placeholder="Ещё раз">
 
         <button id="register-button" type="button" class="ui-button rm-auth-button">Создать аккаунт</button>
-        {telegram_section}
-"##,
-        telegram_section = if telegram_enabled {
-            telegram_auth_section_html()
-        } else {
-            ""
-        },
-    );
+"##;
 
     let footer_html = format!(
         r##"<p class="rm-auth-footer">Уже есть аккаунт? <a href="{login_href}">Войти</a> · <a href="{forgot_href}">Забыли пароль?</a></p>"##,
@@ -703,7 +632,6 @@ pub async fn register_page(
     const passwordConfirmInput = document.getElementById("password-confirm-input");
     const passwordToggle = document.getElementById("password-toggle");
     const registerButton = document.getElementById("register-button");
-    const telegramButton = document.getElementById("telegram-login-button");
     const authStatus = document.getElementById("auth-status");
 
     function setStatus(message, isError) {{
@@ -779,11 +707,6 @@ pub async fn register_page(
         }}
     }}
 
-    document.addEventListener("resursmap:telegram-auth-status", function (event) {{
-        const detail = event.detail || {{}};
-        setStatus(detail.message || "", Boolean(detail.error));
-    }});
-
     if (window.resursmapAuthForms) {{
         window.resursmapAuthForms.bindPasswordToggle(passwordToggle, passwordInput);
         window.resursmapAuthForms.bindEnterSubmit(
@@ -793,13 +716,6 @@ pub async fn register_page(
     }}
 
     registerButton.addEventListener("click", register);
-
-    if (telegramButton && window.resursmapTelegramAuth) {{
-        telegramButton.addEventListener("click", function () {{
-            window.resursmapTelegramAuth.login({{ redirectTarget }});
-        }});
-    }}
-
     emailInput.focus();
 }})();
 </script>
@@ -811,12 +727,10 @@ pub async fn register_page(
         crate::web::templates::AuthPageParams {
             document_title: "Регистрация · ResursMap",
             heading: "Регистрация",
-            subtitle: "Создайте аккаунт на сайте. В Telegram можно войти без пароля, если открыть приложение из бота.",
-            body_html: &body_html,
+            subtitle: "Создайте аккаунт по email и паролю. Telegram используется только для уведомлений и публикаций, не для входа.",
+            body_html,
             footer_html: &footer_html,
             script_html: &body_after,
-            telegram_auth_enabled: telegram_enabled,
-            redirect_target: &redirect_target,
         },
     ))
 }

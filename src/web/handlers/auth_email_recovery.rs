@@ -578,8 +578,6 @@ pub async fn login_code_page(Query(query): Query<AuthNextQuery>) -> Html<String>
             body_html,
             footer_html: &footer_html,
             script_html: &body_after,
-            telegram_auth_enabled: false,
-            redirect_target: &redirect_target,
         },
     ))
 }
@@ -737,8 +735,6 @@ pub async fn forgot_password_page(Query(query): Query<AuthNextQuery>) -> Html<St
             body_html,
             footer_html: &footer_html,
             script_html: &body_after,
-            telegram_auth_enabled: false,
-            redirect_target: &redirect_target,
         },
     ))
 }
