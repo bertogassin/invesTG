@@ -646,6 +646,36 @@ pub fn init_db() -> Result<Connection> {
         [],
     );
 
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS message_reactions (
+            message_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            emoji TEXT NOT NULL,
+            created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+
+            PRIMARY KEY (message_id, user_id),
+
+            CHECK(message_id > 0),
+            CHECK(user_id > 0),
+            CHECK(length(emoji) BETWEEN 1 AND 8),
+
+            FOREIGN KEY (message_id)
+                REFERENCES messages(id)
+                ON DELETE CASCADE,
+
+            FOREIGN KEY (user_id)
+                REFERENCES users(id)
+                ON DELETE CASCADE
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_message_reactions_message
+         ON message_reactions(message_id, emoji)",
+        [],
+    )?;
+
     // ============================================================
     // USER BLOCKS — messenger privacy boundary
     // ============================================================

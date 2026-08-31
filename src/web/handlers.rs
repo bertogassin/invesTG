@@ -15,7 +15,7 @@ mod direct_chat_start;
 pub use chat::*;
 pub use chat_api::{
     api_chat_conversations, api_chat_delete, api_chat_edit, api_chat_messages, api_chat_peer,
-    api_chat_send,
+    api_chat_react, api_chat_send,
 };
 pub use chat_media::{api_chat_media, api_chat_send_image};
 pub use chat_realtime::api_chat_realtime;

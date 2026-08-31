@@ -415,12 +415,32 @@ pub fn render_messages(
 // TASK 7.22F-E — CHAT
 // ============================================================
 
-fn chat_message_display_body(message: &crate::web::view_models::ChatMessageRow) -> String {
+fn chat_message_body_html(message: &crate::web::view_models::ChatMessageRow) -> String {
     if message.deleted_at > 0 {
-        "Сообщение удалено".to_string()
-    } else {
-        escape_html(&message.message)
+        return r#"<div class="chat-message-body is-deleted">Сообщение удалено</div>"#.to_string();
     }
+
+    if message.attachment_kind == "image" && !message.attachment_url.is_empty() {
+        let caption_html = if message.message.is_empty() {
+            String::new()
+        } else {
+            format!(
+                r#"<div class="chat-message-caption">{}</div>"#,
+                escape_html(&message.message)
+            )
+        };
+
+        return format!(
+            r#"<div class="chat-message-body"><img class="chat-message-image" src="{url}" alt="Фото" loading="lazy">{caption}</div>"#,
+            url = escape_html(&message.attachment_url),
+            caption = caption_html,
+        );
+    }
+
+    format!(
+        r#"<div class="chat-message-body">{}</div>"#,
+        escape_html(&message.message)
+    )
 }
 
 fn chat_reply_author_label(
@@ -520,12 +540,6 @@ fn render_chat_message_row(
         "chat-bubble"
     };
 
-    let body_class = if deleted {
-        "chat-message-body is-deleted"
-    } else {
-        "chat-message-body"
-    };
-
     let reply_html = if message.reply_to_message_id > 0 {
         let reply_preview = escape_html(&message.reply_message);
         let reply_author = chat_reply_author_label(
@@ -556,8 +570,10 @@ fn render_chat_message_row(
         String::new()
     };
 
-    let display_body = chat_message_display_body(message);
+    let display_body = chat_message_body_html(message);
     let safe_message_text = escape_html(&message.message);
+    let attachment_kind = escape_html(&message.attachment_kind);
+    let attachment_url = escape_html(&message.attachment_url);
 
     format!(
         r#"
@@ -574,11 +590,13 @@ fn render_chat_message_row(
      data-read-at="{read_at}"
      data-delivered-at="{delivered_at}"
      data-created-at="{created_at}"
-     data-message-text="{message_text}">
+     data-message-text="{message_text}"
+     data-attachment-kind="{attachment_kind}"
+     data-attachment-url="{attachment_url}">
 
     <div class="{bubble_class}">
         {reply_html}
-        <div class="{body_class}">{display_body}</div>
+        {display_body}
         {edited_html}
         <div class="chat-message-meta">
             <span>{chat_time}</span>
@@ -602,8 +620,9 @@ fn render_chat_message_row(
         message_text = safe_message_text,
         bubble_class = bubble_class,
         reply_html = reply_html,
-        body_class = body_class,
         display_body = display_body,
+        attachment_kind = attachment_kind,
+        attachment_url = attachment_url,
         edited_html = edited_html,
         chat_time = chat_time,
         status_class = status.1,
@@ -780,6 +799,18 @@ pub fn render_chat(
             ×
         </button>
     </div>
+
+    <input type="file"
+           id="chat-image-input"
+           accept="image/jpeg,image/png,image/webp"
+           hidden>
+
+    <button id="chat-image-btn"
+            type="button"
+            class="chat-image-btn"
+            aria-label="Отправить фото">
+        📷
+    </button>
 
     <button id="chat-send"
             type="submit"

@@ -45,6 +45,13 @@ fn message_can_be_edited(created_at: i64, deleted_at: i64, now: i64) -> bool {
 }
 
 #[derive(Debug, Serialize)]
+struct MessageReaction {
+    emoji: String,
+    count: i64,
+    mine: bool,
+}
+
+#[derive(Debug, Serialize)]
 struct ChatApiMessage {
     id: i64,
     sender_user_id: i64,
@@ -67,6 +74,84 @@ struct ChatApiMessage {
     attachment_size: i64,
     #[serde(skip_serializing_if = "String::is_empty")]
     attachment_url: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    reactions: Vec<MessageReaction>,
+}
+
+const CHAT_REACTION_EMOJIS: &[&str] = &["❤️", "👍", "😂", "😮", "😢", "🙏"];
+
+fn reaction_emoji_is_allowed(value: &str) -> bool {
+    CHAT_REACTION_EMOJIS.contains(&value)
+}
+
+fn attach_reactions(
+    connection: &rusqlite::Connection,
+    messages: &mut [ChatApiMessage],
+    viewer_user_id: i64,
+) {
+    if messages.is_empty() {
+        return;
+    }
+
+    let mut placeholders = Vec::with_capacity(messages.len());
+    let mut params: Vec<rusqlite::types::Value> = Vec::with_capacity(messages.len() + 1);
+    params.push(rusqlite::types::Value::from(viewer_user_id));
+
+    for (index, message) in messages.iter().enumerate() {
+        placeholders.push(format!("?{}", index + 2));
+        params.push(rusqlite::types::Value::from(message.id));
+    }
+
+    let sql = format!(
+        "SELECT
+            message_id,
+            emoji,
+            COUNT(*) AS reaction_count,
+            SUM(CASE WHEN user_id = ?1 THEN 1 ELSE 0 END) AS mine_count
+         FROM message_reactions
+         WHERE message_id IN ({})
+         GROUP BY message_id, emoji
+         ORDER BY message_id ASC, reaction_count DESC, emoji ASC",
+        placeholders.join(", ")
+    );
+
+    let mut statement = match connection.prepare(&sql) {
+        Ok(statement) => statement,
+        Err(_) => return,
+    };
+
+    let rows = match statement.query_map(rusqlite::params_from_iter(params), |row| {
+        Ok((
+            row.get::<_, i64>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, i64>(2)?,
+            row.get::<_, i64>(3)?,
+        ))
+    }) {
+        Ok(rows) => rows,
+        Err(_) => return,
+    };
+
+    let mut reactions_by_message: std::collections::HashMap<i64, Vec<MessageReaction>> =
+        std::collections::HashMap::new();
+
+    for row in rows.flatten() {
+        let (message_id, emoji, count, mine_count) = row;
+        reactions_by_message
+            .entry(message_id)
+            .or_default()
+            .push(MessageReaction {
+                emoji,
+                count,
+                mine: mine_count > 0,
+            });
+    }
+
+    for message in messages.iter_mut() {
+        if let Some(reactions) = reactions_by_message.remove(&message.id) {
+            message.reactions = reactions;
+        }
+    }
 }
 
 fn normalized_pair(current_user_id: i64, other_user_id: i64) -> Option<(i64, i64)> {
@@ -133,7 +218,7 @@ fn load_api_message_by_id(
     message_id: i64,
     user_id: i64,
 ) -> Option<ChatApiMessage> {
-    connection
+    let mut message = connection
         .query_row(
             "SELECT
                 messages.id,
@@ -207,10 +292,19 @@ fn load_api_message_by_id(
                             String::new()
                         }
                     },
+                    reactions: Vec::new(),
                 })
             },
         )
-        .ok()
+        .ok()?;
+
+    attach_reactions(
+        connection,
+        std::slice::from_mut(&mut message),
+        user_id,
+    );
+
+    Some(message)
 }
 
 fn json_error(status: StatusCode, error: &str) -> Response {
@@ -351,6 +445,7 @@ pub async fn api_chat_messages(
                                         String::new()
                                     }
                                 },
+                                reactions: Vec::new(),
                             })
                         },
                     )?
@@ -436,6 +531,7 @@ pub async fn api_chat_messages(
                                         String::new()
                                     }
                                 },
+                                reactions: Vec::new(),
                             })
                         },
                     )?
@@ -518,6 +614,7 @@ pub async fn api_chat_messages(
                                     String::new()
                                 }
                             },
+                            reactions: Vec::new(),
                         })
                     })?
                     .collect::<Result<Vec<_>, _>>()
@@ -540,6 +637,8 @@ pub async fn api_chat_messages(
     if query.after_id.is_none() {
         messages.reverse();
     }
+
+    attach_reactions(&connection, &mut messages, user_id);
 
     let latest_visible_id = messages.iter().map(|message| message.id).max().unwrap_or(0);
     let should_mark_read = query.mark_read.unwrap_or(false);
@@ -1243,6 +1342,135 @@ pub async fn api_chat_conversations(State(state): State<AppState>, headers: Head
         .into_response()
 }
 
+#[derive(Debug, Deserialize)]
+pub struct ChatReactPayload {
+    emoji: String,
+}
+
+pub async fn api_chat_react(
+    State(state): State<AppState>,
+    Path((other_user_id, message_id)): Path<(i64, i64)>,
+    headers: HeaderMap,
+    Json(payload): Json<ChatReactPayload>,
+) -> Response {
+    if request_is_cross_site(&headers) {
+        return json_error(StatusCode::FORBIDDEN, "cross_site_request_rejected");
+    }
+
+    let user_id = match verify_user_session(&state, &headers) {
+        Some(user_id) => user_id,
+        None => {
+            return json_error(StatusCode::UNAUTHORIZED, "login_required");
+        }
+    };
+
+    if normalized_pair(user_id, other_user_id).is_none() || message_id <= 0 {
+        return json_error(StatusCode::BAD_REQUEST, "invalid_request");
+    }
+
+    let emoji = payload.emoji.trim();
+
+    if !reaction_emoji_is_allowed(emoji) {
+        return json_error(StatusCode::BAD_REQUEST, "invalid_reaction");
+    }
+
+    let connection = match state.db_pool.get() {
+        Ok(connection) => connection,
+        Err(_) => {
+            return json_error(StatusCode::SERVICE_UNAVAILABLE, "database_unavailable");
+        }
+    };
+
+    if users_are_blocked(&connection, user_id, other_user_id) {
+        return json_error(StatusCode::FORBIDDEN, "user_blocked");
+    }
+
+    let conversation_id = match conversation_id(&connection, user_id, other_user_id) {
+        Some(conversation_id) => conversation_id,
+        None => {
+            return json_error(StatusCode::FORBIDDEN, "conversation_not_open");
+        }
+    };
+
+    let message_exists: i64 = connection
+        .query_row(
+            "SELECT COUNT(*)
+             FROM messages
+             WHERE id = ?1
+               AND conversation_id = ?2
+               AND deleted_at = 0",
+            rusqlite::params![message_id, conversation_id],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    if message_exists == 0 {
+        return json_error(StatusCode::NOT_FOUND, "message_not_found");
+    }
+
+    let existing_emoji: Option<String> = connection
+        .query_row(
+            "SELECT emoji
+             FROM message_reactions
+             WHERE message_id = ?1
+               AND user_id = ?2
+             LIMIT 1",
+            rusqlite::params![message_id, user_id],
+            |row| row.get(0),
+        )
+        .ok();
+
+    if existing_emoji.as_deref() == Some(emoji) {
+        let _ = connection.execute(
+            "DELETE FROM message_reactions
+             WHERE message_id = ?1
+               AND user_id = ?2",
+            rusqlite::params![message_id, user_id],
+        );
+    } else {
+        let now = crate::web::handlers::common::unix_now();
+        let changed = connection
+            .execute(
+                "INSERT INTO message_reactions (message_id, user_id, emoji, created_at)
+                 VALUES (?1, ?2, ?3, ?4)
+                 ON CONFLICT(message_id, user_id)
+                 DO UPDATE SET emoji = excluded.emoji,
+                               created_at = excluded.created_at",
+                rusqlite::params![message_id, user_id, emoji, now],
+            )
+            .unwrap_or(0);
+
+        if changed == 0 {
+            return json_error(StatusCode::INTERNAL_SERVER_ERROR, "reaction_save_failed");
+        }
+    }
+
+    let Some(message) =
+        load_api_message_by_id(&connection, conversation_id, message_id, user_id)
+    else {
+        return json_error(StatusCode::INTERNAL_SERVER_ERROR, "message_reload_failed");
+    };
+
+    state.publish_chat_event(
+        "message.reacted",
+        conversation_id,
+        message_id,
+        user_id,
+        other_user_id,
+    );
+
+    (
+        StatusCode::OK,
+        Json(json!({
+            "ok": true,
+            "message_id": message_id,
+            "reactions": message.reactions,
+            "message": message
+        })),
+    )
+        .into_response()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1279,6 +1507,14 @@ mod tests {
         assert!(message_can_be_edited(1_000, 0, 1_000 + 86_400));
         assert!(!message_can_be_edited(1_000, 0, 1_000 + 86_401));
         assert!(!message_can_be_edited(1_000, 2_000, 1_001));
+    }
+
+    #[test]
+    fn chat_reaction_emoji_is_whitelisted() {
+        assert!(reaction_emoji_is_allowed("❤️"));
+        assert!(reaction_emoji_is_allowed("👍"));
+        assert!(!reaction_emoji_is_allowed("💣"));
+        assert!(!reaction_emoji_is_allowed("<script>"));
     }
 
     #[test]

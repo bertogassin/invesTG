@@ -1,8 +1,8 @@
 use super::super::handlers::{
     accept_contact_request, api_chat_block, api_chat_block_status, api_chat_conversations,
     api_chat_delete, api_chat_edit, api_chat_media, api_chat_messages, api_chat_peer,
-    api_chat_realtime, api_chat_send, api_chat_send_image, api_chat_unblock, api_start_direct_chat,
-    chat_page, contact_requests_page, messages_page, reject_contact_request,
+    api_chat_realtime, api_chat_react, api_chat_send, api_chat_send_image, api_chat_unblock,
+    api_start_direct_chat, chat_page, contact_requests_page, messages_page, reject_contact_request,
 };
 use crate::state::app_state::AppState;
 use axum::{
@@ -45,6 +45,10 @@ pub(super) fn routes() -> Router<AppState> {
         .route(
             "/api/chat/{other_user_id}/messages/{message_id}/delete",
             post(api_chat_delete),
+        )
+        .route(
+            "/api/chat/{other_user_id}/messages/{message_id}/react",
+            post(api_chat_react),
         )
         .route("/api/contact/request", post(api_start_direct_chat))
 }

@@ -41,6 +41,8 @@ pub struct ChatMessageRow {
     pub reply_message: String,
     pub edited_at: i64,
     pub deleted_at: i64,
+    pub attachment_kind: String,
+    pub attachment_url: String,
 }
 
 pub type PublicProfileResourceRow = (i64, String, String, String, f64, i64, i64, i64);

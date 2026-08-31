@@ -236,7 +236,9 @@ pub async fn chat_page(
                         messages.conversation_id
                 ), ''),
                 messages.edited_at,
-                messages.deleted_at
+                messages.deleted_at,
+                COALESCE(messages.attachment_kind, ''),
+                COALESCE(messages.attachment_path, '')
              FROM (
                 SELECT id
                 FROM messages
@@ -250,8 +252,13 @@ pub async fn chat_page(
         )
         .and_then(|mut stmt| {
             stmt.query_map(rusqlite::params![conversation_id], |row| {
+                let deleted_at: i64 = row.get(11)?;
+                let attachment_kind: String = row.get(12)?;
+                let attachment_path: String = row.get(13)?;
+                let message_id: i64 = row.get(0)?;
+
                 Ok(crate::web::view_models::ChatMessageRow {
-                    id: row.get(0)?,
+                    id: message_id,
                     sender_user_id: row.get(1)?,
                     message: row.get(2)?,
                     is_read: row.get(3)?,
@@ -262,7 +269,16 @@ pub async fn chat_page(
                     reply_sender_user_id: row.get::<_, Option<i64>>(8)?.unwrap_or(0),
                     reply_message: row.get(9)?,
                     edited_at: row.get(10)?,
-                    deleted_at: row.get(11)?,
+                    deleted_at,
+                    attachment_kind: attachment_kind.clone(),
+                    attachment_url: if deleted_at == 0
+                        && attachment_kind == "image"
+                        && !attachment_path.is_empty()
+                    {
+                        format!("/api/chat/media/{message_id}")
+                    } else {
+                        String::new()
+                    },
                 })
             })?
             .collect::<Result<Vec<_>, _>>()

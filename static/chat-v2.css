@@ -279,7 +279,7 @@
     bottom: max(10px, env(safe-area-inset-bottom));
     z-index: 15;
     display: grid !important;
-    grid-template-columns: minmax(0, 1fr) 48px;
+    grid-template-columns: minmax(0, 1fr) 42px 48px;
     gap: 8px;
     align-items: end;
     margin-top: 12px;
@@ -1418,13 +1418,60 @@ body:has(#chat-form) {
 }
 .chat-message-caption { margin-top: 4px; }
 .chat-image-btn {
+  width: 42px;
+  height: 48px;
   border: 0;
-  background: transparent;
-  color: var(--muted, #8b93a7);
+  border-radius: 14px;
+  background: rgba(127, 127, 127, .09);
+  color: var(--gold-light, var(--muted, #8b93a7));
   font: inherit;
-  font-weight: 700;
-  padding: 8px 10px;
+  font-size: 18px;
+  line-height: 1;
   cursor: pointer;
+}
+.chat-sheet-reactions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+.chat-sheet-reactions button {
+    min-height: 44px;
+    min-width: 44px;
+    flex: 1 1 calc(16.66% - 8px);
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 14px;
+    color: var(--text);
+    background: rgba(255,255,255,.04);
+    font-size: 22px;
+    cursor: pointer;
+}
+.chat-message-reactions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+}
+.chat-reaction-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 9px;
+    border: 1px solid rgba(255,255,255,.10);
+    border-radius: 999px;
+    color: var(--text);
+    background: rgba(255,255,255,.05);
+    font-size: 12px;
+    font-weight: 800;
+    cursor: pointer;
+}
+.chat-reaction-pill.is-mine {
+    border-color: rgba(214,183,122,.42);
+    background: rgba(214,183,122,.12);
+    color: var(--gold-light);
 }
 @media (max-width: 480px) {
     .chat-shell {

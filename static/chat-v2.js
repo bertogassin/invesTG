@@ -1150,21 +1150,33 @@
             flushPendingQueue();
         }
 
-        var imageInput = document.createElement("input");
-        imageInput.type = "file";
-        imageInput.accept = "image/jpeg,image/png,image/webp";
-        imageInput.id = "chat-image-input";
-        imageInput.hidden = true;
-        form.appendChild(imageInput);
-        var imageBtn = document.createElement("button");
-        imageBtn.type = "button";
-        imageBtn.id = "chat-image-btn";
-        imageBtn.textContent = "Фото";
-        imageBtn.className = "chat-image-btn";
-        if (send && send.parentNode) {
-            send.parentNode.insertBefore(imageBtn, send);
+        var imageInput = document.getElementById("chat-image-input");
+        var imageBtn = document.getElementById("chat-image-btn");
+
+        if (!imageInput) {
+            imageInput = document.createElement("input");
+            imageInput.type = "file";
+            imageInput.accept = "image/jpeg,image/png,image/webp";
+            imageInput.id = "chat-image-input";
+            imageInput.hidden = true;
+            form.appendChild(imageInput);
         }
-        imageBtn.addEventListener("click", function () { imageInput.click(); });
+
+        if (!imageBtn) {
+            imageBtn = document.createElement("button");
+            imageBtn.type = "button";
+            imageBtn.id = "chat-image-btn";
+            imageBtn.textContent = "📷";
+            imageBtn.className = "chat-image-btn";
+            if (send && send.parentNode) {
+                send.parentNode.insertBefore(imageBtn, send);
+            }
+        }
+
+        imageBtn.addEventListener("click", function () {
+            imageInput.click();
+        });
+
         imageInput.addEventListener("change", function () {
             var file = imageInput.files && imageInput.files[0];
             imageInput.value = "";
@@ -1196,6 +1208,12 @@
                 updateComposer();
                 if (pack.data.message) {
                     appendMessages([pack.data.message]);
+                }
+                window.ResursMapChatReply = null;
+                var replyBarEl =
+                    document.getElementById("chat-reply-bar");
+                if (replyBarEl) {
+                    replyBarEl.hidden = true;
                 }
                 setConnection("В сети", "is-online");
                 sendState.textContent = "Отправлено · Enter — отправить";
@@ -1510,6 +1528,8 @@
         var selectedMessage = null;
         var refreshDebounceTimer = null;
         var refreshFallbackTimer = null;
+        var lastTapAt = 0;
+        var lastTapMessageId = 0;
 
         var replyBar = document.getElementById("chat-reply-bar");
         var replyText =
@@ -1549,9 +1569,21 @@
                 '<div class="chat-sheet-preview" ' +
                     'id="chat-sheet-preview"></div>' +
                 '<div class="chat-sheet-actions">' +
+                    '<div class="chat-sheet-reactions" id="chat-sheet-reactions">' +
+                        '<button type="button" data-chat-action="react" data-emoji="❤️" aria-label="❤️">❤️</button>' +
+                        '<button type="button" data-chat-action="react" data-emoji="👍" aria-label="👍">👍</button>' +
+                        '<button type="button" data-chat-action="react" data-emoji="😂" aria-label="😂">😂</button>' +
+                        '<button type="button" data-chat-action="react" data-emoji="😮" aria-label="😮">😮</button>' +
+                        '<button type="button" data-chat-action="react" data-emoji="😢" aria-label="😢">😢</button>' +
+                        '<button type="button" data-chat-action="react" data-emoji="🙏" aria-label="🙏">🙏</button>' +
+                    '</div>' +
                     '<button type="button" ' +
                         'data-chat-action="reply">' +
                         '<span>↩</span>Ответить' +
+                    '</button>' +
+                    '<button type="button" ' +
+                        'data-chat-action="copy">' +
+                        '<span>⧉</span>Копировать' +
                     '</button>' +
                     '<button type="button" ' +
                         'data-chat-action="edit">' +
@@ -1693,6 +1725,118 @@
             return text;
         }
 
+        function renderReactions(row, reactions) {
+            var bubble = row.querySelector(".chat-bubble");
+
+            if (!bubble) {
+                return;
+            }
+
+            bubble.querySelectorAll(".chat-message-reactions")
+                .forEach(function (element) {
+                    element.remove();
+                });
+
+            if (!Array.isArray(reactions) || !reactions.length) {
+                return;
+            }
+
+            var bar = document.createElement("div");
+            bar.className = "chat-message-reactions";
+
+            reactions.forEach(function (reaction) {
+                var pill = document.createElement("button");
+                pill.type = "button";
+                pill.className =
+                    "chat-reaction-pill" +
+                    (reaction.mine ? " is-mine" : "");
+                pill.dataset.emoji = reaction.emoji;
+                pill.textContent =
+                    String(reaction.emoji || "") +
+                    " " +
+                    String(reaction.count || 0);
+                bar.appendChild(pill);
+            });
+
+            bubble.appendChild(bar);
+        }
+
+        function applyMessageBody(body, message) {
+            body.classList.remove("is-deleted");
+            body.innerHTML = "";
+
+            if (Number(message.deleted_at) > 0) {
+                body.classList.add("is-deleted");
+                body.textContent = "Сообщение удалено";
+                return;
+            }
+
+            if (
+                message.attachment_kind === "image" &&
+                message.attachment_url
+            ) {
+                var img = document.createElement("img");
+                img.className = "chat-message-image";
+                img.src = String(message.attachment_url);
+                img.alt = "Фото";
+                img.loading = "lazy";
+                body.appendChild(img);
+
+                if (message.message) {
+                    var caption = document.createElement("div");
+                    caption.className = "chat-message-caption";
+                    caption.textContent = String(message.message);
+                    body.appendChild(caption);
+                }
+
+                return;
+            }
+
+            body.textContent = String(message.message || "");
+        }
+
+        function copyMessageText(message) {
+            var text = messageText(message);
+
+            if (!text || text === "Сообщение удалено") {
+                return Promise.reject();
+            }
+
+            if (
+                navigator.clipboard &&
+                typeof navigator.clipboard.writeText === "function"
+            ) {
+                return navigator.clipboard.writeText(text);
+            }
+
+            return Promise.reject();
+        }
+
+        function reactToMessage(message, emoji) {
+            if (!message || Number(message.deleted_at) > 0) {
+                return Promise.resolve();
+            }
+
+            return requestJson(
+                "/api/chat/" +
+                otherUserId +
+                "/messages/" +
+                message.id +
+                "/react",
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({ emoji: emoji })
+                }
+            ).then(function (data) {
+                if (data.message) {
+                    renderMessage(data.message);
+                }
+            });
+        }
+
         function renderMessage(message) {
             var id = Number(message.id);
             var row = history.querySelector(
@@ -1712,7 +1856,10 @@
                 Number(message.edited_at || 0),
                 Number(message.deleted_at || 0),
                 Number(message.read_at || 0),
-                Number(message.delivered_at || 0)
+                Number(message.delivered_at || 0),
+                String(message.attachment_kind || ""),
+                String(message.attachment_url || ""),
+                JSON.stringify(message.reactions || [])
             ].join("|");
 
             if (
@@ -1775,13 +1922,7 @@
                 body.classList.add("chat-message-body");
             }
 
-            body.textContent = messageText(message);
-
-            if (Number(message.deleted_at) > 0) {
-                body.classList.add("is-deleted");
-            } else {
-                body.classList.remove("is-deleted");
-            }
+            applyMessageBody(body, message);
 
             if (
                 Number(message.reply_to_message_id) > 0
@@ -1830,6 +1971,8 @@
                 edited.textContent = "изменено";
                 bubble.appendChild(edited);
             }
+
+            renderReactions(row, message.reactions || []);
         }
 
         function messageFromRow(row) {
@@ -1990,6 +2133,13 @@
             editButton.hidden = !mine || deleted;
             deleteButton.hidden = !mine || deleted;
 
+            var reactionsRow =
+                document.getElementById("chat-sheet-reactions");
+
+            if (reactionsRow) {
+                reactionsRow.hidden = deleted;
+            }
+
             sheet.hidden = false;
             document.body.classList.add(
                 "chat-overlay-open"
@@ -2063,6 +2213,32 @@
         history.addEventListener(
             "click",
             function (event) {
+                var reaction = event.target.closest(
+                    ".chat-reaction-pill"
+                );
+
+                if (reaction) {
+                    var reactionRow = event.target.closest(
+                        ".chat-message-row"
+                    );
+
+                    if (!reactionRow) {
+                        return;
+                    }
+
+                    var reactionMessage =
+                        messageFromRow(reactionRow);
+
+                    if (reactionMessage) {
+                        reactToMessage(
+                            reactionMessage,
+                            reaction.dataset.emoji || "❤️"
+                        );
+                    }
+
+                    return;
+                }
+
                 var quote = event.target.closest(
                     ".chat-reply-quote"
                 );
@@ -2102,7 +2278,7 @@
 
                 if (
                     event.target.closest(
-                        ".chat-message-meta, .chat-message-status"
+                        ".chat-message-meta, .chat-message-status, .chat-message-reactions"
                     )
                 ) {
                     return;
@@ -2111,9 +2287,25 @@
                 var id = Number(row.dataset.messageId);
                 var message = messageFromRow(row);
 
-                if (message) {
-                    openSheet(message);
+                if (!message) {
+                    return;
                 }
+
+                var now = Date.now();
+
+                if (
+                    lastTapMessageId === id &&
+                    now - lastTapAt < 320
+                ) {
+                    lastTapAt = 0;
+                    lastTapMessageId = 0;
+                    reactToMessage(message, "❤️");
+                    return;
+                }
+
+                lastTapAt = now;
+                lastTapMessageId = id;
+                openSheet(message);
             }
         );
 
@@ -2139,6 +2331,21 @@
 
                 if (action.dataset.chatAction === "reply") {
                     selectReply(selectedMessage);
+                } else if (action.dataset.chatAction === "copy") {
+                    copyMessageText(selectedMessage)
+                        .then(function () {
+                            closeSheet();
+                        })
+                        .catch(function () {
+                            closeSheet();
+                        });
+                } else if (action.dataset.chatAction === "react") {
+                    reactToMessage(
+                        selectedMessage,
+                        action.dataset.emoji || "❤️"
+                    ).finally(function () {
+                        closeSheet();
+                    });
                 } else if (
                     action.dataset.chatAction === "edit"
                 ) {
