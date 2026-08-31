@@ -7,7 +7,7 @@ pub fn escape_html(value: &str) -> String {
         .replace('\'', "&#39;")
 }
 
-pub const STATIC_ASSET_VERSION: &str = "4.9.12";
+pub const STATIC_ASSET_VERSION: &str = "4.9.13";
 
 pub fn profession_label(raw: &str) -> String {
     match raw.trim().to_lowercase().as_str() {
@@ -2789,6 +2789,171 @@ fn admin_ops_styles() -> &'static str {
     .rm-admin-ops--city .list-row { flex-direction: column; }
     .rm-admin-ops--city .right { text-align: left; }
 }
+.rm-admin-ops.rm-admin-ops--helpers {
+    width: min(900px, 100%);
+}
+.rm-admin-ops--helpers .create {
+    margin: 15px 0;
+    padding: 18px;
+    border: 1px solid var(--ops-line);
+    border-radius: 20px;
+    background: linear-gradient(145deg, rgba(19, 40, 30, .96), rgba(9, 23, 16, .96));
+}
+.rm-admin-ops--helpers .fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+.rm-admin-ops--helpers label {
+    display: grid;
+    gap: 6px;
+    color: var(--ops-muted);
+    font-size: 12px;
+}
+.rm-admin-ops--helpers input,
+.rm-admin-ops--helpers select,
+.rm-admin-ops--helpers button {
+    width: 100%;
+    border: 1px solid var(--ops-line);
+    border-radius: 12px;
+    padding: 11px;
+    background: #0b1912;
+    color: var(--text);
+    font: inherit;
+}
+.rm-admin-ops--helpers button {
+    cursor: pointer;
+    color: #062015;
+    background: #58e59e;
+    font-weight: 800;
+}
+.rm-admin-ops--helpers button.warning {
+    color: #231900;
+    background: #e8bd62;
+}
+.rm-admin-ops--helpers button.danger {
+    color: #260707;
+    background: #ff7777;
+}
+.rm-admin-ops--helpers .head {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+}
+.rm-admin-ops--helpers .head small {
+    display: block;
+    margin-top: 4px;
+    color: var(--ops-muted);
+}
+.rm-admin-ops--helpers .head span {
+    color: #58e59e;
+    font-size: 12px;
+}
+.rm-admin-ops--helpers .card {
+    padding: 18px;
+    border: 1px solid var(--ops-line);
+    border-radius: 20px;
+    background: linear-gradient(145deg, rgba(19, 40, 30, .96), rgba(9, 23, 16, .96));
+}
+.rm-admin-ops--helpers .card p {
+    color: var(--ops-muted);
+}
+.rm-admin-ops--helpers .actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 9px;
+}
+.rm-admin-ops--helpers .actions form {
+    display: grid;
+    gap: 7px;
+}
+.rm-admin-ops.rm-admin-ops--assign {
+    width: min(780px, 100%);
+}
+.rm-admin-ops--assign .hero {
+    border-color: rgba(214, 183, 122, .25);
+    background:
+        linear-gradient(135deg, rgba(214, 183, 122, .12), rgba(17, 21, 28, .94) 48%),
+        var(--card);
+}
+.rm-admin-ops--assign .kicker {
+    color: var(--ops-gold);
+}
+.rm-admin-ops--assign .protected {
+    color: var(--ops-green);
+    font-size: 11px;
+    font-weight: 950;
+}
+.rm-admin-ops--assign .policy {
+    margin-top: 15px;
+    padding: 17px;
+    border: 1px solid var(--ops-line);
+    border-radius: 18px;
+    color: var(--ops-muted);
+    font-size: 13px;
+    line-height: 1.65;
+    background: linear-gradient(145deg, rgba(20, 24, 32, .96), rgba(10, 12, 17, .97));
+}
+.rm-admin-ops--assign .form-card {
+    display: grid;
+    gap: 18px;
+    margin-top: 18px;
+    padding: 24px;
+    border: 1px solid var(--ops-line);
+    border-radius: 24px;
+    background: linear-gradient(145deg, rgba(20, 24, 32, .96), rgba(10, 12, 17, .97));
+    box-shadow: 0 24px 70px rgba(0, 0, 0, .28);
+}
+.rm-admin-ops--assign label {
+    display: grid;
+    gap: 8px;
+    color: var(--ops-muted);
+    font-size: 12px;
+    font-weight: 850;
+}
+.rm-admin-ops--assign input,
+.rm-admin-ops--assign select,
+.rm-admin-ops--assign textarea {
+    width: 100%;
+    min-height: 49px;
+    padding: 11px 14px;
+    border: 1px solid rgba(255, 255, 255, .12);
+    border-radius: 14px;
+    color: var(--text);
+    background: rgba(255, 255, 255, .04);
+    font: inherit;
+}
+.rm-admin-ops--assign textarea {
+    min-height: 115px;
+    resize: vertical;
+}
+.rm-admin-ops--assign .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+.rm-admin-ops--assign button[type="submit"] {
+    min-height: 52px;
+    border: 1px solid rgba(214, 183, 122, .38);
+    border-radius: 15px;
+    color: #17130b;
+    background: linear-gradient(135deg, #efd49a, #cda85f);
+    font-size: 14px;
+    font-weight: 950;
+    cursor: pointer;
+}
+.rm-admin-ops--assign .warning {
+    margin: 0;
+    color: var(--ops-red);
+    font-size: 12px;
+    line-height: 1.55;
+}
+@media (max-width: 620px) {
+    .rm-admin-ops--helpers .fields,
+    .rm-admin-ops--helpers .actions { grid-template-columns: 1fr; }
+    .rm-admin-ops--assign .grid { grid-template-columns: 1fr; }
+    .rm-admin-ops--assign .protected { display: none; }
+}
 "#
 }
 
@@ -2797,6 +2962,15 @@ pub(crate) fn admin_ops_page(title: &str, content_html: &str) -> String {
 }
 
 pub(crate) fn admin_ops_page_themed(title: &str, theme_modifier: &str, content_html: &str) -> String {
+    admin_ops_page_styled(title, theme_modifier, content_html, "")
+}
+
+pub(crate) fn admin_ops_page_styled(
+    title: &str,
+    theme_modifier: &str,
+    content_html: &str,
+    extra_styles: &str,
+) -> String {
     let wrapper_class = if theme_modifier.is_empty() {
         "rm-admin-ops".to_string()
     } else {
@@ -2805,8 +2979,9 @@ pub(crate) fn admin_ops_page_themed(title: &str, theme_modifier: &str, content_h
 
     let head_extra = format!(
         r#"<meta name="robots" content="noindex,nofollow">
-<style>{styles}</style>"#,
+<style>{styles}{extra}</style>"#,
         styles = admin_ops_styles(),
+        extra = extra_styles,
     );
 
     page_document(

@@ -41,15 +41,8 @@ pub fn render_admin_security(data: AdminSecurityData) -> String {
         )
     };
 
-    format!(
-        r#"<!doctype html>
-<html lang="ru">
-<head>
-<meta charset="utf-8">
-<meta name="viewport"
- content="width=device-width,initial-scale=1,viewport-fit=cover">
+    let head = r#"<meta name="robots" content="noindex,nofollow">
 <meta name="color-scheme" content="dark">
-<title>Безопасность владельца · ResursMap</title>
 <style>
 :root {{
  --gold:#dfc07f;--green:#62e0ad;--orange:#f3a94f;
@@ -129,10 +122,10 @@ input{{
  background:rgba(98,224,173,.06)
 }}
 .notice{{margin-top:15px;color:var(--muted);font-size:12px;line-height:1.55}}
-</style>
-</head>
-<body>
-<main class="page">
+</style>"#;
+
+    let main = format!(
+        r#"
 <a class="back" href="/app/center">← Центр управления</a>
 
 <section class="hero">
@@ -173,13 +166,20 @@ input{{
   15 минут.
  </div>
 </section>
-</main>
-</body>
-</html>"#,
+"#,
         state_class = state_class,
         state_title = state_title,
         state_text = escape_html(&state_text),
         message = message,
         masked_email = escape_html(&data.masked_email),
+    );
+
+    super::common::page_document(
+        "Безопасность владельца · ResursMap",
+        head,
+        "",
+        &main,
+        "",
+        "",
     )
 }

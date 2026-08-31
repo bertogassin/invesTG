@@ -5,6 +5,7 @@ use super::admin_access::{
 use super::auth::verify_authenticated_user;
 use super::common::request_is_cross_site;
 use crate::state::app_state::AppState;
+use crate::web::templates::admin_ops_page_themed;
 use axum::{
     extract::{Form, State},
     http::{header, HeaderMap, HeaderValue, StatusCode},
@@ -292,182 +293,15 @@ fn render_assignment_form(users: &[AssignableUser], scopes: &[AssignableScope]) 
         scope_options.push_str("</optgroup>");
     }
 
-    format!(
-        r##"<!doctype html>
-<html lang="ru">
-<head>
-<meta charset="utf-8">
-<meta name="viewport"
-      content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="color-scheme" content="dark">
-<title>Новое назначение · ResursMap</title>
-<style>
-:root {{
-    --bg:#07090d;
-    --surface:#11151c;
-    --gold:#dfc07f;
-    --green:#62e0ad;
-    --red:#ff7882;
-    --text:#f5f2eb;
-    --muted:#969dab;
-    --line:rgba(223,192,127,.20);
-}}
-* {{ box-sizing:border-box; }}
-body {{
-    margin:0;
-    min-height:100vh;
-    padding:
-        max(18px,env(safe-area-inset-top))
-        16px
-        max(32px,env(safe-area-inset-bottom));
-    color:var(--text);
-    background:
-        radial-gradient(circle at 10% 0%,rgba(45,110,82,.18),transparent 34%),
-        radial-gradient(circle at 100% 5%,rgba(125,91,190,.17),transparent 34%),
-        linear-gradient(160deg,#090b10,#05070a 70%);
-    font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-}}
-.page {{
-    width:min(780px,100%);
-    margin:0 auto;
-}}
-.topbar {{
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    gap:14px;
-    margin-bottom:18px;
-}}
-.back {{
-    min-height:44px;
-    display:inline-flex;
-    align-items:center;
-    padding:0 16px;
-    border:1px solid var(--line);
-    border-radius:14px;
-    color:var(--text);
-    text-decoration:none;
-    font-weight:850;
-}}
-.protected {{
-    color:var(--green);
-    font-size:11px;
-    font-weight:950;
-}}
-.hero,
-.form-card,
-.policy {{
-    border:1px solid var(--line);
-    background:
-        linear-gradient(145deg,rgba(20,24,32,.96),rgba(10,12,17,.97));
-    box-shadow:0 24px 70px rgba(0,0,0,.28);
-}}
-.hero {{
-    padding:28px;
-    border-radius:26px;
-}}
-.kicker {{
-    color:var(--gold);
-    font-size:11px;
-    font-weight:950;
-    letter-spacing:.17em;
-}}
-h1 {{
-    margin:12px 0 10px;
-    font-size:clamp(32px,7vw,54px);
-    line-height:1;
-    letter-spacing:-.04em;
-}}
-.hero p,
-.policy {{
-    color:var(--muted);
-    line-height:1.65;
-}}
-.policy {{
-    margin-top:15px;
-    padding:17px;
-    border-radius:18px;
-    font-size:13px;
-}}
-.form-card {{
-    display:grid;
-    gap:18px;
-    margin-top:18px;
-    padding:24px;
-    border-radius:24px;
-}}
-label {{
-    display:grid;
-    gap:8px;
-    color:var(--muted);
-    font-size:12px;
-    font-weight:850;
-}}
-input,
-select,
-textarea {{
-    width:100%;
-    min-height:49px;
-    padding:11px 14px;
-    border:1px solid rgba(255,255,255,.12);
-    border-radius:14px;
-    outline:none;
-    color:var(--text);
-    background:rgba(255,255,255,.04);
-    font:inherit;
-}}
-textarea {{
-    min-height:115px;
-    resize:vertical;
-}}
-option,
-optgroup {{
-    color:#111;
-}}
-.grid {{
-    display:grid;
-    grid-template-columns:1fr 1fr;
-    gap:16px;
-}}
-button {{
-    min-height:52px;
-    border:1px solid rgba(223,192,127,.38);
-    border-radius:15px;
-    color:#17130b;
-    background:linear-gradient(135deg,#efd49a,#cda85f);
-    font-size:14px;
-    font-weight:950;
-    cursor:pointer;
-}}
-.warning {{
-    margin:0;
-    color:var(--red);
-    font-size:12px;
-    line-height:1.55;
-}}
-@media (max-width:620px) {{
-    .hero,
-    .form-card {{
-        padding:20px;
-    }}
-    .grid {{
-        grid-template-columns:1fr;
-    }}
-    .protected {{
-        display:none;
-    }}
-}}
-</style>
-</head>
-<body>
-<main class="page">
+    let content = format!(
+        r##"
     <div class="topbar">
         <a class="back"
            href="/app/center/administrators">
             ← Администраторы
         </a>
         <span class="protected">
-            OWNER · FRESH STEP-UP
+            ВЛАДЕЛЕЦ · ПОДТВЕРЖДЕНИЕ
         </span>
     </div>
 
@@ -565,11 +399,15 @@ button {{
             Создать защищённое назначение
         </button>
     </form>
-</main>
-</body>
-</html>"##,
+"##,
         user_options = user_options,
         scope_options = scope_options,
+    );
+
+    admin_ops_page_themed(
+        "Новое назначение · ResursMap",
+        "rm-admin-ops--assign",
+        &content,
     )
 }
 

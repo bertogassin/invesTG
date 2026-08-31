@@ -5,7 +5,7 @@ use super::admin_access::{
 use super::auth::verify_authenticated_user;
 use super::common::{csrf_rejected_response, request_is_cross_site};
 use crate::state::app_state::AppState;
-use crate::web::templates::escape_html;
+use crate::web::templates::{admin_ops_page_themed, escape_html, workflow_status_label_or_raw};
 use axum::{
     extract::{Form, Path, State},
     http::{header, HeaderMap, HeaderValue, StatusCode},
@@ -446,7 +446,7 @@ pub async fn city_helpers_page(State(state): State<AppState>, headers: HeaderMap
                         r#"<article class="card">
                             <div class="head">
                                 <div>
-                                    <strong>User #{user_id}</strong>
+                                    <strong>Пользователь #{user_id}</strong>
                                     <small>{group_name}</small>
                                 </div>
                                 <span>{status}</span>
@@ -457,7 +457,7 @@ pub async fn city_helpers_page(State(state): State<AppState>, headers: HeaderMap
                         </article>"#,
                         user_id = user_id,
                         group_name = escape_html(group_name),
-                        status = escape_html(status),
+                        status = escape_html(&workflow_status_label_or_raw(status)),
                         assignment_id = assignment_id,
                         until = valid_until
                             .map(|value| value.to_string())
@@ -471,113 +471,13 @@ pub async fn city_helpers_page(State(state): State<AppState>, headers: HeaderMap
             .join("")
     };
 
-    let html = format!(
-        r#"<!doctype html>
-<html lang="ru">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex,nofollow">
-<title>Помощники · {city}</title>
-<style>
-:root {{
-    color-scheme:dark;
-    --bg:#07110d;
-    --panel:#102219;
-    --line:#29473b;
-    --text:#eff8f3;
-    --muted:#98aba1;
-    --green:#58e59e;
-    --gold:#e8bd62;
-    --red:#ff7777;
-}}
-* {{ box-sizing:border-box; }}
-body {{
-    margin:0;
-    background:
-      radial-gradient(circle at 15% 0%,#173c2b,transparent 34%),
-      var(--bg);
-    color:var(--text);
-    font-family:Inter,system-ui,sans-serif;
-}}
-main {{
-    width:min(900px,calc(100% - 24px));
-    margin:auto;
-    padding:24px 0 60px;
-}}
-.hero,.card,.create {{
-    border:1px solid var(--line);
-    border-radius:20px;
-    background:linear-gradient(145deg,#13281e,#091710);
-}}
-.hero,.create,.card {{ padding:18px; }}
-h1 {{ margin:8px 0; }}
-p,small {{ color:var(--muted); }}
-a {{ color:var(--green); }}
-.create {{ margin:15px 0; }}
-.grid {{ display:grid; gap:12px; }}
-.fields {{
-    display:grid;
-    grid-template-columns:1fr 1fr;
-    gap:10px;
-}}
-label {{ display:grid; gap:6px; color:var(--muted); }}
-input,select,button {{
-    width:100%;
-    border:1px solid var(--line);
-    border-radius:12px;
-    padding:11px;
-    background:#0b1912;
-    color:var(--text);
-}}
-button {{
-    cursor:pointer;
-    color:#062015;
-    background:var(--green);
-    font-weight:800;
-}}
-button.warning {{
-    color:#231900;
-    background:var(--gold);
-}}
-button.danger {{
-    color:#260707;
-    background:var(--red);
-}}
-.head {{
-    display:flex;
-    justify-content:space-between;
-    gap:12px;
-}}
-.head small {{ display:block; margin-top:4px; }}
-.head span {{
-    color:var(--green);
-    font-size:12px;
-}}
-.actions {{
-    display:grid;
-    grid-template-columns:1fr 1fr;
-    gap:9px;
-}}
-.actions form {{ display:grid; gap:7px; }}
-.empty {{
-    padding:20px;
-    border:1px dashed var(--line);
-    border-radius:16px;
-    color:var(--muted);
-}}
-@media(max-width:620px) {{
-    .fields,.actions {{ grid-template-columns:1fr; }}
-}}
-</style>
-</head>
-<body>
-<main>
+    let content = format!(
+        r#"
 <section class="hero">
-    <small>Уровень 2 · управление командой</small>
+    <div class="kicker">Уровень 2 · управление командой</div>
     <h1>Помощники города</h1>
     <p>{city}</p>
-    <a href="/app/center/city">← Вернуться в кабинет города</a>
+    <a class="back" href="/app/center/city">← Вернуться в кабинет города</a>
 </section>
 
 <form class="create"
@@ -625,12 +525,16 @@ button.danger {{
 <section class="grid">
     {helper_cards}
 </section>
-</main>
-</body>
-</html>"#,
+"#,
         city = escape_html(&city_name),
         group_options = group_options,
         helper_cards = helper_cards,
+    );
+
+    let html = admin_ops_page_themed(
+        &format!("Помощники · {}", escape_html(&city_name)),
+        "rm-admin-ops--city rm-admin-ops--helpers",
+        &content,
     );
 
     let mut response = Html(html).into_response();

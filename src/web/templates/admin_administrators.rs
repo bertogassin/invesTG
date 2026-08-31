@@ -384,15 +384,8 @@ pub fn render_admin_administrators(data: AdminAdministratorsData) -> String {
             .join("")
     };
 
-    format!(
-        r##"<!doctype html>
-<html lang="ru">
-<head>
-<meta charset="utf-8">
-<meta name="viewport"
-      content="width=device-width, initial-scale=1, viewport-fit=cover">
+    let head = r##"<meta name="robots" content="noindex,nofollow">
 <meta name="color-scheme" content="dark">
-<title>Все администраторы · ResursMap</title>
 <style>
 :root {{
     --bg:#07090d;
@@ -881,10 +874,10 @@ h1 {{
 @media (prefers-reduced-motion:reduce) {{
     html {{ scroll-behavior:auto; }}
 }}
-</style>
-</head>
-<body>
-<main class="page">
+</style>"##;
+
+    let main = format!(
+        r##"
     <div class="topbar">
         <a class="back" href="/app/center">← Центр управления</a>
         <div class="topbar-actions">
@@ -942,9 +935,7 @@ h1 {{
     <section class="session-list">
         {sessions_html}
     </section>
-</main>
-</body>
-</html>"##,
+"##,
         viewer_name = escape_html(&data.viewer_name),
         total = data.administrators.len(),
         active = data.active_assignments,
@@ -952,5 +943,14 @@ h1 {{
         expiring = data.expiring_assignments,
         administrators_html = administrators_html,
         sessions_html = sessions_html,
+    );
+
+    super::common::page_document(
+        "Все администраторы · ResursMap",
+        head,
+        "",
+        &main,
+        "",
+        "",
     )
 }
