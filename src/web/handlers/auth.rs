@@ -6,7 +6,7 @@ use axum::{
     extract::State,
     http::{header, HeaderMap, HeaderValue, StatusCode},
     response::{Html, IntoResponse, Response},
-    Json,
+    Form, Json,
 };
 use hmac::{Hmac, Mac};
 use serde::Deserialize;
@@ -868,6 +868,11 @@ pub async fn email_auth_verify(
 
 fn hash_user_session_token(token: &str) -> String {
     hex::encode(Sha256::digest(token.as_bytes()))
+}
+
+pub(super) fn current_session_public_id(headers: &HeaderMap) -> Option<String> {
+    let token = extract_user_session_token(headers)?;
+    Some(token.split_once('.')?.0.to_string())
 }
 
 fn extract_user_session_token(headers: &HeaderMap) -> Option<String> {
@@ -1829,6 +1834,105 @@ pub async fn app_auth_page() -> Html<String> {
         "",
         body_after,
     ))
+}
+
+#[derive(Deserialize)]
+pub struct RevokeSessionForm {
+    pub session_public_id: String,
+}
+
+pub async fn app_revoke_other_sessions(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Response {
+    if request_is_cross_site(&headers) {
+        return csrf_rejected_response();
+    }
+
+    let user_id = match verify_user_session(&state, &headers) {
+        Some(user_id) => user_id,
+        None => {
+            return (
+                StatusCode::SEE_OTHER,
+                [(header::LOCATION, "/app/auth?next=/app/me")],
+            )
+                .into_response();
+        }
+    };
+
+    let current_public_id = current_session_public_id(&headers).unwrap_or_default();
+    let now = unix_now();
+
+    if let Ok(db) = crate::db::pool::get_connection(&state.db_pool) {
+        let _ = db.execute(
+            "UPDATE user_sessions
+             SET revoked_at = ?3
+             WHERE user_id = ?1
+               AND session_public_id <> ?2
+               AND revoked_at IS NULL",
+            rusqlite::params![user_id, current_public_id, now],
+        );
+    }
+
+    (
+        StatusCode::SEE_OTHER,
+        [(header::LOCATION, "/app/me?sessions=revoked")],
+    )
+        .into_response()
+}
+
+pub async fn app_revoke_session(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Form(form): Form<RevokeSessionForm>,
+) -> Response {
+    if request_is_cross_site(&headers) {
+        return csrf_rejected_response();
+    }
+
+    let user_id = match verify_user_session(&state, &headers) {
+        Some(user_id) => user_id,
+        None => {
+            return (
+                StatusCode::SEE_OTHER,
+                [(header::LOCATION, "/app/auth?next=/app/me")],
+            )
+                .into_response();
+        }
+    };
+
+    let session_public_id = form.session_public_id.trim();
+
+    if session_public_id.len() != 32
+        || !session_public_id
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit())
+    {
+        return (StatusCode::SEE_OTHER, [(header::LOCATION, "/app/me")]).into_response();
+    }
+
+    if current_session_public_id(&headers).as_deref() == Some(session_public_id) {
+        return (StatusCode::SEE_OTHER, [(header::LOCATION, "/app/me")]).into_response();
+    }
+
+    let now = unix_now();
+
+    if let Ok(db) = crate::db::pool::get_connection(&state.db_pool) {
+        let _ = db.execute(
+            "UPDATE user_sessions
+             SET revoked_at = ?3
+             WHERE user_id = ?1
+               AND session_public_id = ?2
+               AND revoked_at IS NULL",
+            rusqlite::params![user_id, session_public_id, now],
+        );
+    }
+
+    (
+        StatusCode::SEE_OTHER,
+        [(header::LOCATION, "/app/me?sessions=revoked")],
+    )
+        .into_response()
 }
 
 pub async fn app_logout(State(state): State<AppState>, headers: HeaderMap) -> Response {

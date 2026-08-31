@@ -1,7 +1,7 @@
 use super::common::{
-    back_hero, back_link, bottom_nav, empty_state_card, escape_html, guest_locked_section,
-    guest_mode_panel, icon, navigation_card, page_document, page_shell, profile_resource_card,
-    section_head, simple_hero, topbar,
+    back_hero, back_link, bottom_nav, bottom_nav_with_badge, empty_state_card, escape_html,
+    guest_locked_section, guest_mode_panel, icon, navigation_card, page_document, page_shell,
+    profile_resource_card, section_head, simple_hero, topbar,
 };
 
 pub struct RenderMeParams<'a> {
@@ -22,6 +22,95 @@ pub struct RenderMeParams<'a> {
     pub intent_text: &'a str,
     pub intent_until: i64,
     pub category: &'a str,
+    pub user_sessions: Vec<crate::web::view_models::UserSessionRow>,
+}
+
+fn session_device_label(user_agent: &str) -> &'static str {
+    let agent = user_agent.to_lowercase();
+
+    if agent.contains("telegram") {
+        "Telegram"
+    } else if agent.contains("android") {
+        "Android"
+    } else if agent.contains("iphone") || agent.contains("ipad") {
+        "iPhone / iPad"
+    } else if agent.contains("windows") {
+        "Windows"
+    } else if agent.contains("mac os") || agent.contains("macintosh") {
+        "Mac"
+    } else {
+        "Браузер"
+    }
+}
+
+fn render_user_sessions_panel(sessions: &[crate::web::view_models::UserSessionRow]) -> String {
+    if sessions.is_empty() {
+        return String::new();
+    }
+
+    let rows = sessions
+        .iter()
+        .map(|session| {
+            let device = session_device_label(&session.user_agent);
+            let ip = if session.ip_address.is_empty() {
+                "IP не определён".to_string()
+            } else {
+                escape_html(&session.ip_address)
+            };
+            let current = if session.is_current {
+                r#"<span class="rm-session-current">Это устройство</span>"#
+            } else {
+                ""
+            };
+            let revoke_form = if session.is_current {
+                String::new()
+            } else {
+                format!(
+                    r#"<form method="post" action="/app/sessions/revoke" style="margin:0;">
+    <input type="hidden" name="session_public_id" value="{session_id}">
+    <button type="submit" class="ui-button" style="min-height:34px;padding:0 12px;font-size:11px;">
+        Завершить
+    </button>
+</form>"#,
+                    session_id = escape_html(&session.session_public_id),
+                )
+            };
+
+            format!(
+                r#"<div class="rm-session-row">
+    <div>
+        <strong>{device}</strong>
+        <div class="card-meta" style="margin-top:4px;">{ip}</div>
+        {current}
+    </div>
+    {revoke_form}
+</div>"#,
+                device = device,
+                ip = ip,
+                current = current,
+                revoke_form = revoke_form,
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("");
+
+    format!(
+        r#"<section class="rm-sessions-panel">
+    <div class="card-title" style="font-size:16px;margin-bottom:8px;">
+        Активные сессии
+    </div>
+    <div class="card-meta" style="margin-bottom:10px;line-height:1.5;">
+        Устройства, где вы вошли в ResursMap.
+    </div>
+    {rows}
+    <form method="post" action="/app/sessions/revoke-others" style="margin-top:14px;">
+        <button type="submit" class="ui-button" style="width:100%;min-height:42px;">
+            Выйти на других устройствах
+        </button>
+    </form>
+</section>"#,
+        rows = rows,
+    )
 }
 
 fn count_badge(count: i64) -> String {
@@ -51,34 +140,13 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
         intent_text,
         intent_until,
         category,
+        user_sessions,
     } = params;
     let safe_username = escape_html(username);
     let safe_first_name = escape_html(first_name);
     let safe_last_name = escape_html(last_name);
     let safe_intent_text = escape_html(intent_text);
     let safe_category = escape_html(category);
-
-    let _unread_messages_badge = if unread_messages_count > 0 {
-        format!(
-            r#"<span style="
-                    min-width:28px;
-                    height:28px;
-                    padding:0 8px;
-                    border-radius:999px;
-                    display:flex;
-                    align-items:center;
-                    justify-content:center;
-                    box-sizing:border-box;
-                    font-size:12px;
-                    font-weight:900;
-                    background:rgba(214,183,122,.16);
-                    border:1px solid rgba(214,183,122,.38);
-                ">{}</span>"#,
-            unread_messages_count
-        )
-    } else {
-        String::new()
-    };
 
     let intent_status_text = if safe_intent_text.is_empty() {
         "Статус не указан".to_string()
@@ -256,8 +324,10 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
             style="width:100%;min-height:44px;">
         Выйти из аккаунта
     </button>
-</form>"#,
+</form>
+{sessions_panel}"#,
             account_header = account_header,
+            sessions_panel = render_user_sessions_panel(&user_sessions),
         )
     } else {
         account_header
@@ -1407,12 +1477,15 @@ intent_text:
         content = content_html,
     );
 
+    let attention_count =
+        unread_messages_count + unread_notifications_count + pending_contact_requests_count;
+
     page_document(
         "Профиль · ResursMap",
         r####"<script src="https://telegram.org/js/telegram-web-app.js"></script>"####,
         "",
         &main_html,
-        &bottom_nav("profile"),
+        &bottom_nav_with_badge("profile", attention_count),
         &body_after_html,
     )
 }
@@ -1426,7 +1499,7 @@ pub fn render_notifications(
     authenticated: bool,
 ) -> String {
     let cards = if !authenticated {
-        guest_locked_section("Уведомления")
+        guest_locked_section("Уведомления", "/app/notifications")
     } else if notifications.is_empty() {
         empty_state_card(
             "Уведомлений нет",
@@ -2279,7 +2352,7 @@ pub fn render_favorites(
     authenticated: bool,
 ) -> String {
     let cards = if !authenticated {
-        guest_locked_section("Избранное")
+        guest_locked_section("Избранное", "/app/favorites")
     } else if resources.is_empty() {
         empty_state_card(
             "Избранное пока пустое",
@@ -2375,6 +2448,7 @@ mod personal_center_tests {
             intent_text: "Ищу партнёров",
             intent_until: 0,
             category: "Бизнес",
+            user_sessions: vec![],
         }
     }
 

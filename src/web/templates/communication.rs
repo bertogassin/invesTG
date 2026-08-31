@@ -10,7 +10,7 @@ pub fn render_contact_requests(
     let pending_count = requests.iter().filter(|r| r.3 == "pending").count();
 
     let cards = if !authenticated {
-        guest_locked_section("Запросы на связь")
+        guest_locked_section("Запросы на связь", "/app/contact-requests")
     } else if requests.is_empty() {
         empty_state_card(
             "Нет входящих запросов",
@@ -408,7 +408,7 @@ pub fn render_messages(
     let total_unread: i64 = conversations.iter().map(|c| c.unread_count).sum();
 
     let content = if !authenticated {
-        guest_locked_section("Сообщения")
+        guest_locked_section("Сообщения", "/app/messages")
     } else if conversations.is_empty() {
         empty_state_card(
             "Нет диалогов",
@@ -809,7 +809,7 @@ pub fn render_chat(
     };
 
     let content = if !authenticated {
-        guest_locked_section("Чат")
+        guest_locked_section("Чат", "/app/messages")
     } else if messages.is_empty()
         && username.is_empty()
         && first_name.is_empty()

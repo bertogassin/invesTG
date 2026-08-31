@@ -7,7 +7,7 @@ pub fn escape_html(value: &str) -> String {
         .replace('\'', "&#39;")
 }
 
-pub const STATIC_ASSET_VERSION: &str = "4.9.6";
+pub const STATIC_ASSET_VERSION: &str = "4.9.7";
 
 pub fn profession_label(raw: &str) -> String {
     match raw.trim().to_lowercase().as_str() {
@@ -922,6 +922,61 @@ body::before {
    RESURSMAP LUXURY LAYER
    ============================================================ */
 
+.rm-guest-panel {
+    display: block;
+    padding: 22px 20px;
+    margin-bottom: 18px;
+    border-color: rgba(232, 204, 150, .24);
+    background:
+        linear-gradient(145deg, rgba(232, 204, 150, .08), rgba(126, 212, 228, .05));
+}
+
+.rm-guest-title {
+    font-size: 18px;
+    line-height: 1.25;
+}
+
+.rm-guest-copy {
+    margin-top: 8px;
+    line-height: 1.55;
+}
+
+.rm-guest-actions {
+    display: grid;
+    gap: 10px;
+    margin-top: 16px;
+}
+
+.rm-sessions-panel {
+    margin-top: 18px;
+    padding: 16px;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    background: rgba(0, 0, 0, .03);
+}
+
+.rm-session-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--line);
+}
+
+.rm-session-row:last-child {
+    border-bottom: 0;
+    padding-bottom: 0;
+}
+
+.rm-session-current {
+    color: var(--gold-light);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+}
+
 .topbar {
     position: relative;
     z-index: 5;
@@ -1411,6 +1466,7 @@ pub(crate) fn page_document(
 
 <script src="{splash_js}" defer></script>
 <script src="{notification_sound_js}" defer></script>
+<script src="{nav_badge_js}" defer></script>
 <script src="{theme_toggle_js}" defer></script>
 
 </body>
@@ -1426,6 +1482,7 @@ pub(crate) fn page_document(
         body_after = body_after_html,
         splash_js = static_asset("splash.js"),
         notification_sound_js = static_asset("notification-sound.js"),
+        nav_badge_js = static_asset("nav-badge.js"),
         theme_toggle_js = static_asset("theme-toggle.js"),
     )
 }
@@ -1478,14 +1535,14 @@ pub(crate) fn bottom_nav_with_badge(active: &str, unread_count: i64) -> String {
         <span>Поиск</span>
     </a>
 
-    <a class="{profile_class}" href="/app/me">
+    <a class="{profile_class}" href="/app/me" data-nav-attention-link>
         {nav_user}
+        {unread_badge}
         <span>Профиль</span>
     </a>
 
     <a class="{menu_class}" href="/app/menu">
         {nav_menu}
-        {unread_badge}
         <span>Меню</span>
     </a>
 
@@ -1500,7 +1557,12 @@ pub(crate) fn bottom_nav_with_badge(active: &str, unread_count: i64) -> String {
         nav_user = icon("user"),
         nav_menu = icon("menu"),
         unread_badge = if unread_count > 0 {
-            format!(r#"<span class="nav-badge">{}</span>"#, unread_count)
+            let label = if unread_count > 99 {
+                "99+".to_string()
+            } else {
+                unread_count.to_string()
+            };
+            format!(r#"<span class="nav-badge">{label}</span>"#)
         } else {
             String::new()
         },
@@ -1934,11 +1996,48 @@ pub(crate) fn guest_mode_panel(next_path: &str) -> String {
         format!("/app/auth?next={}", urlencoding::encode(next_path),)
     };
 
-    navigation_card(&auth_href, "user", "Войти", "Личный кабинет")
+    format!(
+        r#"
+<div class="rm-guest-panel card">
+    <div class="card-content">
+        <div class="card-title rm-guest-title">
+            Вы в гостевом режиме
+        </div>
+        <div class="card-meta rm-guest-copy">
+            Смотрите карту и ресурсы без регистрации.
+            Войдите, когда понадобятся сообщения, избранное или публикации.
+        </div>
+    </div>
+
+    <div class="rm-guest-actions">
+        {map_card}
+        {search_card}
+        {login_card}
+    </div>
+</div>"#,
+        map_card = navigation_card("/app", "globe", "Карта ресурсов", "Страны и города"),
+        search_card = navigation_card("/app/search", "search", "Поиск", "Люди и ресурсы"),
+        login_card = navigation_card(
+            &auth_href,
+            "user",
+            "Войти в аккаунт",
+            "Telegram или email · необязательно",
+        ),
+    )
 }
 
-pub(crate) fn guest_locked_section(_feature: &str) -> String {
-    guest_mode_panel("/app/me")
+pub(crate) fn guest_locked_section(feature: &str, next_path: &str) -> String {
+    format!(
+        "{note}{panel}",
+        note = empty_state_card(
+            "Нужен аккаунт",
+            &format!(
+                "Раздел «{feature}» доступен после входа. Карта и поиск работают без регистрации.",
+                feature = escape_html(feature),
+            ),
+        ),
+        panel = guest_mode_panel(next_path),
+    )
 }
 
 pub(crate) fn section_head(title: &str, caption: &str, margin_top: Option<u32>) -> String {

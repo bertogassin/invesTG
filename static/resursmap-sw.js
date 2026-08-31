@@ -1,10 +1,11 @@
 "use strict";
 
-const CACHE_VERSION = "resursmap-shell-v4.9.6";
+const CACHE_VERSION = "resursmap-shell-v4.9.7";
 
 const STATIC_ASSETS = [
     "/static/manifest.webmanifest",
-    "/static/app-icon.svg"
+    "/static/app-icon.svg",
+    "/static/nav-badge.js",
 ];
 
 self.addEventListener("install", function (event) {

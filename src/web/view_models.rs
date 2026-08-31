@@ -17,6 +17,17 @@ pub struct ConversationRow {
     pub updated_at: i64,
 }
 
+pub struct UserSessionRow {
+    pub session_public_id: String,
+    pub ip_address: String,
+    pub user_agent: String,
+    #[allow(dead_code)]
+    pub created_at: i64,
+    #[allow(dead_code)]
+    pub last_seen_at: i64,
+    pub is_current: bool,
+}
+
 pub struct ChatMessageRow {
     pub id: i64,
     pub sender_user_id: i64,

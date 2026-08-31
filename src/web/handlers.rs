@@ -59,7 +59,10 @@ pub use health::*;
 mod common;
 
 mod auth;
-pub use auth::{app_auth, app_auth_page, app_logout, email_auth_request, email_auth_verify};
+pub use auth::{
+    app_auth, app_auth_page, app_logout, app_revoke_other_sessions, app_revoke_session,
+    email_auth_request, email_auth_verify,
+};
 
 pub use admin_administrators::administrators_panel;
 

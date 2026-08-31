@@ -1,4 +1,4 @@
-use super::auth::{verify_authenticated_user, verify_user_session};
+use super::auth::{current_session_public_id, verify_authenticated_user, verify_user_session};
 use super::common::{
     csrf_rejected_response, input_text_is_valid, rate_limit_retry_after, request_is_cross_site,
     unix_now,
@@ -38,6 +38,7 @@ pub async fn app_me(State(state): State<AppState>, headers: HeaderMap) -> Html<S
                 intent_text: "",
                 intent_until: 0,
                 category: "",
+                user_sessions: vec![],
             }));
         }
     };
@@ -197,6 +198,9 @@ pub async fn app_me(State(state): State<AppState>, headers: HeaderMap) -> Html<S
         )
         .unwrap_or(0);
 
+    let current_session_public_id = current_session_public_id(&headers).unwrap_or_default();
+    let user_sessions = load_user_sessions(&db, user_id, &current_session_public_id, unix_now());
+
     drop(db);
 
     Html(templates::render_me(templates::RenderMeParams {
@@ -217,7 +221,125 @@ pub async fn app_me(State(state): State<AppState>, headers: HeaderMap) -> Html<S
         intent_text: &intent_text,
         intent_until,
         category: &category,
+        user_sessions,
     }))
+}
+
+pub async fn api_attention_count(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    let user_id = match verify_user_session(&state, &headers) {
+        Some(user_id) => user_id,
+        None => {
+            return Json(json!({
+                "count": 0,
+                "messages": 0,
+                "notifications": 0,
+                "contacts": 0,
+            }))
+            .into_response();
+        }
+    };
+
+    let db = match crate::db::pool::get_connection(&state.db_pool) {
+        Ok(db) => db,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({ "error": "database_unavailable" })),
+            )
+                .into_response();
+        }
+    };
+
+    let counts = query_attention_counts(&db, user_id);
+
+    Json(json!({
+        "count": counts.0,
+        "messages": counts.1,
+        "notifications": counts.2,
+        "contacts": counts.3,
+    }))
+    .into_response()
+}
+
+fn query_attention_counts(db: &rusqlite::Connection, user_id: i64) -> (i64, i64, i64, i64) {
+    let notifications: i64 = db
+        .query_row(
+            "SELECT COUNT(*)
+             FROM user_notifications
+             WHERE user_id = ?1
+               AND is_read = 0",
+            rusqlite::params![user_id],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    let contacts: i64 = db
+        .query_row(
+            "SELECT COUNT(*)
+             FROM contact_requests
+             WHERE receiver_user_id = ?1
+               AND status = 'pending'",
+            rusqlite::params![user_id],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    let messages: i64 = db
+        .query_row(
+            "SELECT COUNT(*)
+             FROM messages m
+             JOIN conversations c
+               ON c.id = m.conversation_id
+             WHERE (c.user1_id = ?1 OR c.user2_id = ?1)
+               AND m.sender_user_id <> ?1
+               AND m.is_read = 0",
+            rusqlite::params![user_id],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    (
+        messages + notifications + contacts,
+        messages,
+        notifications,
+        contacts,
+    )
+}
+
+fn load_user_sessions(
+    db: &rusqlite::Connection,
+    user_id: i64,
+    current_public_id: &str,
+    now: i64,
+) -> Vec<crate::web::view_models::UserSessionRow> {
+    let mut stmt = match db.prepare(
+        "SELECT session_public_id, ip_address, user_agent, created_at, last_seen_at
+         FROM user_sessions
+         WHERE user_id = ?1
+           AND revoked_at IS NULL
+           AND expires_at > ?2
+         ORDER BY last_seen_at DESC
+         LIMIT 8",
+    ) {
+        Ok(stmt) => stmt,
+        Err(_) => return Vec::new(),
+    };
+
+    stmt.query_map(rusqlite::params![user_id, now], |row| {
+        let session_public_id: String = row.get(0)?;
+
+        Ok(crate::web::view_models::UserSessionRow {
+            session_public_id: session_public_id.clone(),
+            ip_address: row.get(1)?,
+            user_agent: row.get(2)?,
+            created_at: row.get(3)?,
+            last_seen_at: row.get(4)?,
+            is_current: !current_public_id.is_empty() && session_public_id == current_public_id,
+        })
+    })
+    .ok()
+    .map(|rows| rows.filter_map(Result::ok).collect())
+    .unwrap_or_default()
 }
 
 pub async fn public_user_profile(

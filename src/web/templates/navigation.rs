@@ -769,7 +769,9 @@ pub fn render_search(
     q: &str,
     resources: Vec<crate::web::view_models::SearchResourceRow>,
     people: Vec<crate::web::view_models::SearchPersonRow>,
+    guest_mode: bool,
 ) -> String {
+    let guest_hint = if guest_mode { guest_mode_hint() } else { "" };
     let world_data = world();
 
     let query_lower = q.trim().to_lowercase();
@@ -1063,6 +1065,8 @@ pub fn render_search(
 
     let content = format!(
         r#"
+{guest_hint}
+
 {location_section}
 
 {people_section}
@@ -1073,6 +1077,7 @@ pub fn render_search(
     {results}
 </section>
 "#,
+        guest_hint = guest_hint,
         location_section = location_section,
         people_section = people_section,
         result_header = result_header,

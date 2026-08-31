@@ -136,6 +136,7 @@ pub async fn app_root(State(state): State<AppState>, headers: HeaderMap) -> Html
 
 pub async fn app_search(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Query(params): Query<BTreeMap<String, String>>,
 ) -> Response {
     let q = params.get("q").map(|s| s.trim()).unwrap_or("");
@@ -354,7 +355,13 @@ pub async fn app_search(
         drop(db);
     }
 
-    Html(templates::render_search(q, resources, people)).into_response()
+    Html(templates::render_search(
+        q,
+        resources,
+        people,
+        verify_user_session(&state, &headers).is_none(),
+    ))
+    .into_response()
 }
 
 pub async fn app_continent(Path(ci): Path<usize>) -> Html<String> {

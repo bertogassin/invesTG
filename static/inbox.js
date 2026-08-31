@@ -56,7 +56,12 @@
             ].join("|");
         }
 
-        function renderConversation(conversation) {
+    var MESSAGE_ICON =
+        '<svg class="icon" viewBox="0 0 24 24"><path d="M21 11.5c0 4.7-4 8.5-9 8.5-1 0-2-.2-2.9-.5L4 21l1.5-4.5C4.5 15.4 3 13.6 3 11.5 3 6.8 7 3 12 3s9 3.8 9 8.5Z"/></svg>';
+    var CHEVRON_ICON =
+        '<svg class="icon small-icon" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>';
+
+    function renderConversation(conversation) {
             var username = String(conversation.username || "").trim();
             var usernameHtml = username
                 ? '<div class="card-meta" style="margin-top:3px;overflow-wrap:anywhere;">@'
@@ -80,7 +85,9 @@
                 + encodeURIComponent(conversation.other_user_id)
                 + '#chat-end" class="card chat-dialog-card" data-other-user-id="'
                 + escapeHtml(conversation.other_user_id)
-                + '"><div class="card-icon inbox-card-icon" aria-hidden="true"></div><div class="card-content"><div class="card-title">'
+                + '"><div class="card-icon">'
+                + MESSAGE_ICON
+                + '</div><div class="card-content"><div class="card-title">'
                 + escapeHtml(conversation.display_name)
                 + "</div>"
                 + usernameHtml
@@ -89,7 +96,9 @@
                 + '</div></div><div class="chat-dialog-side">'
                 + lastTime
                 + unreadHtml
-                + '<div class="card-arrow inbox-card-arrow" aria-hidden="true"></div></div></a>'
+                + '<div class="card-arrow">'
+                + CHEVRON_ICON
+                + "</div></div></a>"
             );
         }
 
@@ -114,6 +123,10 @@
             if (caption) {
                 caption.textContent =
                     "Непрочитанных: " + String(data.total_unread || 0);
+            }
+
+            if (typeof window.resursmapRefreshAttentionBadge === "function") {
+                window.resursmapRefreshAttentionBadge();
             }
 
             if (!conversations.length) {
