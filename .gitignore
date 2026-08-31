@@ -17,6 +17,11 @@ backups/
 *.broken*
 *current-broken*
 *luxury-backup*
+*.swp
+*.swo
+*~
+*.bak.*
+data/*.db.bak.*
 # Local audit files
 RESURSMAP_AUDIT.txt
 $root/
