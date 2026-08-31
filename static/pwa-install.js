@@ -59,7 +59,7 @@
             }
         }
 
-        return "4.9.10";
+        return "4.9.11";
     }
 
     function registerServiceWorker() {

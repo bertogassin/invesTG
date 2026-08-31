@@ -958,7 +958,7 @@ pub async fn admin_resources(
             };
 
         let premium_badge = if premium == 1 {
-            r#"<span style="color:#b88932;font-weight:800;">★ Премиум</span>"#
+            templates::premium_badge_html("admin")
         } else {
             ""
         };

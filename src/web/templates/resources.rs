@@ -1,6 +1,6 @@
 use super::common::{
     back_hero, back_link, bottom_nav, empty_state_card, escape_html, guest_locked_section, icon,
-    navigation_card, page_document, page_shell, section_head, topbar,
+    navigation_card, page_document, page_shell, premium_badge_html, section_head, topbar,
 };
 
 pub fn render_category(
@@ -52,19 +52,7 @@ pub fn render_category(
                 };
 
                 let premium_badge = if *premium != 0 {
-                    r#"<span style="
-                        display:inline-flex;
-                        align-items:center;
-                        gap:5px;
-                        padding:4px 9px;
-                        border-radius:999px;
-                        background:rgba(214,183,122,.12);
-                        border:1px solid rgba(214,183,122,.45);
-                        color:var(--gold-light);
-                        font-size:10px;
-                        font-weight:800;
-                        letter-spacing:.10em;
-                    ">★ Премиум</span>"#
+                    premium_badge_html("default")
                 } else {
                     ""
                 };
@@ -229,19 +217,7 @@ pub fn render_resource_profile(params: RenderResourceProfileParams<'_>) -> Strin
     let safe_address = escape_html(address);
 
     let premium_badge = if premium != 0 {
-        r#"<span style="
-            display:inline-flex;
-            align-items:center;
-            gap:6px;
-            padding:6px 11px;
-            border-radius:999px;
-            background:rgba(214,183,122,.12);
-            border:1px solid rgba(214,183,122,.45);
-            color:var(--gold-light);
-            font-size:11px;
-            font-weight:800;
-            letter-spacing:.08em;
-        ">★ Премиум</span>"#
+        premium_badge_html("default")
     } else {
         ""
     };
@@ -1284,7 +1260,7 @@ pub fn render_my_resources(
                 let safe_rejection_reason = escape_html(rejection_reason);
 
                 let premium_badge = if *premium != 0 {
-                    r#"<span style="font-size:11px;font-weight:800;color:var(--gold-light);">★ Премиум</span>"#
+                    premium_badge_html("compact")
                 } else {
                     ""
                 };

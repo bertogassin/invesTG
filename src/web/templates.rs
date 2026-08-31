@@ -10,6 +10,9 @@ pub(crate) use common::icon;
 pub(crate) use common::navigation_card;
 pub(crate) use common::page_document;
 pub(crate) use common::{render_auth_page, AuthPageParams};
+pub(crate) use common::{
+    admin_ops_page, premium_badge_html, workflow_status_label_or_raw,
+};
 pub(crate) use common::status_page;
 pub(crate) use common::ExtendedNavigationCardParams;
 

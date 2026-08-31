@@ -7,7 +7,7 @@ pub fn escape_html(value: &str) -> String {
         .replace('\'', "&#39;")
 }
 
-pub const STATIC_ASSET_VERSION: &str = "4.9.10";
+pub const STATIC_ASSET_VERSION: &str = "4.9.11";
 
 pub fn profession_label(raw: &str) -> String {
     match raw.trim().to_lowercase().as_str() {
@@ -1437,6 +1437,36 @@ body::before {
     border-top: 1px solid rgba(255, 255, 255, .08);
 }
 
+.rm-premium-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 9px;
+    border-radius: 999px;
+    border: 1px solid rgba(214, 183, 122, .45);
+    background: rgba(214, 183, 122, .12);
+    color: var(--gold-light);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .08em;
+}
+
+.rm-premium-badge--compact {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    font-size: 10px;
+}
+
+.rm-premium-badge--admin {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: #b88932;
+    font-size: inherit;
+    letter-spacing: normal;
+}
+
 .ui-button {
     font-family: inherit;
     -webkit-tap-highlight-color: transparent;
@@ -2155,6 +2185,297 @@ pub(crate) fn status_page(
     );
 
     page_document(title, "", "", &content, "", "")
+}
+
+pub(crate) fn premium_badge_html(variant: &str) -> &'static str {
+    match variant {
+        "compact" => r#"<span class="rm-premium-badge rm-premium-badge--compact">★ Премиум</span>"#,
+        "admin" => r#"<span class="rm-premium-badge rm-premium-badge--admin">★ Премиум</span>"#,
+        _ => r#"<span class="rm-premium-badge">★ Премиум</span>"#,
+    }
+}
+
+pub(crate) fn workflow_status_label(status: &str) -> &'static str {
+    match status {
+        "pending" => "Ожидает",
+        "closed" => "Закрыта",
+        "escalated" => "Передана выше",
+        "rejected" => "Отклонена",
+        "active" => "Активна",
+        "suspended" => "Приостановлена",
+        _ => "",
+    }
+}
+
+pub(crate) fn workflow_status_label_or_raw(status: &str) -> String {
+    let label = workflow_status_label(status);
+    if label.is_empty() {
+        status.to_string()
+    } else {
+        label.to_string()
+    }
+}
+
+fn admin_ops_styles() -> &'static str {
+    r#"
+.rm-admin-ops {
+    --ops-green: #46d39a;
+    --ops-gold: #d6b77a;
+    --ops-red: #ff7d7d;
+    --ops-blue: #72aaff;
+    --ops-line: rgba(255, 255, 255, .10);
+    --ops-muted: #9aaba2;
+    width: min(1100px, 100%);
+    margin: 0 auto;
+}
+.rm-admin-ops .topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+.rm-admin-ops .back {
+    color: var(--text);
+    text-decoration: none;
+    font-weight: 850;
+}
+.rm-admin-ops .protected {
+    padding: 7px 10px;
+    border: 1px solid rgba(70, 211, 154, .32);
+    border-radius: 999px;
+    color: var(--ops-green);
+    font-size: 11px;
+    font-weight: 900;
+}
+.rm-admin-ops .hero {
+    padding: 26px;
+    border: 1px solid rgba(70, 211, 154, .26);
+    border-radius: 25px;
+    background:
+        linear-gradient(135deg, rgba(70, 211, 154, .12), rgba(16, 26, 22, .96) 54%),
+        var(--card);
+    box-shadow: 0 24px 65px rgba(0, 0, 0, .30);
+}
+.rm-admin-ops .kicker {
+    color: var(--ops-green);
+    font-size: 12px;
+    font-weight: 900;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+}
+.rm-admin-ops h1 {
+    margin: 9px 0;
+    font-size: clamp(30px, 6vw, 54px);
+    line-height: 1;
+    letter-spacing: -.04em;
+}
+.rm-admin-ops .hero p {
+    max-width: 680px;
+    margin: 0;
+    color: #c4d1ca;
+    line-height: 1.55;
+}
+.rm-admin-ops .group-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 16px;
+}
+.rm-admin-ops .group-meta span {
+    padding: 6px 9px;
+    border: 1px solid var(--ops-line);
+    border-radius: 999px;
+    color: var(--ops-muted);
+    font-size: 11px;
+}
+.rm-admin-ops .telegram {
+    display: inline-flex;
+    margin-top: 15px;
+    color: var(--ops-blue);
+    text-decoration: none;
+    font-weight: 850;
+}
+.rm-admin-ops .metrics {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin: 16px 0 26px;
+}
+.rm-admin-ops .metric {
+    padding: 17px;
+    border: 1px solid var(--ops-line);
+    border-radius: 18px;
+    background: rgba(16, 26, 22, .88);
+}
+.rm-admin-ops .metric strong {
+    display: block;
+    color: var(--ops-green);
+    font-size: 25px;
+}
+.rm-admin-ops .metric span {
+    color: var(--ops-muted);
+    font-size: 12px;
+}
+.rm-admin-ops .section-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: end;
+    gap: 12px;
+    margin: 24px 2px 12px;
+    border-bottom: 0;
+}
+.rm-admin-ops .section-head h2 {
+    margin: 0;
+    font-size: 20px;
+}
+.rm-admin-ops .section-head span {
+    color: var(--ops-muted);
+    font-size: 12px;
+}
+.rm-admin-ops .grid {
+    display: grid;
+    gap: 11px;
+}
+.rm-admin-ops .event-card,
+.rm-admin-ops .report-card,
+.rm-admin-ops .risk-row {
+    padding: 16px;
+    border: 1px solid var(--ops-line);
+    border-radius: 17px;
+    background: linear-gradient(145deg, rgba(20, 34, 28, .96), rgba(11, 20, 16, .96));
+}
+.rm-admin-ops .event-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+}
+.rm-admin-ops .event-card p,
+.rm-admin-ops .report-card p {
+    margin: 10px 0;
+    color: #cad5cf;
+}
+.rm-admin-ops .report-actions {
+    margin-top: 14px;
+    padding-top: 13px;
+    border-top: 1px solid var(--ops-line);
+}
+.rm-admin-ops .report-actions form {
+    display: grid;
+    gap: 9px;
+}
+.rm-admin-ops .report-actions input {
+    width: 100%;
+    min-height: 43px;
+    padding: 0 12px;
+    border: 1px solid var(--ops-line);
+    border-radius: 11px;
+    color: var(--text);
+    background: #0b1511;
+    font: inherit;
+}
+.rm-admin-ops .action-buttons {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 7px;
+}
+.rm-admin-ops .action-buttons button {
+    min-height: 41px;
+    padding: 7px;
+    border-radius: 10px;
+    font-weight: 850;
+    cursor: pointer;
+}
+.rm-admin-ops .action-buttons .close {
+    color: var(--text);
+    border: 1px solid var(--ops-line);
+    background: rgba(255, 255, 255, .05);
+}
+.rm-admin-ops .action-buttons .escalate {
+    color: var(--ops-gold);
+    border: 1px solid rgba(214, 183, 122, .32);
+    background: rgba(214, 183, 122, .08);
+}
+.rm-admin-ops .action-buttons .reject {
+    color: var(--ops-red);
+    border: 1px solid rgba(255, 125, 125, .30);
+    background: rgba(255, 125, 125, .08);
+}
+.rm-admin-ops .risk,
+.rm-admin-ops .report-status {
+    padding: 5px 8px;
+    border: 1px solid var(--ops-line);
+    border-radius: 999px;
+    color: var(--ops-gold);
+    font-size: 10px;
+    font-weight: 900;
+}
+.rm-admin-ops .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+}
+.rm-admin-ops .meta span {
+    color: var(--ops-muted);
+    font-size: 11px;
+}
+.rm-admin-ops .risk-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+}
+.rm-admin-ops .risk-row small {
+    display: block;
+    margin-top: 4px;
+    color: var(--ops-muted);
+}
+.rm-admin-ops .risk-values {
+    display: flex;
+    gap: 7px;
+}
+.rm-admin-ops .risk-values span {
+    padding: 6px 8px;
+    border: 1px solid var(--ops-line);
+    border-radius: 10px;
+    color: var(--ops-gold);
+    font-size: 11px;
+}
+.rm-admin-ops .empty {
+    padding: 28px 16px;
+    border: 1px dashed var(--ops-line);
+    border-radius: 17px;
+    color: var(--ops-muted);
+    text-align: center;
+}
+@media (max-width: 700px) {
+    .rm-admin-ops .hero { padding: 21px 17px; }
+    .rm-admin-ops .metrics { grid-template-columns: 1fr; }
+    .rm-admin-ops .event-head,
+    .rm-admin-ops .risk-row {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+    .rm-admin-ops .action-buttons { grid-template-columns: 1fr; }
+}
+"#
+}
+
+pub(crate) fn admin_ops_page(title: &str, content_html: &str) -> String {
+    let head_extra = format!(
+        r#"<meta name="robots" content="noindex,nofollow">
+<style>{styles}</style>"#,
+        styles = admin_ops_styles(),
+    );
+
+    page_document(
+        title,
+        &head_extra,
+        "",
+        &format!(r#"<div class="rm-admin-ops">{content_html}</div>"#),
+        "",
+        "",
+    )
 }
 
 pub(crate) fn empty_state_card(title: &str, description_html: &str) -> String {

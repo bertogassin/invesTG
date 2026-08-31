@@ -1,7 +1,7 @@
 use super::common::{
     bottom_nav, empty_state_card, escape_html, guest_mode_hint, icon, navigation_card,
-    page_document, page_shell, people_result_card, profession_label, resource_result_card,
-    search_form_hero, section_head, simple_hero, topbar,
+    page_document, page_shell, people_result_card, premium_badge_html, profession_label,
+    resource_result_card, search_form_hero, section_head, simple_hero, topbar,
 };
 use crate::geography::world;
 
@@ -1022,17 +1022,7 @@ pub fn render_search(
                         .unwrap_or_else(|| "Местоположение не указано".to_string());
 
                     let premium_badge = if *premium != 0 {
-                        r#"<span style="
-                            display:inline-flex;
-                            align-items:center;
-                            padding:4px 8px;
-                            border-radius:999px;
-                            border:1px solid rgba(214,183,122,.38);
-                            background:rgba(214,183,122,.08);
-                            color:var(--gold);
-                            font-size:10px;
-                            font-weight:800;
-                        ">★ Премиум</span>"#
+                        premium_badge_html("default")
                     } else {
                         ""
                     };

@@ -1,7 +1,7 @@
 use super::common::{
     back_hero, back_link, bottom_nav, bottom_nav_with_badge, empty_state_card, escape_html,
     guest_locked_section, guest_mode_panel, icon, navigation_card, page_document, page_shell,
-    profile_resource_card, section_head, simple_hero, topbar,
+    premium_badge_html, profile_resource_card, section_head, simple_hero, topbar,
 };
 
 pub struct RenderMeParams<'a> {
@@ -1993,11 +1993,7 @@ pub fn render_public_user_profile(params: RenderPublicUserProfileParams<'_>) -> 
                     };
 
                     let premium_badge = if *premium != 0 {
-                        r#"<span style="
-                                font-size:10px;
-                                font-weight:900;
-                                color:var(--gold-light);
-                            ">★ Премиум</span>"#
+                        premium_badge_html("compact")
                     } else {
                         ""
                     };
@@ -2374,7 +2370,7 @@ pub fn render_favorites(
                     premium,
                 )| {
                     let premium_badge = if *premium != 0 {
-                        r#"<span style="font-size:10px;font-weight:800;color:var(--gold-light);">★ Премиум</span>"#
+                        premium_badge_html("compact")
                     } else {
                         ""
                     };

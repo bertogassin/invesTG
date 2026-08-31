@@ -5,7 +5,7 @@ use super::admin_access::{
 use super::auth::verify_authenticated_user;
 use super::common::{csrf_rejected_response, request_is_cross_site};
 use crate::state::app_state::AppState;
-use crate::web::templates::escape_html;
+use crate::web::templates::{admin_ops_page, escape_html, workflow_status_label_or_raw};
 use axum::{
     extract::{Form, Path, State},
     http::{header, HeaderMap, HeaderValue, StatusCode},
@@ -109,10 +109,10 @@ fn render_page(
                         <p>{reason}</p>
                         <div class="meta">
                             <span>ID пользователя: {user_id}</span>
-                            <span>Message ID: {message_id}</span>
-                            <span>Mute: {mute_seconds}s</span>
+                            <span>ID сообщения: {message_id}</span>
+                            <span>Заглушка: {mute_seconds} с</span>
                             <span>{status}</span>
-                            <span>Unix: {created_at}</span>
+                            <span>время: {created_at}</span>
                         </div>
                     </article>"#,
                     action = escape_html(action_title(&event.action)),
@@ -217,12 +217,12 @@ fn render_page(
                         <div class="meta">
                             <span>Жалоба #{id}</span>
                             <span>Ресурс #{resource_id}</span>
-                            <span>Unix: {created_at}</span>
+                            <span>время: {created_at}</span>
                         </div>
                         {actions}
                     </article>"#,
                     title = escape_html(&report.resource_title),
-                    status = escape_html(&report.status),
+                    status = escape_html(&workflow_status_label_or_raw(&report.status)),
                     reason = escape_html(&report.reason),
                     id = report.id,
                     resource_id = report.resource_id,
@@ -248,283 +248,8 @@ fn render_page(
         String::new()
     };
 
-    format!(
-        r#"<!doctype html>
-<html lang="ru">
-<head>
-<meta charset="utf-8">
-<meta name="viewport"
-      content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="robots" content="noindex,nofollow">
-<title>Помощник группы · ResursMap</title>
-<style>
-:root {{
-    color-scheme:dark;
-    --bg:#07100d;
-    --panel:#101a16;
-    --panel-2:#14221c;
-    --line:rgba(255,255,255,.10);
-    --text:#f3f8f5;
-    --muted:#9aaba2;
-    --green:#46d39a;
-    --gold:#d6b77a;
-    --red:#ff7d7d;
-    --blue:#72aaff;
-}}
-* {{ box-sizing:border-box; }}
-body {{
-    margin:0;
-    min-height:100vh;
-    color:var(--text);
-    background:
-        radial-gradient(circle at 15% 0%,rgba(70,211,154,.14),transparent 32%),
-        radial-gradient(circle at 100% 20%,rgba(114,170,255,.09),transparent 30%),
-        var(--bg);
-    font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-}}
-.page {{
-    width:min(1100px,100%);
-    margin:0 auto;
-    padding:
-        max(18px,env(safe-area-inset-top))
-        14px
-        calc(80px + env(safe-area-inset-bottom));
-}}
-.topbar {{
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    gap:12px;
-    margin-bottom:16px;
-}}
-.back {{
-    color:var(--text);
-    text-decoration:none;
-    font-weight:850;
-}}
-.protected {{
-    padding:7px 10px;
-    border:1px solid rgba(70,211,154,.32);
-    border-radius:999px;
-    color:var(--green);
-    font-size:11px;
-    font-weight:900;
-}}
-.hero {{
-    padding:26px;
-    border:1px solid rgba(70,211,154,.26);
-    border-radius:25px;
-    background:
-        linear-gradient(135deg,rgba(70,211,154,.12),rgba(16,26,22,.96) 54%),
-        var(--panel);
-    box-shadow:0 24px 65px rgba(0,0,0,.30);
-}}
-.kicker {{
-    color:var(--green);
-    font-size:12px;
-    font-weight:900;
-    letter-spacing:.12em;
-    text-transform:uppercase;
-}}
-h1 {{
-    margin:9px 0;
-    font-size:clamp(30px,6vw,54px);
-    line-height:1;
-    letter-spacing:-.04em;
-}}
-.hero p {{
-    max-width:680px;
-    margin:0;
-    color:#c4d1ca;
-    line-height:1.55;
-}}
-.group-meta {{
-    display:flex;
-    flex-wrap:wrap;
-    gap:8px;
-    margin-top:16px;
-}}
-.group-meta span {{
-    padding:6px 9px;
-    border:1px solid var(--line);
-    border-radius:999px;
-    color:var(--muted);
-    font-size:11px;
-}}
-.telegram {{
-    display:inline-flex;
-    margin-top:15px;
-    color:var(--blue);
-    text-decoration:none;
-    font-weight:850;
-}}
-.metrics {{
-    display:grid;
-    grid-template-columns:repeat(3,minmax(0,1fr));
-    gap:10px;
-    margin:16px 0 26px;
-}}
-.metric {{
-    padding:17px;
-    border:1px solid var(--line);
-    border-radius:18px;
-    background:rgba(16,26,22,.88);
-}}
-.metric strong {{
-    display:block;
-    color:var(--green);
-    font-size:25px;
-}}
-.metric span {{
-    color:var(--muted);
-    font-size:12px;
-}}
-.section-head {{
-    display:flex;
-    justify-content:space-between;
-    align-items:end;
-    gap:12px;
-    margin:24px 2px 12px;
-}}
-.section-head h2 {{
-    margin:0;
-    font-size:20px;
-}}
-.section-head span {{
-    color:var(--muted);
-    font-size:12px;
-}}
-.grid {{
-    display:grid;
-    gap:11px;
-}}
-.event-card,
-.report-card,
-.risk-row {{
-    padding:16px;
-    border:1px solid var(--line);
-    border-radius:17px;
-    background:linear-gradient(145deg,rgba(20,34,28,.96),rgba(11,20,16,.96));
-}}
-.event-head {{
-    display:flex;
-    justify-content:space-between;
-    gap:12px;
-}}
-.event-card p,
-.report-card p {{
-    margin:10px 0;
-    color:#cad5cf;
-}}
-.report-actions {{
-    margin-top:14px;
-    padding-top:13px;
-    border-top:1px solid var(--line);
-}}
-.report-actions form {{
-    display:grid;
-    gap:9px;
-}}
-.report-actions input {{
-    width:100%;
-    min-height:43px;
-    padding:0 12px;
-    border:1px solid var(--line);
-    border-radius:11px;
-    color:var(--text);
-    background:#0b1511;
-    font:inherit;
-}}
-.action-buttons {{
-    display:grid;
-    grid-template-columns:repeat(3,minmax(0,1fr));
-    gap:7px;
-}}
-.action-buttons button {{
-    min-height:41px;
-    padding:7px;
-    border-radius:10px;
-    font-weight:850;
-    cursor:pointer;
-}}
-.action-buttons .close {{
-    color:var(--text);
-    border:1px solid var(--line);
-    background:rgba(255,255,255,.05);
-}}
-.action-buttons .escalate {{
-    color:var(--gold);
-    border:1px solid rgba(214,183,122,.32);
-    background:rgba(214,183,122,.08);
-}}
-.action-buttons .reject {{
-    color:var(--red);
-    border:1px solid rgba(255,125,125,.30);
-    background:rgba(255,125,125,.08);
-}}
-.risk,
-.report-status {{
-    padding:5px 8px;
-    border:1px solid var(--line);
-    border-radius:999px;
-    color:var(--gold);
-    font-size:10px;
-    font-weight:900;
-}}
-.meta {{
-    display:flex;
-    flex-wrap:wrap;
-    gap:7px;
-}}
-.meta span {{
-    color:var(--muted);
-    font-size:11px;
-}}
-.risk-row {{
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    gap:12px;
-}}
-.risk-row small {{
-    display:block;
-    margin-top:4px;
-    color:var(--muted);
-}}
-.risk-values {{
-    display:flex;
-    gap:7px;
-}}
-.risk-values span {{
-    padding:6px 8px;
-    border:1px solid var(--line);
-    border-radius:10px;
-    color:var(--gold);
-    font-size:11px;
-}}
-.empty {{
-    padding:28px 16px;
-    border:1px dashed var(--line);
-    border-radius:17px;
-    color:var(--muted);
-    text-align:center;
-}}
-@media (max-width:700px) {{
-    .hero {{ padding:21px 17px; }}
-    .metrics {{ grid-template-columns:1fr; }}
-    .event-head,
-    .risk-row {{
-        align-items:flex-start;
-        flex-direction:column;
-    }}
-    .action-buttons {{
-        grid-template-columns:1fr;
-    }}
-}}
-</style>
-</head>
-<body>
-<main class="page">
+    let content = format!(
+        r#"
     <div class="topbar">
         <a class="back" href="/app/me">← Личный кабинет</a>
         <span class="protected">УРОВЕНЬ 1 · ТОЛЬКО ГРУППА</span>
@@ -540,8 +265,8 @@ h1 {{
 
         <div class="group-meta">
             <span>{stable_key}</span>
-            <span>Chat ID: {chat_id}</span>
-            <span>City ID: {city_id}</span>
+            <span>ID чата: {chat_id}</span>
+            <span>ID города: {city_id}</span>
         </div>
 
         {telegram_link}
@@ -579,9 +304,7 @@ h1 {{
         <span>Последние {report_count}</span>
     </div>
     <section class="grid">{report_cards}</section>
-</main>
-</body>
-</html>"#,
+"#,
         city_name = escape_html(&group.city_name),
         target_name = escape_html(&group.target_name),
         stable_key = escape_html(&group.stable_key),
@@ -596,7 +319,9 @@ h1 {{
         event_cards = event_cards,
         risk_rows = risk_rows,
         report_cards = report_cards,
-    )
+    );
+
+    admin_ops_page("Помощник группы · ResursMap", &content)
 }
 
 pub async fn group_helper_panel(State(state): State<AppState>, headers: HeaderMap) -> Response {
