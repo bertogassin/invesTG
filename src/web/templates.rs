@@ -9,6 +9,7 @@ pub(crate) use common::extended_navigation_card;
 pub(crate) use common::icon;
 pub(crate) use common::navigation_card;
 pub(crate) use common::page_document;
+pub(crate) use common::{render_auth_page, AuthPageParams};
 pub(crate) use common::status_page;
 pub(crate) use common::ExtendedNavigationCardParams;
 

@@ -7,7 +7,7 @@ pub fn escape_html(value: &str) -> String {
         .replace('\'', "&#39;")
 }
 
-pub const STATIC_ASSET_VERSION: &str = "4.9.8";
+pub const STATIC_ASSET_VERSION: &str = "4.9.9";
 
 pub fn profession_label(raw: &str) -> String {
     match raw.trim().to_lowercase().as_str() {
@@ -265,6 +265,9 @@ html {
 body {
     margin: 0;
     min-height: 100vh;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
 
     font-family:
         Inter,
@@ -319,7 +322,7 @@ body::before {
 .page {
     width: min(100% - 32px, 900px);
     margin: 0 auto;
-    padding: 28px 0 110px;
+    padding: 28px 0 calc(110px + env(safe-area-inset-bottom, 0px));
 }
 
 .icon {
@@ -741,7 +744,7 @@ body::before {
     z-index: 20;
 
     left: 50%;
-    bottom: 16px;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
 
     width: min(calc(100% - 28px), 520px);
 
@@ -1287,6 +1290,153 @@ body::before {
     box-sizing: border-box;
 }
 
+.ui-form-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.ui-field {
+    display: block;
+}
+
+.ui-field-label {
+    display: block;
+    margin-bottom: 7px;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.ui-form-note {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.5;
+}
+
+.rm-auth-wrap {
+    width: min(100%, 520px);
+    margin: 0 auto;
+    padding: 18px;
+}
+
+.rm-auth-card {
+    display: block;
+    padding: 26px 22px;
+    border-color: rgba(214, 183, 122, .24);
+}
+
+.rm-auth-title {
+    margin: 0 0 10px;
+    color: var(--text);
+    font-size: clamp(30px, 8vw, 42px);
+}
+
+.rm-auth-subtitle {
+    margin: 0 0 24px;
+    color: var(--muted);
+    font-size: 16px;
+    line-height: 1.58;
+}
+
+.rm-auth-label {
+    display: block;
+    margin-bottom: 8px;
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 750;
+}
+
+.rm-auth-label + .rm-auth-input + .rm-auth-label,
+.rm-auth-step .rm-auth-label {
+    margin-top: 16px;
+}
+
+.rm-auth-input {
+    width: 100%;
+    min-height: 52px;
+    padding: 0 15px;
+    border-radius: 14px;
+}
+
+.rm-auth-input--code {
+    text-align: center;
+    letter-spacing: .24em;
+    font-size: 20px;
+}
+
+.rm-auth-links {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 10px;
+    font-size: 13px;
+}
+
+.rm-auth-links a {
+    text-decoration: none;
+}
+
+.rm-auth-links a:first-child {
+    color: var(--gold-light);
+}
+
+.rm-auth-links a:last-child {
+    color: var(--muted);
+}
+
+.rm-auth-button {
+    width: 100%;
+    min-height: 52px;
+    margin-top: 16px;
+    border-radius: 14px;
+    font-size: 16px;
+    font-weight: 850;
+    cursor: pointer;
+}
+
+.rm-auth-button--compact {
+    margin-top: 12px;
+}
+
+.rm-auth-status {
+    min-height: 22px;
+    margin: 15px 0 0;
+    color: var(--muted);
+    font-size: 14px;
+}
+
+.rm-auth-status.is-error {
+    color: #ef6b72;
+}
+
+.rm-auth-footer {
+    margin: 18px 0 0;
+    text-align: center;
+    color: var(--muted);
+    font-size: 14px;
+}
+
+.rm-auth-footer a {
+    color: var(--gold-light);
+}
+
+.rm-auth-back {
+    margin-top: 18px;
+    text-align: center;
+}
+
+.rm-auth-back a {
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 14px;
+}
+
+.rm-auth-step {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid rgba(255, 255, 255, .08);
+}
+
 .ui-button {
     font-family: inherit;
     -webkit-tap-highlight-color: transparent;
@@ -1438,7 +1588,7 @@ pub(crate) fn page_document(
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="resursmap-asset-version" content="{asset_version}">
 {site_head}
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;">
@@ -1484,6 +1634,45 @@ pub(crate) fn page_document(
         notification_sound_js = static_asset("notification-sound.js"),
         nav_badge_js = static_asset("nav-badge.js"),
         theme_toggle_js = static_asset("theme-toggle.js"),
+    )
+}
+
+pub(crate) struct AuthPageParams<'a> {
+    pub document_title: &'a str,
+    pub heading: &'a str,
+    pub subtitle: &'a str,
+    pub body_html: &'a str,
+    pub footer_html: &'a str,
+    pub script_html: &'a str,
+}
+
+pub(crate) fn render_auth_page(params: AuthPageParams<'_>) -> String {
+    let main_html = format!(
+        r#"<div class="rm-auth-wrap">
+    <section class="card rm-auth-card">
+        <h1 class="rm-auth-title">{heading}</h1>
+        <p class="rm-auth-subtitle">{subtitle}</p>
+        {body}
+        <p id="auth-status" class="rm-auth-status" role="status" aria-live="polite"></p>
+        {footer}
+    </section>
+    <div class="rm-auth-back">
+        <a href="/app">&larr; Вернуться на карту</a>
+    </div>
+</div>"#,
+        heading = escape_html(params.heading),
+        subtitle = escape_html(params.subtitle),
+        body = params.body_html,
+        footer = params.footer_html,
+    );
+
+    page_document(
+        params.document_title,
+        "",
+        "",
+        &main_html,
+        "",
+        params.script_html,
     )
 }
 

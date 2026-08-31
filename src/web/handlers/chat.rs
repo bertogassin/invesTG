@@ -289,6 +289,7 @@ pub async fn chat_page(
     ))
 }
 
+#[allow(dead_code)]
 pub async fn send_chat_message(
     State(state): State<AppState>,
     Path(other_user_id): Path<i64>,

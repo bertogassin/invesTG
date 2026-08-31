@@ -458,42 +458,28 @@ pub async fn login_page(Query(query): Query<AuthNextQuery>) -> Html<String> {
     let forgot_href = auth_related_href("/login/forgot", &redirect_target);
     let code_href = auth_related_href("/login/code", &redirect_target);
 
-    let main_html = format!(
+    let body_html = format!(
         r##"
-<div style="width:min(100%,520px);margin:0 auto;padding:18px;">
-    <section class="card" style="display:block;padding:26px 22px;border-color:rgba(214,183,122,.24);">
-        <h1 style="margin:0 0 10px;color:var(--text);font-size:clamp(30px,8vw,42px);">Вход</h1>
-        <p style="margin:0 0 24px;color:var(--muted);font-size:16px;line-height:1.58;">
-            Карта и поиск работают без регистрации. Вход нужен для сообщений, избранного и публикаций.
-        </p>
+        <label class="rm-auth-label" for="email-input">Email</label>
+        <input id="email-input" class="ui-input rm-auth-input" type="email" autocomplete="email" maxlength="254" placeholder="name@example.com">
 
-        <label for="email-input" style="display:block;margin-bottom:8px;color:var(--text);font-size:14px;font-weight:750;">Email</label>
-        <input id="email-input" class="ui-input" type="email" autocomplete="email" maxlength="254" placeholder="name@example.com" style="width:100%;min-height:52px;padding:0 15px;border-radius:14px;">
+        <label class="rm-auth-label" for="password-input">Пароль</label>
+        <input id="password-input" class="ui-input rm-auth-input" type="password" autocomplete="current-password" maxlength="128" placeholder="********">
 
-        <label for="password-input" style="display:block;margin:16px 0 8px;color:var(--text);font-size:14px;font-weight:750;">Пароль</label>
-        <input id="password-input" class="ui-input" type="password" autocomplete="current-password" maxlength="128" placeholder="********" style="width:100%;min-height:52px;padding:0 15px;border-radius:14px;">
-
-        <div style="display:flex;justify-content:space-between;gap:12px;margin-top:10px;font-size:13px;">
-            <a href="{forgot_href}" style="color:var(--gold-light);text-decoration:none;">Забыли пароль?</a>
-            <a href="{code_href}" style="color:var(--muted);text-decoration:none;">Войти по коду</a>
+        <div class="rm-auth-links">
+            <a href="{forgot_href}">Забыли пароль?</a>
+            <a href="{code_href}">Войти по коду</a>
         </div>
 
-        <button id="login-button" type="button" class="ui-button" style="width:100%;min-height:52px;margin-top:16px;border-radius:14px;font-size:16px;font-weight:850;cursor:pointer;">
-            Войти
-        </button>
+        <button id="login-button" type="button" class="ui-button rm-auth-button">Войти</button>
+"##,
+        forgot_href = forgot_href,
+        code_href = code_href,
+    );
 
-        <p id="auth-status" role="status" aria-live="polite" style="min-height:22px;margin:15px 0 0;color:var(--muted);font-size:14px;"></p>
-
-        <p style="margin:18px 0 0;text-align:center;color:var(--muted);font-size:14px;">
-            Нет аккаунта? <a href="{register_href}" style="color:var(--gold-light);">Зарегистрироваться</a>
-        </p>
-    </section>
-
-    <div style="margin-top:18px;text-align:center;">
-        <a href="/app" style="color:var(--muted);text-decoration:none;font-size:14px;">&larr; Вернуться на карту</a>
-    </div>
-</div>
-"##
+    let footer_html = format!(
+        r##"<p class="rm-auth-footer">Нет аккаунта? <a href="{register_href}">Зарегистрироваться</a></p>"##,
+        register_href = register_href,
     );
 
     let body_after = format!(
@@ -508,7 +494,7 @@ pub async fn login_page(Query(query): Query<AuthNextQuery>) -> Html<String> {
 
     function setStatus(message, isError) {{
         authStatus.textContent = message;
-        authStatus.style.color = isError ? "#ef6b72" : "var(--muted)";
+        authStatus.classList.toggle("is-error", isError);
     }}
 
     function errorMessage(error) {{
@@ -577,55 +563,34 @@ pub async fn login_page(Query(query): Query<AuthNextQuery>) -> Html<String> {
         redirect_target_json = serde_json::to_string(&redirect_target).unwrap_or_else(|_| "\"/app\"".to_string()),
     );
 
-    Html(crate::web::templates::page_document(
-        "Вход · ResursMap",
-        "",
-        "",
-        &main_html,
-        "",
-        &body_after,
+    Html(crate::web::templates::render_auth_page(
+        crate::web::templates::AuthPageParams {
+            document_title: "Вход · ResursMap",
+            heading: "Вход",
+            subtitle: "Карта и поиск работают без регистрации. Вход нужен для сообщений, избранного и публикаций.",
+            body_html: &body_html,
+            footer_html: &footer_html,
+            script_html: &body_after,
+        },
     ))
 }
 
 pub async fn register_page(Query(query): Query<AuthNextQuery>) -> Html<String> {
     let redirect_target = auth_redirect_target(query.next.as_deref());
-    let login_href = if redirect_target == "/app" {
-        "/login".to_string()
-    } else {
-        format!("/login?next={}", urlencoding::encode(&redirect_target))
-    };
+    let login_href = auth_related_href("/login", &redirect_target);
 
-    let main_html = format!(
-        r##"
-<div style="width:min(100%,520px);margin:0 auto;padding:18px;">
-    <section class="card" style="display:block;padding:26px 22px;border-color:rgba(214,183,122,.24);">
-        <h1 style="margin:0 0 10px;color:var(--text);font-size:clamp(30px,8vw,42px);">Регистрация</h1>
-        <p style="margin:0 0 24px;color:var(--muted);font-size:16px;line-height:1.58;">
-            Создайте аккаунт на сайте. Telegram для входа не требуется.
-        </p>
+    let body_html = r##"
+        <label class="rm-auth-label" for="email-input">Email</label>
+        <input id="email-input" class="ui-input rm-auth-input" type="email" autocomplete="email" maxlength="254" placeholder="name@example.com">
 
-        <label for="email-input" style="display:block;margin-bottom:8px;color:var(--text);font-size:14px;font-weight:750;">Email</label>
-        <input id="email-input" class="ui-input" type="email" autocomplete="email" maxlength="254" placeholder="name@example.com" style="width:100%;min-height:52px;padding:0 15px;border-radius:14px;">
+        <label class="rm-auth-label" for="password-input">Пароль</label>
+        <input id="password-input" class="ui-input rm-auth-input" type="password" autocomplete="new-password" maxlength="128" placeholder="Минимум 8 символов">
 
-        <label for="password-input" style="display:block;margin:16px 0 8px;color:var(--text);font-size:14px;font-weight:750;">Пароль</label>
-        <input id="password-input" class="ui-input" type="password" autocomplete="new-password" maxlength="128" placeholder="Минимум 8 символов" style="width:100%;min-height:52px;padding:0 15px;border-radius:14px;">
+        <button id="register-button" type="button" class="ui-button rm-auth-button">Создать аккаунт</button>
+"##;
 
-        <button id="register-button" type="button" class="ui-button" style="width:100%;min-height:52px;margin-top:16px;border-radius:14px;font-size:16px;font-weight:850;cursor:pointer;">
-            Создать аккаунт
-        </button>
-
-        <p id="auth-status" role="status" aria-live="polite" style="min-height:22px;margin:15px 0 0;color:var(--muted);font-size:14px;"></p>
-
-        <p style="margin:18px 0 0;text-align:center;color:var(--muted);font-size:14px;">
-            Уже есть аккаунт? <a href="{login_href}" style="color:var(--gold-light);">Войти</a>
-        </p>
-    </section>
-
-    <div style="margin-top:18px;text-align:center;">
-        <a href="/app" style="color:var(--muted);text-decoration:none;font-size:14px;">&larr; Вернуться на карту</a>
-    </div>
-</div>
-"##
+    let footer_html = format!(
+        r##"<p class="rm-auth-footer">Уже есть аккаунт? <a href="{login_href}">Войти</a></p>"##
     );
 
     let body_after = format!(
@@ -640,7 +605,7 @@ pub async fn register_page(Query(query): Query<AuthNextQuery>) -> Html<String> {
 
     function setStatus(message, isError) {{
         authStatus.textContent = message;
-        authStatus.style.color = isError ? "#ef6b72" : "var(--muted)";
+        authStatus.classList.toggle("is-error", isError);
     }}
 
     function errorMessage(error) {{
@@ -710,12 +675,14 @@ pub async fn register_page(Query(query): Query<AuthNextQuery>) -> Html<String> {
         redirect_target_json = serde_json::to_string(&redirect_target).unwrap_or_else(|_| "\"/app\"".to_string()),
     );
 
-    Html(crate::web::templates::page_document(
-        "Регистрация · ResursMap",
-        "",
-        "",
-        &main_html,
-        "",
-        &body_after,
+    Html(crate::web::templates::render_auth_page(
+        crate::web::templates::AuthPageParams {
+            document_title: "Регистрация · ResursMap",
+            heading: "Регистрация",
+            subtitle: "Создайте аккаунт на сайте. Telegram для входа не требуется.",
+            body_html,
+            footer_html: &footer_html,
+            script_html: &body_after,
+        },
     ))
 }

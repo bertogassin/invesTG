@@ -1570,60 +1570,51 @@ pub fn render_edit_resource(
     let content = format!(
         r####"<form method="post"
       action="/app/resource/{id}/edit"
-      style="display:flex;flex-direction:column;gap:16px;" class="ui-form">
+      class="ui-form ui-form-stack">
 
-    <label>
-        <div style="margin-bottom:7px;font-weight:600;">Название</div>
+    <label class="ui-field">
+        <span class="ui-field-label">Название</span>
         <input
             name="title"
             required
             maxlength="120"
             value="{title}"
-            style="width:100%;padding:15px;border-radius:14px;
-                   border:1px solid #ddd;font-size:16px;box-sizing:border-box;" class="ui-input">
+            class="ui-input">
     </label>
 
-    <label>
-        <div style="margin-bottom:7px;font-weight:600;">Описание</div>
+    <label class="ui-field">
+        <span class="ui-field-label">Описание</span>
         <textarea
             name="description"
             required
             maxlength="1000"
             rows="6"
-            style="width:100%;padding:15px;border-radius:14px;
-                   border:1px solid #ddd;font-size:16px;
-                   box-sizing:border-box;resize:vertical;" class="ui-textarea">{description}</textarea>
+            class="ui-textarea">{description}</textarea>
     </label>
 
-    <label>
-        <div style="margin-bottom:7px;font-weight:600;">Телефон или Telegram</div>
+    <label class="ui-field">
+        <span class="ui-field-label">Телефон или Telegram</span>
         <input
             name="contact"
             maxlength="120"
             value="{contact}"
-            style="width:100%;padding:15px;border-radius:14px;
-                   border:1px solid #ddd;font-size:16px;box-sizing:border-box;" class="ui-input">
+            class="ui-input">
     </label>
 
-    <label>
-        <div style="margin-bottom:7px;font-weight:600;">Адрес</div>
+    <label class="ui-field">
+        <span class="ui-field-label">Адрес</span>
         <input
             name="address"
             maxlength="250"
             value="{address}"
-            style="width:100%;padding:15px;border-radius:14px;
-                   border:1px solid #ddd;font-size:16px;box-sizing:border-box;" class="ui-input">
+            class="ui-input">
     </label>
 
-    <button type="submit"
-            style="min-height:52px;border:0;border-radius:16px;
-                   font-size:16px;font-weight:800;cursor:pointer;
-                   background:linear-gradient(135deg,var(--gold),var(--gold-light));
-                   color:#111;" class="ui-button">
+    <button type="submit" class="ui-button rm-auth-button">
         Сохранить изменения
     </button>
 
-    <div style="font-size:12px;color:var(--muted);line-height:1.5;">
+    <div class="ui-form-note">
         После сохранения ресурс автоматически вернётся на повторную модерацию.
     </div>
 
@@ -1660,68 +1651,48 @@ pub fn render_add_resource(ci: usize, si: usize, zi: usize, category: &str) -> S
     let content = format!(
         r####"<form method="post"
       action="/app/{}/{}/{}/cat/{}/add"
-      style="display:flex;flex-direction:column;gap:16px;" class="ui-form">
+      class="ui-form ui-form-stack">
 
-    <label>
-        <div style="margin-bottom:7px;font-weight:600;">
-            Название
-        </div>
-
+    <label class="ui-field">
+        <span class="ui-field-label">Название</span>
         <input
             name="title"
             required
             maxlength="120"
             placeholder="Например: Охранная компания"
-            style="width:100%;padding:15px;border-radius:14px;
-                   border:1px solid #ddd;font-size:16px;box-sizing:border-box;" class="ui-input">
+            class="ui-input">
     </label>
 
-    <label>
-        <div style="margin-bottom:7px;font-weight:600;">
-            Описание
-        </div>
-
+    <label class="ui-field">
+        <span class="ui-field-label">Описание</span>
         <textarea
             name="description"
             required
             maxlength="1000"
             rows="5"
             placeholder="Расскажите о ресурсе..."
-            style="width:100%;padding:15px;border-radius:14px;
-                   border:1px solid #ddd;font-size:16px;
-                   box-sizing:border-box;resize:vertical;" class="ui-textarea"></textarea>
+            class="ui-textarea"></textarea>
     </label>
 
-    <label>
-        <div style="margin-bottom:7px;font-weight:600;">
-            Телефон или Telegram
-        </div>
-
+    <label class="ui-field">
+        <span class="ui-field-label">Телефон или Telegram</span>
         <input
             name="contact"
             maxlength="120"
             placeholder="+33... или @username"
-            style="width:100%;padding:15px;border-radius:14px;
-                   border:1px solid #ddd;font-size:16px;box-sizing:border-box;" class="ui-input">
+            class="ui-input">
     </label>
 
-    <label>
-        <div style="margin-bottom:7px;font-weight:600;">
-            Адрес
-        </div>
-
+    <label class="ui-field">
+        <span class="ui-field-label">Адрес</span>
         <input
             name="address"
             maxlength="200"
             placeholder="Город, улица..."
-            style="width:100%;padding:15px;border-radius:14px;
-                   border:1px solid #ddd;font-size:16px;box-sizing:border-box;" class="ui-input">
+            class="ui-input">
     </label>
 
-    <button
-        type="submit"
-        style="margin-top:8px;padding:16px;border:0;border-radius:16px;
-               font-size:17px;font-weight:700;cursor:pointer;" class="ui-button">
+    <button type="submit" class="ui-button rm-auth-button">
         ➕ Добавить ресурс
     </button>
 

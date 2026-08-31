@@ -436,43 +436,23 @@ pub async fn login_code_page(Query(query): Query<AuthNextQuery>) -> Html<String>
     let redirect_target = auth_redirect_target(query.next.as_deref());
     let login_href = auth_related_href("/login", &redirect_target);
 
-    let main_html = format!(
-        r##"
-<div style="width:min(100%,520px);margin:0 auto;padding:18px;">
-    <section class="card" style="display:block;padding:26px 22px;border-color:rgba(214,183,122,.24);">
-        <h1 style="margin:0 0 10px;color:var(--text);font-size:clamp(30px,8vw,42px);">Вход по коду</h1>
-        <p style="margin:0 0 24px;color:var(--muted);font-size:16px;line-height:1.58;">
-            Для аккаунтов, созданных ранее по email-коду. Новым пользователям проще зарегистрироваться с паролем.
-        </p>
+    let body_html = r##"
+        <label class="rm-auth-label" for="email-input">Email</label>
+        <input id="email-input" class="ui-input rm-auth-input" type="email" autocomplete="email" maxlength="254" placeholder="name@example.com">
 
-        <label for="email-input" style="display:block;margin-bottom:8px;color:var(--text);font-size:14px;font-weight:750;">Email</label>
-        <input id="email-input" class="ui-input" type="email" autocomplete="email" maxlength="254" placeholder="name@example.com" style="width:100%;min-height:52px;padding:0 15px;border-radius:14px;">
+        <button id="request-button" type="button" class="ui-button rm-auth-button rm-auth-button--compact">Получить код</button>
 
-        <button id="request-button" type="button" class="ui-button" style="width:100%;min-height:52px;margin-top:12px;border-radius:14px;font-size:16px;font-weight:850;cursor:pointer;">
-            Получить код
-        </button>
+        <div id="code-section" hidden class="rm-auth-step">
+            <label class="rm-auth-label" for="code-input">Код из письма</label>
+            <input id="code-input" class="ui-input rm-auth-input rm-auth-input--code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000">
 
-        <div id="code-section" hidden style="margin-top:20px;padding-top:20px;border-top:1px solid rgba(255,255,255,.08);">
-            <label for="code-input" style="display:block;margin-bottom:8px;color:var(--text);font-size:14px;font-weight:750;">Код из письма</label>
-            <input id="code-input" class="ui-input" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000" style="width:100%;min-height:52px;padding:0 15px;border-radius:14px;text-align:center;letter-spacing:.24em;font-size:20px;">
-
-            <button id="verify-button" type="button" class="ui-button" style="width:100%;min-height:52px;margin-top:12px;border-radius:14px;font-size:16px;font-weight:850;cursor:pointer;">
-                Подтвердить и войти
-            </button>
+            <button id="verify-button" type="button" class="ui-button rm-auth-button rm-auth-button--compact">Подтвердить и войти</button>
         </div>
+"##;
 
-        <p id="auth-status" role="status" aria-live="polite" style="min-height:22px;margin:15px 0 0;color:var(--muted);font-size:14px;"></p>
-
-        <p style="margin:18px 0 0;text-align:center;color:var(--muted);font-size:14px;">
-            <a href="{login_href}" style="color:var(--gold-light);">Войти с паролем</a>
-        </p>
-    </section>
-
-    <div style="margin-top:18px;text-align:center;">
-        <a href="/app" style="color:var(--muted);text-decoration:none;font-size:14px;">&larr; Вернуться на карту</a>
-    </div>
-</div>
-"##
+    let footer_html = format!(
+        r##"<p class="rm-auth-footer"><a href="{login_href}">Войти с паролем</a></p>"##,
+        login_href = login_href,
     );
 
     let body_after = format!(
@@ -489,7 +469,7 @@ pub async fn login_code_page(Query(query): Query<AuthNextQuery>) -> Html<String>
 
     function setStatus(message, isError) {{
         authStatus.textContent = message;
-        authStatus.style.color = isError ? "#ef6b72" : "var(--muted)";
+        authStatus.classList.toggle("is-error", isError);
     }}
 
     function otpError(error) {{
@@ -591,13 +571,15 @@ pub async fn login_code_page(Query(query): Query<AuthNextQuery>) -> Html<String>
         redirect_target_json = serde_json::to_string(&redirect_target).unwrap_or_else(|_| "\"/app\"".to_string()),
     );
 
-    Html(crate::web::templates::page_document(
-        "Вход по коду · ResursMap",
-        "",
-        "",
-        &main_html,
-        "",
-        &body_after,
+    Html(crate::web::templates::render_auth_page(
+        crate::web::templates::AuthPageParams {
+            document_title: "Вход по коду · ResursMap",
+            heading: "Вход по коду",
+            subtitle: "Для аккаунтов, созданных ранее по email-коду. Новым пользователям проще зарегистрироваться с паролем.",
+            body_html,
+            footer_html: &footer_html,
+            script_html: &body_after,
+        },
     ))
 }
 
@@ -605,46 +587,26 @@ pub async fn forgot_password_page(Query(query): Query<AuthNextQuery>) -> Html<St
     let redirect_target = auth_redirect_target(query.next.as_deref());
     let login_href = auth_related_href("/login", &redirect_target);
 
-    let main_html = format!(
-        r##"
-<div style="width:min(100%,520px);margin:0 auto;padding:18px;">
-    <section class="card" style="display:block;padding:26px 22px;border-color:rgba(214,183,122,.24);">
-        <h1 style="margin:0 0 10px;color:var(--text);font-size:clamp(30px,8vw,42px);">Сброс пароля</h1>
-        <p style="margin:0 0 24px;color:var(--muted);font-size:16px;line-height:1.58;">
-            Отправим код на email. Подойдёт и для старых аккаунтов без пароля — вы сможете задать новый.
-        </p>
+    let body_html = r##"
+        <label class="rm-auth-label" for="email-input">Email</label>
+        <input id="email-input" class="ui-input rm-auth-input" type="email" autocomplete="email" maxlength="254" placeholder="name@example.com">
 
-        <label for="email-input" style="display:block;margin-bottom:8px;color:var(--text);font-size:14px;font-weight:750;">Email</label>
-        <input id="email-input" class="ui-input" type="email" autocomplete="email" maxlength="254" placeholder="name@example.com" style="width:100%;min-height:52px;padding:0 15px;border-radius:14px;">
+        <button id="request-button" type="button" class="ui-button rm-auth-button rm-auth-button--compact">Отправить код</button>
 
-        <button id="request-button" type="button" class="ui-button" style="width:100%;min-height:52px;margin-top:12px;border-radius:14px;font-size:16px;font-weight:850;cursor:pointer;">
-            Отправить код
-        </button>
+        <div id="reset-section" hidden class="rm-auth-step">
+            <label class="rm-auth-label" for="code-input">Код из письма</label>
+            <input id="code-input" class="ui-input rm-auth-input rm-auth-input--code" type="text" inputmode="numeric" maxlength="6" placeholder="000000">
 
-        <div id="reset-section" hidden style="margin-top:20px;padding-top:20px;border-top:1px solid rgba(255,255,255,.08);">
-            <label for="code-input" style="display:block;margin-bottom:8px;color:var(--text);font-size:14px;font-weight:750;">Код из письма</label>
-            <input id="code-input" class="ui-input" type="text" inputmode="numeric" maxlength="6" placeholder="000000" style="width:100%;min-height:52px;padding:0 15px;border-radius:14px;text-align:center;letter-spacing:.24em;font-size:20px;">
+            <label class="rm-auth-label" for="password-input">Новый пароль</label>
+            <input id="password-input" class="ui-input rm-auth-input" type="password" autocomplete="new-password" maxlength="128" placeholder="Минимум 8 символов">
 
-            <label for="password-input" style="display:block;margin:16px 0 8px;color:var(--text);font-size:14px;font-weight:750;">Новый пароль</label>
-            <input id="password-input" class="ui-input" type="password" autocomplete="new-password" maxlength="128" placeholder="Минимум 8 символов" style="width:100%;min-height:52px;padding:0 15px;border-radius:14px;">
-
-            <button id="reset-button" type="button" class="ui-button" style="width:100%;min-height:52px;margin-top:12px;border-radius:14px;font-size:16px;font-weight:850;cursor:pointer;">
-                Сохранить пароль
-            </button>
+            <button id="reset-button" type="button" class="ui-button rm-auth-button rm-auth-button--compact">Сохранить пароль</button>
         </div>
+"##;
 
-        <p id="auth-status" role="status" aria-live="polite" style="min-height:22px;margin:15px 0 0;color:var(--muted);font-size:14px;"></p>
-
-        <p style="margin:18px 0 0;text-align:center;color:var(--muted);font-size:14px;">
-            <a href="{login_href}" style="color:var(--gold-light);">Вернуться ко входу</a>
-        </p>
-    </section>
-
-    <div style="margin-top:18px;text-align:center;">
-        <a href="/app" style="color:var(--muted);text-decoration:none;font-size:14px;">&larr; Вернуться на карту</a>
-    </div>
-</div>
-"##
+    let footer_html = format!(
+        r##"<p class="rm-auth-footer"><a href="{login_href}">Вернуться ко входу</a></p>"##,
+        login_href = login_href,
     );
 
     let body_after = format!(
@@ -662,7 +624,7 @@ pub async fn forgot_password_page(Query(query): Query<AuthNextQuery>) -> Html<St
 
     function setStatus(message, isError) {{
         authStatus.textContent = message;
-        authStatus.style.color = isError ? "#ef6b72" : "var(--muted)";
+        authStatus.classList.toggle("is-error", isError);
     }}
 
     function resetError(error) {{
@@ -766,12 +728,14 @@ pub async fn forgot_password_page(Query(query): Query<AuthNextQuery>) -> Html<St
         redirect_target_json = serde_json::to_string(&redirect_target).unwrap_or_else(|_| "\"/app\"".to_string()),
     );
 
-    Html(crate::web::templates::page_document(
-        "Сброс пароля · ResursMap",
-        "",
-        "",
-        &main_html,
-        "",
-        &body_after,
+    Html(crate::web::templates::render_auth_page(
+        crate::web::templates::AuthPageParams {
+            document_title: "Сброс пароля · ResursMap",
+            heading: "Сброс пароля",
+            subtitle: "Отправим код на email. Подойдёт и для старых аккаунтов без пароля — вы сможете задать новый.",
+            body_html,
+            footer_html: &footer_html,
+            script_html: &body_after,
+        },
     ))
 }

@@ -898,8 +898,6 @@ pub fn render_chat(
 </section>
 
 <form id="chat-form"
-      method="post"
-      action="/app/chat/{other_user_id}/send"
       class="ui-form chat-composer">
     <div class="chat-composer-main">
         <textarea

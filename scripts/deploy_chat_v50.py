@@ -10,7 +10,7 @@ import sys
 
 ROOT = pathlib.Path("/root/resursmap")
 REPO = pathlib.Path(__file__).resolve().parent.parent
-CACHE_VERSION = "4.9.8"
+CACHE_VERSION = "4.9.9"
 
 FILES = [
     "src/state/app_state.rs",
