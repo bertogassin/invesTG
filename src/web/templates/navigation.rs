@@ -359,7 +359,7 @@ pub fn render_continents(
         {categories_html}
     </div>
 
-    <div style="margin-top:14px;font-size:11px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);">
+    <div class="rm-home-professions-kicker">
         Люди по профессиям
     </div>
 
@@ -408,20 +408,14 @@ pub fn render_continents(
     let main_html = format!(
         r####"
 <section id="resursmap-install-panel"
-         class="card"
-         style="
-            display:block;
-            padding:17px;
-            margin-bottom:16px;
-         ">
+         class="card rm-pwa-panel">
 
     <div class="card-title">
         Установить приложение
     </div>
 
     <div id="resursmap-install-hint"
-         class="card-meta"
-         style="margin-top:5px;line-height:1.45;">
+         class="card-meta rm-pwa-hint">
         Приложение ResursMap
     </div>
 
@@ -459,19 +453,19 @@ pub fn render_continents(
 {section_head_features}
 
 <div class="feature-grid">
-    <a href="{my_resources_href}" class="feature" style="text-decoration:none;color:inherit;">
+    <a href="{my_resources_href}" class="feature">
         {map_icon}
         <strong>Мои ресурсы</strong>
         <span>Публикации и управление.</span>
     </a>
 
-    <a href="{favorites_href}" class="feature" style="text-decoration:none;color:inherit;">
+    <a href="{favorites_href}" class="feature">
         {heart_icon}
         <strong>Избранное</strong>
         <span>Сохранённые ресурсы.</span>
     </a>
 
-    <a href="{messages_href}" class="feature" style="text-decoration:none;color:inherit;">
+    <a href="{messages_href}" class="feature">
         {message_icon}
         <strong>Сообщения</strong>
         <span>Личные диалоги.</span>
@@ -489,38 +483,19 @@ pub fn render_continents(
                 Начать
             </div>
 
-            <div class="card"
-                 style="
-                    display:block;
-                    padding:18px;
-                 ">
+            <div class="card rm-home-start-card">
 
-                <div class="card-title"
-                     style="font-size:18px;line-height:1.3;">
+                <div class="card-title rm-home-start-title">
                     Всё нужное — в одном месте
                 </div>
 
-                <div class="card-meta"
-                     style="
-                        margin-top:8px;
-                        line-height:1.5;
-                     ">
+                <div class="card-meta rm-home-start-copy">
                     Найдите человека, специалиста, услугу,
                     бизнес или другой ресурс через поиск и карту.
                 </div>
 
                 <a href="/app/search"
-                   class="ui-button"
-                   style="
-                      display:flex;
-                      align-items:center;
-                      justify-content:center;
-                      min-height:46px;
-                      margin-top:15px;
-                      border-radius:14px;
-                      text-decoration:none;
-                      font-weight:850;
-                   ">
+                   class="ui-button rm-home-search-btn">
                     Открыть поиск
                 </a>
 
@@ -539,30 +514,30 @@ pub fn render_continents(
 
             <div class="card rm-flow-item">
                 <div class="rm-flow-number">01</div>
-                <div class="card-title" style="margin-top:7px;">
+                <div class="card-title rm-flow-title">
                     Найдите
                 </div>
-                <div class="card-meta" style="margin-top:5px;">
+                <div class="card-meta rm-flow-copy">
                     Используйте карту или поиск.
                 </div>
             </div>
 
             <div class="card rm-flow-item">
                 <div class="rm-flow-number">02</div>
-                <div class="card-title" style="margin-top:7px;">
+                <div class="card-title rm-flow-title">
                     Изучите
                 </div>
-                <div class="card-meta" style="margin-top:5px;">
+                <div class="card-meta rm-flow-copy">
                     Посмотрите профиль и детали ресурса.
                 </div>
             </div>
 
             <div class="card rm-flow-item">
                 <div class="rm-flow-number">03</div>
-                <div class="card-title" style="margin-top:7px;">
+                <div class="card-title rm-flow-title">
                     Свяжитесь
                 </div>
-                <div class="card-meta" style="margin-top:5px;">
+                <div class="card-meta rm-flow-copy">
                     Откройте профиль и начните диалог.
                 </div>
             </div>
@@ -878,10 +853,7 @@ pub fn render_search(
                         && display_name != format!("@{}", safe_username)
                     {
                         format!(
-                            r#"<div class="card-meta"
-                                     style="margin-top:4px;">
-                                    @{username}
-                                </div>"#,
+                            r#"<div class="card-meta rm-search-person-username">@{username}</div>"#,
                             username = safe_username
                         )
                     } else {
@@ -900,20 +872,7 @@ pub fn render_search(
 
                     let intent_html = if intent_is_active {
                         format!(
-                            r#"
-<div style="
-    margin-top:10px;
-    padding:10px 12px;
-    border-radius:12px;
-    border:1px solid rgba(214,183,122,.20);
-    background:rgba(214,183,122,.07);
-    font-size:13px;
-    line-height:1.45;
-    overflow-wrap:anywhere;
-">
-    {intent}
-</div>
-"#,
+                            r#"<div class="rm-search-intent-box">{intent}</div>"#,
                             intent = safe_intent
                         )
                     } else {
@@ -921,23 +880,11 @@ pub fn render_search(
                     };
 
                     let contact_html = if is_online {
-                        r#"<span style="
-                                font-size:10px;
-                                font-weight:850;
-                                color:#22c55e;
-                            ">🟢 Онлайн</span>"#
+                        r#"<span class="rm-presence-badge rm-presence-badge--online">🟢 Онлайн</span>"#
                     } else if *open_contact != 0 {
-                        r#"<span style="
-                                font-size:10px;
-                                font-weight:850;
-                                color:#16a34a;
-                            ">● Контакт открыт</span>"#
+                        r#"<span class="rm-presence-badge rm-presence-badge--open">● Контакт открыт</span>"#
                     } else {
-                        r#"<span style="
-                                font-size:10px;
-                                font-weight:750;
-                                color:var(--muted);
-                            ">Контакт закрыт</span>"#
+                        r#"<span class="rm-presence-badge rm-presence-badge--closed">Контакт закрыт</span>"#
                     };
 
                     people_result_card(
@@ -1129,54 +1076,22 @@ pub fn render_menu() -> String {
         r#"<section>
     {section_head_settings}
 
-    <div class="card" style="display:block;padding:20px;">
-        <div class="card-title" style="margin-bottom:12px;">Тема оформления</div>
+    <div class="card rm-settings-card">
+        <div class="card-title rm-settings-title">Тема оформления</div>
 
-        <button class="theme-toggle-btn"
-                type="button"
-                style="
-                    width:100%;
-                    min-height:48px;
-                    display:flex;
-                    align-items:center;
-                    justify-content:center;
-                    gap:8px;
-                    border:1px solid rgba(214,183,122,.28);
-                    border-radius:14px;
-                    background:rgba(214,183,122,.06);
-                    color:var(--gold-light);
-                    font-size:14px;
-                    font-weight:700;
-                    cursor:pointer;
-                ">
+        <button class="theme-toggle-btn rm-settings-theme-btn" type="button">
             ☀️ Светлая тема
         </button>
     </div>
 
-    <div class="card" style="display:block;padding:20px;margin-top:12px;">
-        <div class="card-title" style="margin-bottom:6px;">Язык</div>
+    <div class="card rm-settings-card rm-settings-card--spaced">
+        <div class="card-title rm-settings-title--sm">Язык</div>
         <div class="card-meta">Русский</div>
     </div>
 
-    <button class="ui-button sound-test-btn"
+    <button class="ui-button sound-test-btn rm-settings-sound-btn"
             type="button"
-            onclick="playNotificationSound()"
-            style="
-                width:100%;
-                min-height:48px;
-                display:flex;
-                align-items:center;
-                justify-content:center;
-                gap:8px;
-                margin-top:12px;
-                border:1px solid rgba(214,183,122,.28);
-                border-radius:14px;
-                background:rgba(214,183,122,.06);
-                color:var(--gold-light);
-                font-size:14px;
-                font-weight:700;
-                cursor:pointer;
-            ">
+            onclick="playNotificationSound()">
         🔊 Тест звука
     </button>
 </section>"#,

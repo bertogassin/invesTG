@@ -1,7 +1,8 @@
 use super::common::{
     back_hero, back_link, bottom_nav, empty_state_card, empty_state_action,
-    empty_state_card_with_actions, escape_html, guest_locked_section, icon, navigation_card,
-    page_document, page_shell, premium_badge_html, section_head, topbar, verified_badge_html,
+    empty_state_card_with_actions, escape_html, guest_locked_section, icon, my_resource_moderation_badge,
+    navigation_card, page_document, page_shell, premium_badge_html, resource_card_link_class,
+    resource_detail_section_class, section_head, topbar, verified_badge_html,
 };
 
 pub fn render_category(
@@ -53,52 +54,46 @@ pub fn render_category(
                     ""
                 };
 
-                let card_style = if *premium != 0 {
-                    "margin-bottom:16px;                    border:1px solid rgba(214,183,122,.55);                    background:linear-gradient(145deg,var(--card),var(--card-hover));                    box-shadow:0 10px 32px rgba(214,183,122,.14),0 0 0 1px rgba(214,183,122,.06);                    position:relative;                    overflow:hidden;"
+                let card_class = resource_card_link_class(*premium != 0);
+                let premium_shine = if *premium != 0 {
+                    r#"<div class="rm-resource-card-shine"></div>"#
                 } else {
-                    "margin-bottom:14px;"
+                    ""
                 };
 
                 format!(
                     r#"
-                    <a href="/app/resource/{}" class="card" style="{}text-decoration:none;color:inherit;">
-                        {}
-                        <div class="card-icon">{}</div>
+                    <a href="/app/resource/{id}" class="{card_class}">
+                        {premium_shine}
+                        <div class="card-icon">{map_icon}</div>
 
                         <div class="card-content">
 
-                            <div style="
-                                display:flex;
-                                align-items:center;
-                                gap:8px;
-                                flex-wrap:wrap;
-                                margin-bottom:6px;
-                            ">
+                            <div class="rm-resource-title-row">
                                 <div class="card-title">
-                                    {}
+                                    {title}
                                 </div>
-
-                                {}
+                                {premium_badge}
                             </div>
 
                             <div class="card-meta">
-                                {}
+                                {description}
                             </div>
 
                             <div class="card-meta">
-                                ⭐ {:.1} · {} голосов
+                                ⭐ {rating:.1} · {votes} голосов
                             </div>
 
                             <div class="card-meta">
-                                📍 {}
+                                📍 {address}
                             </div>
 
                             <div class="card-meta">
-                                📞 {}
+                                📞 {contact}
                             </div>
 
-                            <div style="margin-top:6px;">
-                                {}
+                            <div class="rm-resource-verified-row">
+                                {verified_badge}
                             </div>
 
                         </div>
@@ -106,22 +101,18 @@ pub fn render_category(
                         <div class="card-arrow">›</div>
                     </a>
                     "#,
-                    id,
-                    card_style,
-                    if *premium != 0 {
-                        r#"<div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--gold),transparent);"></div>"#
-                    } else {
-                        ""
-                    },
-                    icon("map-pin"),
-                    safe_title,
-                    premium_badge,
-                    safe_description,
-                    rating,
-                    votes,
-                    safe_address,
-                    safe_contact,
-                    verified_badge
+                    id = id,
+                    card_class = card_class,
+                    premium_shine = premium_shine,
+                    map_icon = icon("map-pin"),
+                    title = safe_title,
+                    premium_badge = premium_badge,
+                    description = safe_description,
+                    rating = rating,
+                    votes = votes,
+                    address = safe_address,
+                    contact = safe_contact,
+                    verified_badge = verified_badge,
                 )
             })
             .collect::<Vec<_>>()
@@ -225,19 +216,12 @@ pub fn render_resource_profile(params: RenderResourceProfileParams<'_>) -> Strin
     };
 
     let hero_description = format!(
-        r#"<span style="
-            display:flex;
-            align-items:center;
-            gap:9px;
-            flex-wrap:wrap;
-            margin-bottom:10px;
-        ">
+        r#"<span class="rm-resource-hero-badges">
             {premium_badge}
             {verified_badge}
         </span>
 
-        <span id="rating-summary"
-              style="display:block;">
+        <span id="rating-summary" class="rm-resource-rating-summary">
             ⭐ <strong>{rating:.1}</strong> · {votes} голосов
         </span>"#,
         premium_badge = premium_badge,
@@ -246,11 +230,7 @@ pub fn render_resource_profile(params: RenderResourceProfileParams<'_>) -> Strin
         votes = votes,
     );
 
-    let premium_style = if premium != 0 {
-        "border:1px solid rgba(214,183,122,.55);background:linear-gradient(145deg,var(--card),var(--card-hover));box-shadow:0 12px 38px rgba(214,183,122,.14);"
-    } else {
-        "border:1px solid rgba(0,0,0,.07);"
-    };
+    let detail_section_class = resource_detail_section_class(premium != 0);
 
     let contact_clean = contact.trim();
 
@@ -272,32 +252,15 @@ pub fn render_resource_profile(params: RenderResourceProfileParams<'_>) -> Strin
     } else {
         format!(
             r#"
-<section class="card"
-         style="
-             display:flex;
-             width:100%;
-             box-sizing:border-box;
-             margin-bottom:16px;
-             padding:18px;
-             text-decoration:none;
-         ">
+<section class="card rm-resource-owner-card">
 
-    <div class="card-icon"
-         style="flex:0 0 auto;">
+    <div class="card-icon rm-resource-owner-icon">
         {owner_icon}
     </div>
 
-    <div class="card-content"
-         style="min-width:0;">
+    <div class="card-content rm-resource-owner-content">
 
-        <div style="
-            font-size:11px;
-            text-transform:uppercase;
-            letter-spacing:.07em;
-            color:var(--muted);
-            font-weight:800;
-            margin-bottom:5px;
-        ">
+        <div class="rm-resource-owner-kicker">
             Владелец ресурса
         </div>
 
@@ -305,30 +268,13 @@ pub fn render_resource_profile(params: RenderResourceProfileParams<'_>) -> Strin
             Профиль участника
         </div>
 
-        <div class="card-meta"
-             style="margin-top:4px;">
+        <div class="card-meta rm-resource-owner-meta">
             Другие ресурсы и актуальный статус
         </div>
 
     </div>
 
-    <a href="/app/user/{public_id}"
-       style="
-           flex:0 0 auto;
-           align-self:center;
-           min-height:40px;
-           display:inline-flex;
-           align-items:center;
-           justify-content:center;
-           padding:0 13px;
-           border-radius:12px;
-           text-decoration:none;
-           color:var(--text);
-           font-size:12px;
-           font-weight:800;
-           border:1px solid rgba(214,183,122,.32);
-           background:rgba(214,183,122,.08);
-       ">
+    <a href="/app/user/{public_id}" class="rm-resource-owner-link">
         Открыть
     </a>
 
@@ -354,62 +300,23 @@ pub fn render_resource_profile(params: RenderResourceProfileParams<'_>) -> Strin
 <button
         id="favorite-button"
         type="button"
-        style="
-            margin-top:12px;
-            min-height:44px;
-            padding:0 15px;
-            border-radius:14px;
-            border:1px solid rgba(220,38,38,.25);
-            background:rgba(220,38,38,.06);
-            color:var(--text);
-            font-weight:800;
-            cursor:pointer;
-        " class="ui-button">
+        class="ui-button rm-resource-favorite-btn">
         ♡ В избранное
     </button>
 
-    <div
-        id="favorite-status"
-        style="
-            margin-top:7px;
-            font-size:12px;
-            color:var(--muted);
-        " class="ui-status">
+    <div id="favorite-status" class="ui-status rm-resource-favorite-status">
     </div>
 
     <button
         id="report-button"
         type="button"
-        style="
-            margin-top:10px;
-            min-height:42px;
-            padding:0 14px;
-            border-radius:14px;
-            border:1px solid rgba(217,119,6,.28);
-            background:rgba(217,119,6,.06);
-            color:var(--text);
-            font-weight:700;
-            cursor:pointer;
-        " class="ui-button">
+        class="ui-button rm-resource-report-btn">
         ⚑ Пожаловаться
     </button>
 
-    <div
-        id="report-panel"
-        style="
-            display:none;
-            margin-top:12px;
-            padding:14px;
-            border-radius:16px;
-            border:1px solid rgba(217,119,6,.18);
-            background:rgba(0,0,0,.03);
-        ">
+    <div id="report-panel" class="rm-resource-report-panel">
 
-        <div style="
-            font-size:13px;
-            font-weight:800;
-            margin-bottom:8px;
-        ">
+        <div class="rm-resource-report-label">
             Причина жалобы
         </div>
 
@@ -418,136 +325,55 @@ pub fn render_resource_profile(params: RenderResourceProfileParams<'_>) -> Strin
             maxlength="500"
             rows="4"
             placeholder="Коротко опишите проблему..."
-            style="
-                width:100%;
-                box-sizing:border-box;
-                padding:12px 13px;
-                border-radius:12px;
-                border:1px solid var(--line);
-                background:rgba(0,0,0,.04);
-                color:var(--text);
-                resize:vertical;
-                font-size:14px;
-            " class="ui-textarea"></textarea>
+            class="ui-textarea"></textarea>
 
-        <div style="
-            display:flex;
-            gap:8px;
-            margin-top:10px;
-            flex-wrap:wrap;
-        ">
+        <div class="rm-resource-report-actions">
 
             <button
                 id="report-submit"
                 type="button"
-                style="
-                    min-height:40px;
-                    padding:0 14px;
-                    border-radius:12px;
-                    border:1px solid rgba(220,38,38,.30);
-                    background:rgba(220,38,38,.08);
-                    color:var(--text);
-                    font-weight:800;
-                    cursor:pointer;
-                " class="ui-button">
+                class="ui-button rm-resource-report-submit">
                 Отправить жалобу
             </button>
 
             <button
                 id="report-cancel"
                 type="button"
-                style="
-                    min-height:40px;
-                    padding:0 14px;
-                    border-radius:12px;
-                    border:1px solid var(--line);
-                    background:rgba(0,0,0,.03);
-                    color:var(--text);
-                    font-weight:700;
-                    cursor:pointer;
-                " class="ui-button">
+                class="ui-button rm-resource-report-cancel">
                 Отмена
             </button>
 
         </div>
 
-        <div
-            id="report-status"
-            style="
-                margin-top:9px;
-                font-size:12px;
-                color:var(--muted);
-            " class="ui-status">
+        <div id="report-status" class="ui-status rm-resource-report-status">
         </div>
 
     </div>
 
-    <div style="margin-top:18px;">
-        <div style="
-            font-size:12px;
-            color:var(--muted);
-            margin-bottom:8px;
-            font-weight:700;
-            letter-spacing:.05em;
-        ">
+    <div class="rm-resource-rating-block">
+        <div class="rm-resource-rating-kicker">
             ОЦЕНИТЬ РЕСУРС
         </div>
 
-        <div id="rating-stars" style="
-            display:flex;
-            gap:8px;
-            align-items:center;
-        ">
-            <button type="button" data-score="1" style="font-size:28px;background:none;border:0;cursor:pointer;padding:2px;" class="ui-button">☆</button>
-            <button type="button" data-score="2" style="font-size:28px;background:none;border:0;cursor:pointer;padding:2px;" class="ui-button">☆</button>
-            <button type="button" data-score="3" style="font-size:28px;background:none;border:0;cursor:pointer;padding:2px;" class="ui-button">☆</button>
-            <button type="button" data-score="4" style="font-size:28px;background:none;border:0;cursor:pointer;padding:2px;" class="ui-button">☆</button>
-            <button type="button" data-score="5" style="font-size:28px;background:none;border:0;cursor:pointer;padding:2px;" class="ui-button">☆</button>
+        <div id="rating-stars" class="rm-resource-stars">
+            <button type="button" data-score="1" class="ui-button rm-resource-star-btn">☆</button>
+            <button type="button" data-score="2" class="ui-button rm-resource-star-btn">☆</button>
+            <button type="button" data-score="3" class="ui-button rm-resource-star-btn">☆</button>
+            <button type="button" data-score="4" class="ui-button rm-resource-star-btn">☆</button>
+            <button type="button" data-score="5" class="ui-button rm-resource-star-btn">☆</button>
         </div>
 
-        <div id="vote-status" style="
-            margin-top:7px;
-            font-size:12px;
-            color:var(--muted);
-        " class="ui-status"></div>
+        <div id="vote-status" class="ui-status rm-resource-vote-status"></div>
     </div>
 </section>
 
-<section
-    class="card"
-    style="
-        {premium_style}
-        display:block;
-        width:100%;
-        box-sizing:border-box;
-        margin-bottom:16px;
-        padding:20px;
-        position:relative;
-        overflow:hidden;
-    "
->
+<section class="{detail_section_class}">
 
-    <div style="
-        font-size:12px;
-        color:var(--muted);
-        margin-bottom:8px;
-        text-transform:uppercase;
-        letter-spacing:.08em;
-        font-weight:700;
-    ">
+    <div class="rm-resource-section-kicker">
         О ресурсе
     </div>
 
-    <div style="
-        width:100%;
-        min-width:0;
-        box-sizing:border-box;
-        font-size:16px;
-        line-height:1.6;
-        white-space:pre-wrap;
-        overflow-wrap:anywhere;
-        word-break:break-word;
-    ">
+    <div class="rm-resource-description">
         {description}
     </div>
 
@@ -555,96 +381,30 @@ pub fn render_resource_profile(params: RenderResourceProfileParams<'_>) -> Strin
 
 {owner_profile_html}
 
-<section
-    class="card"
-    style="
-        display:block;
-        width:100%;
-        box-sizing:border-box;
-        margin-bottom:16px;
-        padding:20px;
-    "
->
+<section class="card rm-resource-section">
 
-    <div style="
-        font-size:12px;
-        color:var(--muted);
-        margin-bottom:12px;
-        text-transform:uppercase;
-        letter-spacing:.08em;
-        font-weight:700;
-    ">
+    <div class="rm-resource-section-kicker rm-resource-section-kicker--contacts">
         Контакты
     </div>
 
-    <div class="card-meta"
-         style="
-             display:block;
-             width:100%;
-             margin-bottom:10px;
-             line-height:1.5;
-             overflow-wrap:anywhere;
-         ">
+    <div class="card-meta rm-resource-contact-line">
         📍 {address}
     </div>
 
-    <div class="card-meta"
-         style="
-             display:block;
-             width:100%;
-             line-height:1.5;
-             overflow-wrap:anywhere;
-         ">
+    <div class="card-meta rm-resource-contact-line rm-resource-contact-line--last">
         📞 {contact}
     </div>
 
-    <div style="
-        display:grid;
-        grid-template-columns:repeat(2,minmax(0,1fr));
-        width:100%;
-        gap:10px;
-        margin-top:18px;
-    ">
+    <div class="rm-resource-contact-actions">
 
-        <a href="{contact_href}"
-           style="
-               display:flex;
-               align-items:center;
-               justify-content:center;
-               gap:8px;
-               min-width:0;
-               min-height:48px;
-               padding:0 10px;
-               box-sizing:border-box;
-               border-radius:14px;
-               text-decoration:none;
-               font-weight:800;
-               color:var(--text);
-               border:1px solid rgba(214,183,122,.38);
-               background:rgba(214,183,122,.08);
-           ">
+        <a href="{contact_href}" class="rm-resource-contact-btn rm-resource-contact-btn--gold">
             📞 Связаться
         </a>
 
         <a href="{map_href}"
            target="_blank"
            rel="noopener noreferrer"
-           style="
-               display:flex;
-               align-items:center;
-               justify-content:center;
-               gap:8px;
-               min-width:0;
-               min-height:48px;
-               padding:0 10px;
-               box-sizing:border-box;
-               border-radius:14px;
-               text-decoration:none;
-               font-weight:800;
-               color:var(--text);
-               border:1px solid var(--line);
-               background:rgba(0,0,0,.035);
-           ">
+           class="rm-resource-contact-btn rm-resource-contact-btn--neutral">
             📍 На карте
         </a>
 
@@ -652,29 +412,13 @@ pub fn render_resource_profile(params: RenderResourceProfileParams<'_>) -> Strin
 
 </section>
 
-<section
-    class="card"
-    style="
-        display:block;
-        width:100%;
-        box-sizing:border-box;
-        margin-bottom:16px;
-        padding:20px;
-    "
->
+<section class="card rm-resource-section">
 
-    <div style="
-        font-size:12px;
-        color:var(--muted);
-        margin-bottom:12px;
-        text-transform:uppercase;
-        letter-spacing:.08em;
-        font-weight:700;
-    ">
+    <div class="rm-resource-section-kicker rm-resource-section-kicker--contacts">
         ID ресурса
     </div>
 
-    <div style="font-size:18px;font-weight:700;">
+    <div class="rm-resource-id-value">
         #{id}
     </div>
 
@@ -685,7 +429,7 @@ pub fn render_resource_profile(params: RenderResourceProfileParams<'_>) -> Strin
         contact = safe_contact,
         contact_href = safe_contact_href,
         map_href = safe_map_href,
-        premium_style = premium_style,
+        detail_section_class = detail_section_class,
         id = id,
     );
 
@@ -1004,19 +748,11 @@ pub fn render_resource_promotion(params: RenderResourcePromotionParams<'_>) -> S
 
     let action_html = if params.existing_status.is_some() {
         r#"
-<div class="card"
-     style="
-         display:block;
-         padding:18px;
-         margin-top:16px;
-         border:1px solid rgba(214,183,122,.32);
-         background:rgba(214,183,122,.07);
-     ">
+<div class="card rm-promo-pending">
     <div class="card-title">
         Заявка ожидает подтверждения
     </div>
-    <div class="card-meta"
-         style="margin-top:6px;">
+    <div class="card-meta rm-promo-pending-copy">
         Повторная заявка не требуется.
     </div>
 </div>
@@ -1027,29 +763,12 @@ pub fn render_resource_promotion(params: RenderResourcePromotionParams<'_>) -> S
             r#"
 <form method="post"
       action="/app/resource/{resource_id}/promote/request"
-      class="ui-form"
-      style="margin-top:16px;">
+      class="ui-form rm-promo-form">
     <input type="hidden"
            name="target_id"
            value="{target_id}">
 
-    <button type="submit"
-            class="ui-button"
-            style="
-                width:100%;
-                min-height:52px;
-                border-radius:15px;
-                border:1px solid rgba(214,183,122,.55);
-                background:
-                    linear-gradient(
-                        135deg,
-                        rgba(214,183,122,.20),
-                        rgba(214,183,122,.08)
-                    );
-                color:var(--text);
-                font-weight:900;
-                cursor:pointer;
-            ">
+    <button type="submit" class="ui-button rm-promo-submit">
         Отправить на модерацию
     </button>
 </form>
@@ -1061,122 +780,51 @@ pub fn render_resource_promotion(params: RenderResourcePromotionParams<'_>) -> S
 
     let content = format!(
         r#"
-<section class="card"
-         style="
-             display:block;
-             overflow:hidden;
-             padding:0;
-             border:1px solid rgba(214,183,122,.52);
-             background:
-                 radial-gradient(
-                     circle at 100% 0%,
-                     rgba(126,212,228,.15),
-                     transparent 34%
-                 ),
-                 linear-gradient(
-                     145deg,
-                     rgba(20,23,30,.99),
-                     rgba(10,12,17,.99)
-                 );
-             box-shadow:
-                 0 22px 60px rgba(0,0,0,.30),
-                 0 0 38px rgba(214,183,122,.08);
-         ">
+<section class="card rm-promo-preview">
 
-    <div style="
-        padding:15px 20px;
-        border-bottom:1px solid rgba(214,183,122,.24);
-        color:var(--gold-light);
-        font-size:12px;
-        font-weight:900;
-        letter-spacing:.12em;
-        text-transform:uppercase;
-    ">
+    <div class="rm-promo-preview-head">
         RESURSMAP · {city_name}
     </div>
 
-    <div style="padding:22px 20px;">
+    <div class="rm-promo-preview-body">
 
-        <div style="
-            color:var(--muted);
-            font-size:11px;
-            font-weight:800;
-            letter-spacing:.08em;
-            text-transform:uppercase;
-        ">
+        <div class="rm-promo-preview-category">
             {category}
         </div>
 
-        <h2 style="
-            margin:8px 0 12px;
-            font-size:24px;
-            line-height:1.18;
-            overflow-wrap:anywhere;
-        ">
+        <h2 class="rm-promo-preview-title">
             {title}
         </h2>
 
-        <div style="
-            color:var(--text);
-            font-size:14px;
-            line-height:1.55;
-            white-space:pre-wrap;
-            overflow-wrap:anywhere;
-        ">
+        <div class="rm-promo-preview-text">
             {description}
         </div>
 
-        <div style="
-            margin-top:16px;
-            color:var(--muted);
-            font-size:13px;
-            overflow-wrap:anywhere;
-        ">
+        <div class="rm-promo-preview-address">
             📍 {address}
         </div>
 
-        <div style="
-            margin-top:20px;
-            padding-top:15px;
-            border-top:1px solid rgba(214,183,122,.18);
-            color:var(--gold-light);
-            font-size:12px;
-            font-weight:850;
-        ">
+        <div class="rm-promo-preview-footer">
             ResursMap — люди, услуги и возможности рядом
         </div>
 
-        <div style="
-            margin-top:7px;
-            color:var(--muted);
-            font-size:11px;
-        ">
+        <div class="rm-promo-preview-domain">
             resursmap.de
         </div>
 
     </div>
 </section>
 
-<section class="card"
-         style="
-             display:block;
-             padding:18px;
-             margin-top:16px;
-         ">
+<section class="card rm-promo-target-card">
     <div class="card-title">
         Место публикации
     </div>
 
-    <div class="card-meta"
-         style="margin-top:7px;">
+    <div class="card-meta rm-promo-target-copy">
         {target_name} · {city_name}
     </div>
 
-    <div class="card-meta"
-         style="
-             margin-top:10px;
-             line-height:1.5;
-         ">
+    <div class="card-meta rm-promo-target-note">
         Перед публикацией заявка проверяется администратором.
         Контактные данные остаются на странице объявления.
     </div>
@@ -1255,38 +903,14 @@ pub fn render_my_resources(
                     ""
                 };
 
-                let moderation_badge = if *is_active == 0
-                    && moderation_status != "rejected"
-                {
-                    r#"<span style="font-size:11px;font-weight:800;color:#dc2626;">⚫ Скрыт</span>"#
-                } else {
-                    match moderation_status.as_str() {
-                        "approved" => {
-                            r#"<span style="font-size:11px;font-weight:800;color:#16a34a;">🟢 Одобрен</span>"#
-                        }
-                        "rejected" => {
-                            r#"<span style="font-size:11px;font-weight:800;color:#dc2626;">🔴 Отклонён</span>"#
-                        }
-                        _ => {
-                            r#"<span style="font-size:11px;font-weight:800;color:#d97706;">🟡 На проверке</span>"#
-                        }
-                    }
-                };
+                let moderation_badge =
+                    my_resource_moderation_badge(*is_active, moderation_status);
 
                 let hidden_html =
                     if *is_active == 0
                         && moderation_status != "rejected"
                     {
-                        r#"<div style="
-                            margin-top:10px;
-                            padding:10px 12px;
-                            border-radius:12px;
-                            border:1px solid rgba(220,38,38,.18);
-                            background:rgba(220,38,38,.05);
-                            color:#dc2626;
-                            font-size:12px;
-                            line-height:1.5;
-                        "><strong>Ресурс скрыт.</strong> Публикация недоступна другим участникам.</div>"#
+                        r#"<div class="rm-my-resource-note rm-my-resource-note--hidden"><strong>Ресурс скрыт.</strong> Публикация недоступна другим участникам.</div>"#
                             .to_string()
                     } else {
                         String::new()
@@ -1297,24 +921,7 @@ pub fn render_my_resources(
                         && *is_active == 1
                     {
                         format!(
-                            r#"<a
-                                href="/app/resource/{id}/promote"
-                                style="
-                                    display:inline-flex;
-                                    align-items:center;
-                                    justify-content:center;
-                                    min-height:42px;
-                                    padding:0 14px;
-                                    border-radius:12px;
-                                    text-decoration:none;
-                                    font-size:13px;
-                                    font-weight:850;
-                                    color:var(--gold-light);
-                                    border:1px solid rgba(214,183,122,.48);
-                                    background:rgba(214,183,122,.10);
-                                ">
-                                Продвинуть
-                            </a>"#,
+                            r#"<a href="/app/resource/{id}/promote" class="rm-my-resource-action rm-my-resource-action--gold">Продвинуть</a>"#,
                             id = id,
                         )
                     } else {
@@ -1326,16 +933,7 @@ pub fn render_my_resources(
                         && !rejection_reason.trim().is_empty()
                     {
                         format!(
-                            r#"<div style="
-                                margin-top:10px;
-                                padding:10px 12px;
-                                border-radius:12px;
-                                border:1px solid rgba(220,38,38,.22);
-                                background:rgba(220,38,38,.07);
-                                color:#dc2626;
-                                font-size:12px;
-                                line-height:1.5;
-                            "><strong>Причина отказа:</strong> {}</div>"#,
+                            r#"<div class="rm-my-resource-note rm-my-resource-note--rejected"><strong>Причина отказа:</strong> {}</div>"#,
                             safe_rejection_reason
                         )
                     } else {
@@ -1344,81 +942,37 @@ pub fn render_my_resources(
 
                 format!(
                     r#"
-                    <article class="card"
-                       style="
-                           display:block;
-                           margin-bottom:16px;
-                           padding:18px;
-                       ">
+                    <article class="card rm-my-resource-card">
 
-                        <div style="
-                            display:flex;
-                            align-items:flex-start;
-                            gap:14px;
-                        ">
+                        <div class="rm-my-resource-layout">
 
-                            <div class="card-icon"
-                                 style="flex:0 0 auto;">
+                            <div class="card-icon rm-my-resource-icon">
                                 {icon}
                             </div>
 
-                            <div style="
-                                flex:1;
-                                min-width:0;
-                            ">
+                            <div class="rm-my-resource-body">
 
-                                <div style="
-                                    display:flex;
-                                    justify-content:space-between;
-                                    gap:12px;
-                                    align-items:flex-start;
-                                ">
-                                    <div style="min-width:0;">
-                                        <div class="card-title"
-                                             style="
-                                                 font-size:18px;
-                                                 line-height:1.25;
-                                                 margin-bottom:4px;
-                                             ">
+                                <div class="rm-my-resource-head">
+                                    <div class="rm-my-resource-title-wrap">
+                                        <div class="card-title rm-my-resource-title">
                                             {title}
                                         </div>
 
-                                        <div class="card-meta"
-                                             style="
-                                                 font-size:12px;
-                                                 text-transform:uppercase;
-                                                 letter-spacing:.06em;
-                                             ">
+                                        <div class="card-meta rm-my-resource-category">
                                             {category}
                                         </div>
                                     </div>
 
-                                    <div style="
-                                        flex:0 0 auto;
-                                        font-size:12px;
-                                        color:var(--muted);
-                                        white-space:nowrap;
-                                    ">
+                                    <div class="rm-my-resource-rating">
                                         ⭐ {rating:.1} · {votes}
                                     </div>
                                 </div>
 
-                                <div class="card-meta"
-                                     style="
-                                         margin-top:10px;
-                                         line-height:1.5;
-                                         overflow-wrap:anywhere;
-                                     ">
+                                <div class="card-meta rm-my-resource-desc">
                                     {description}
                                 </div>
 
-                                <div style="
-                                    display:flex;
-                                    gap:8px;
-                                    flex-wrap:wrap;
-                                    align-items:center;
-                                    margin-top:12px;
-                                ">
+                                <div class="rm-my-resource-badges">
                                     {premium_badge}
                                     {moderation_badge}
                                 </div>
@@ -1426,52 +980,17 @@ pub fn render_my_resources(
                                 {rejection_html}
                                 {hidden_html}
 
-                                <div style="
-                                    display:flex;
-                                    gap:10px;
-                                    flex-wrap:wrap;
-                                    margin-top:14px;
-                                ">
+                                <div class="rm-my-resource-actions">
 
-                                    <a
-                                        href="/app/resource/{id}/edit"
-                                        style="
-                                            display:inline-flex;
-                                            align-items:center;
-                                            justify-content:center;
-                                            min-height:42px;
-                                            padding:0 14px;
-                                            border-radius:12px;
-                                            text-decoration:none;
-                                            font-size:13px;
-                                            font-weight:800;
-                                            color:var(--text);
-                                            border:1px solid rgba(214,183,122,.35);
-                                            background:rgba(214,183,122,.08);
-                                        "
-                                    >
+                                    <a href="/app/resource/{id}/edit"
+                                       class="rm-my-resource-action rm-my-resource-action--edit">
                                         ✎ Редактировать
                                     </a>
 
                                     {promotion_button}
 
-                                    <a
-                                        href="/app/resource/{id}"
-                                        style="
-                                            display:inline-flex;
-                                            align-items:center;
-                                            justify-content:center;
-                                            min-height:42px;
-                                            padding:0 14px;
-                                            border-radius:12px;
-                                            text-decoration:none;
-                                            font-size:13px;
-                                            font-weight:700;
-                                            color:var(--text);
-                                            border:1px solid var(--line);
-                                            background:rgba(0,0,0,.03);
-                                        "
-                                    >
+                                    <a href="/app/resource/{id}"
+                                       class="rm-my-resource-action rm-my-resource-action--neutral">
                                         Открыть
                                     </a>
 
