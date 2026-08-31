@@ -1997,7 +1997,7 @@ pub fn render_public_user_profile(params: RenderPublicUserProfileParams<'_>) -> 
                                 font-size:10px;
                                 font-weight:900;
                                 color:var(--gold-light);
-                            ">★ PREMIUM</span>"#
+                            ">★ Премиум</span>"#
                     } else {
                         ""
                     };
@@ -2374,7 +2374,7 @@ pub fn render_favorites(
                     premium,
                 )| {
                     let premium_badge = if *premium != 0 {
-                        r#"<span style="font-size:10px;font-weight:800;color:var(--gold-light);">★ PREMIUM</span>"#
+                        r#"<span style="font-size:10px;font-weight:800;color:var(--gold-light);">★ Премиум</span>"#
                     } else {
                         ""
                     };

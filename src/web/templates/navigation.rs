@@ -980,7 +980,17 @@ pub fn render_search(
             &format!("По запросу «{}» пока ничего не найдено.", escape_html(q),),
         )
     } else if resources.is_empty() {
-        String::new()
+        if people.is_empty() && location_results.is_empty() {
+            String::new()
+        } else {
+            empty_state_card(
+                "Ресурсы не найдены",
+                &format!(
+                    "По запросу «{}» ресурсы не найдены. Ниже — другие совпадения.",
+                    escape_html(q),
+                ),
+            )
+        }
     } else {
         resources
             .iter()
@@ -1022,7 +1032,7 @@ pub fn render_search(
                             color:var(--gold);
                             font-size:10px;
                             font-weight:800;
-                        ">★ PREMIUM</span>"#
+                        ">★ Премиум</span>"#
                     } else {
                         ""
                     };
@@ -1072,8 +1082,14 @@ pub fn render_search(
         )
     };
 
-    let result_header = if q.trim().is_empty() || resources.is_empty() {
+    let result_header = if q.trim().is_empty() {
         String::new()
+    } else if resources.is_empty() {
+        if people.is_empty() && location_results.is_empty() {
+            String::new()
+        } else {
+            section_head("Ресурсы", "Не найдено", Some(24))
+        }
     } else {
         section_head(
             "Результаты",

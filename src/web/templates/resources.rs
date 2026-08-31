@@ -64,7 +64,7 @@ pub fn render_category(
                         font-size:10px;
                         font-weight:800;
                         letter-spacing:.10em;
-                    ">★ PREMIUM</span>"#
+                    ">★ Премиум</span>"#
                 } else {
                     ""
                 };
@@ -241,7 +241,7 @@ pub fn render_resource_profile(params: RenderResourceProfileParams<'_>) -> Strin
             font-size:11px;
             font-weight:800;
             letter-spacing:.08em;
-        ">★ PREMIUM</span>"#
+        ">★ Премиум</span>"#
     } else {
         ""
     };
@@ -1284,7 +1284,7 @@ pub fn render_my_resources(
                 let safe_rejection_reason = escape_html(rejection_reason);
 
                 let premium_badge = if *premium != 0 {
-                    r#"<span style="font-size:11px;font-weight:800;color:var(--gold-light);">★ PREMIUM</span>"#
+                    r#"<span style="font-size:11px;font-weight:800;color:var(--gold-light);">★ Премиум</span>"#
                 } else {
                     ""
                 };

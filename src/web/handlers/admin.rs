@@ -470,7 +470,7 @@ pub async fn admin_reports(State(state): State<AppState>, headers: HeaderMap) ->
         <div class="brand-mark">{logo}</div>
         <div>
             <div class="brand-name">ResursMap</div>
-            <div class="brand-sub">REPORT CENTER</div>
+            <div class="brand-sub">ЦЕНТР ЖАЛОБ</div>
         </div>
     </a>
 </header>
@@ -958,7 +958,7 @@ pub async fn admin_resources(
             };
 
         let premium_badge = if premium == 1 {
-            r#"<span style="color:#b88932;font-weight:800;">★ PREMIUM</span>"#
+            r#"<span style="color:#b88932;font-weight:800;">★ Премиум</span>"#
         } else {
             ""
         };
@@ -970,9 +970,9 @@ pub async fn admin_resources(
         };
 
         let premium_label = if premium == 1 {
-            "Premium OFF"
+            "Снять премиум"
         } else {
-            "★ Premium ON"
+            "★ Включить премиум"
         };
 
         let active_label = if active == 1 {
@@ -1167,6 +1167,18 @@ pub async fn admin_resources(
         ));
     }
 
+    if cards.is_empty() {
+        cards = r#"
+<div class="card" style="display:block;">
+    <div class="card-content">
+        <div class="card-title">Ресурсы не найдены</div>
+        <div class="card-meta">По текущему фильтру и поиску ничего не найдено.</div>
+    </div>
+</div>
+"#
+        .to_string();
+    }
+
     let safe_q = templates::escape_html(q);
     let safe_filter = templates::escape_html(filter);
 
@@ -1176,7 +1188,7 @@ pub async fn admin_resources(
         <div class="brand-mark">{logo}</div>
         <div>
             <div class="brand-name">ResursMap</div>
-            <div class="brand-sub">MODERATION CENTER</div>
+            <div class="brand-sub">ЦЕНТР МОДЕРАЦИИ</div>
         </div>
     </a>
 </header>
@@ -1191,7 +1203,7 @@ pub async fn admin_resources(
     <h1>Модерация ресурсов</h1>
 
     <p>
-        Проверка, Premium и видимость ресурсов.
+        Проверка, премиум-статус и видимость ресурсов.
     </p>
 
 </section>
@@ -1281,7 +1293,7 @@ pub async fn admin_resources(
     <a href="/app/admin/resources{key_query}{key_join}filter=premium"
        style="padding:9px 12px;border-radius:999px;text-decoration:none;
               border:1px solid rgba(214,183,122,.45);color:inherit;font-weight:700;">
-        Premium
+        Премиум
     </a>
 
     <a href="/app/admin/resources{key_query}{key_join}filter=hidden"
@@ -1323,7 +1335,7 @@ pub async fn admin_resources(
     <div class="card">
         <div class="card-content">
             <div class="card-title">{premium_count}</div>
-            <div class="card-meta">Premium</div>
+            <div class="card-meta">Премиум</div>
         </div>
     </div>
 
@@ -1380,7 +1392,7 @@ pub async fn admin_resources(
                            border:1px solid rgba(214,183,122,.42);
                            background:rgba(214,183,122,.10);
                            color:inherit;font-weight:800;cursor:pointer;">
-                ★ Premium ON
+                ★ Включить премиум
             </button>
         </form>
 

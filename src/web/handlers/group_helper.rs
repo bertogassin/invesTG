@@ -108,7 +108,7 @@ fn render_page(
                         </div>
                         <p>{reason}</p>
                         <div class="meta">
-                            <span>User ID: {user_id}</span>
+                            <span>ID пользователя: {user_id}</span>
                             <span>Message ID: {message_id}</span>
                             <span>Mute: {mute_seconds}s</span>
                             <span>{status}</span>
@@ -143,7 +143,7 @@ fn render_page(
                 format!(
                     r#"<div class="risk-row">
                         <div>
-                            <strong>User ID {user_id}</strong>
+                            <strong>ID пользователя {user_id}</strong>
                             <small>Обновлено: {updated_at}</small>
                         </div>
                         <div class="risk-values">
@@ -527,7 +527,7 @@ h1 {{
 <main class="page">
     <div class="topbar">
         <a class="back" href="/app/me">← Личный кабинет</a>
-        <span class="protected">LEVEL 1 · GROUP ONLY</span>
+        <span class="protected">УРОВЕНЬ 1 · ТОЛЬКО ГРУППА</span>
     </div>
 
     <section class="hero">

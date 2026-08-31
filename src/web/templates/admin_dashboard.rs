@@ -593,14 +593,14 @@ pub(crate) fn render_admin_dashboard(data: AdminDashboardData<'_>) -> String {
     <div class="admin-section-title"
          id="system-state">
         <h2>Состояние управления</h2>
-        <span>Admin V2</span>
+        <span>Админ V2</span>
     </div>
 
     <section class="admin-command-grid">
         <article class="admin-command-card">
             <div class="admin-command-header">
                 <div class="admin-command-name">База данных</div>
-                <div class="admin-command-status">● ONLINE</div>
+                <div class="admin-command-status">● В СЕТИ</div>
             </div>
             <div class="admin-command-meta">
                 SQLite подключена. Миграция Admin V2 активна.
@@ -610,7 +610,7 @@ pub(crate) fn render_admin_dashboard(data: AdminDashboardData<'_>) -> String {
         <article class="admin-command-card">
             <div class="admin-command-header">
                 <div class="admin-command-name">Защита владельца</div>
-                <div class="admin-command-status">● ACTIVE</div>
+                <div class="admin-command-status">● АКТИВНА</div>
             </div>
             <div class="admin-command-meta">
                 Единственный владелец · {owner_name}
@@ -684,7 +684,7 @@ fn render_stats(data: &AdminDashboardData<'_>) -> String {
         (
             "★",
             data.premium_resources,
-            "Premium-ресурсы",
+            "Премиум-ресурсы",
             Some("/app/admin/resources?filter=premium"),
         ),
         (

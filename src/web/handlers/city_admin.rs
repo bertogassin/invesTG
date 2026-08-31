@@ -142,7 +142,7 @@ fn render_page(
                         </div>
                         <div class="right">
                             <span class="badge warning">{status}</span>
-                            <small>Ресурс #{resource_id} · Unix {created_at}</small>
+                            <small>Ресурс #{resource_id} · время {created_at}</small>
                         </div>
                     </div>"#,
                     id = id,
@@ -200,7 +200,7 @@ fn render_page(
                         </div>
                         <div class="right">
                             <span class="badge danger">{level}</span>
-                            <small>Риск {risk} · Unix {created_at}</small>
+                            <small>Риск {risk} · время {created_at}</small>
                         </div>
                     </div>"#,
                     user_id = user_id,

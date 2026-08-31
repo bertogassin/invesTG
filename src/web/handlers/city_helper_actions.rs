@@ -586,7 +586,7 @@ button.danger {{
     <h2>Назначить помощника</h2>
     <div class="fields">
         <label>
-            User ID
+            ID пользователя
             <input name="user_id"
                    type="number"
                    min="1"
