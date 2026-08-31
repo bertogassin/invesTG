@@ -1203,8 +1203,8 @@
             var file = imageInput.files && imageInput.files[0];
             imageInput.value = "";
             if (!file) return;
-            if (file.size > 2 * 1024 * 1024) {
-                setConnection("Фото больше 2 МБ", "is-error");
+            if (file.size > 8 * 1024 * 1024) {
+                setConnection("Фото больше 8 МБ", "is-error");
                 return;
             }
             var clientMessageId = createClientMessageId();

@@ -14,7 +14,7 @@ use serde_json::json;
 use std::fs;
 use std::path::{Path as FsPath, PathBuf};
 
-const MAX_IMAGE_BYTES: usize = 2 * 1024 * 1024;
+const MAX_IMAGE_BYTES: usize = 8 * 1024 * 1024;
 const MAX_VOICE_BYTES: usize = 512 * 1024;
 
 #[derive(Debug, Serialize)]
