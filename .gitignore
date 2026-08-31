@@ -31,3 +31,5 @@ scripts/chat_v50_bundle.tar.gz
 /target/
 /target-web/
 # Environment / secrets
+
+/data/chat-media/
