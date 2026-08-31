@@ -1215,6 +1215,7 @@ pub fn render_notifications(
                         "promotion_moderation" => ("⏳", "rm-notif-card--contact", "rm-notif-icon--contact"),
                         "promotion_publish_failed" => ("⚠", "rm-notif-card--rejected", "rm-notif-icon--rejected"),
                         "promotion_rejected" => ("×", "rm-notif-card--rejected", "rm-notif-icon--rejected"),
+                        "admin_assignment" => ("🛡", "rm-notif-card--contact", "rm-notif-icon--contact"),
                         "chat_message" => ("💬", "rm-notif-card--chat", "rm-notif-icon--chat"),
                         "contact_accepted" => ("✓", "rm-notif-card--contact", "rm-notif-icon--contact"),
                         "contact_rejected" => ("×", "rm-notif-card--rejected", "rm-notif-icon--rejected"),

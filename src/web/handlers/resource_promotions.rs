@@ -10,7 +10,7 @@ use crate::resource_screening::{listing_type_label, screen_listing_content};
 use crate::stripe_payments::{
     checkout_session_is_paid, checkout_session_payment_reference, checkout_session_request_id,
     checkout_session_user_id, create_promotion_checkout_session, fetch_checkout_session,
-    mock_promotion_payment_allowed, stripe_configured,
+    mock_promotion_payment_allowed, refund_promotion_payment, stripe_configured,
     verify_webhook_signature,
 };
 use crate::state::app_state::AppState;
@@ -946,8 +946,18 @@ pub async fn stripe_promotion_webhook(
     StatusCode::OK.into_response()
 }
 
+#[derive(Debug, Default, Deserialize)]
+pub struct AdminPromotionQuery {
+    error: Option<String>,
+    published: Option<String>,
+}
+
 #[allow(clippy::type_complexity)]
-pub async fn admin_promotion_queue(State(state): State<AppState>, headers: HeaderMap) -> Response {
+pub async fn admin_promotion_queue(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(query): Query<AdminPromotionQuery>,
+) -> Response {
     if !is_resource_moderation_session(&state, &headers) {
         return Redirect::temporary("/login?next=%2Fapp%2Fadmin%2Fpromotions").into_response();
     }
@@ -996,7 +1006,20 @@ pub async fn admin_promotion_queue(State(state): State<AppState>, headers: Heade
 
     drop(connection);
 
-    Html(templates::render_admin_promotion_queue(&rows)).into_response()
+    let notice = if query.published.as_deref() == Some("1") {
+        Some("Объявление опубликовано в группе.".to_string())
+    } else if let Some(error) = query
+        .error
+        .as_ref()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+    {
+        Some(format!("Ошибка: {error}"))
+    } else {
+        None
+    };
+
+    Html(templates::render_admin_promotion_queue(&rows, notice.as_deref())).into_response()
 }
 
 pub async fn admin_approve_promotion(
@@ -1032,9 +1055,14 @@ pub async fn admin_approve_promotion(
         return Redirect::temporary("/app/admin/promotions").into_response();
     }
 
-    let _ = try_publish_promotion(&state, request_id, 0).await;
-
-    Redirect::temporary("/app/admin/promotions").into_response()
+    match try_publish_promotion(&state, request_id, 0).await {
+        Ok(()) => Redirect::temporary("/app/admin/promotions?published=1").into_response(),
+        Err(error) => Redirect::temporary(&format!(
+            "/app/admin/promotions?error={}",
+            urlencoding::encode(&error)
+        ))
+        .into_response(),
+    }
 }
 
 pub async fn admin_reject_promotion(
@@ -1054,69 +1082,91 @@ pub async fn admin_reject_promotion(
         Err(_) => return (StatusCode::SERVICE_UNAVAILABLE, "DB error").into_response(),
     };
 
-    let row: Option<(i64, i64, String, String)> = connection
+    let row: Option<(i64, i64, String, String, String)> = connection
         .query_row(
-            "SELECT pr.requester_user_id, pr.resource_id, r.title, pr.payment_status
+            "SELECT pr.requester_user_id,
+                    pr.resource_id,
+                    r.title,
+                    pr.payment_status,
+                    COALESCE(pr.stripe_payment_reference, '')
              FROM resource_promotion_requests pr
              JOIN resources r ON r.id = pr.resource_id
              WHERE pr.id = ?1
                AND pr.status IN ('pending', 'failed')
              LIMIT 1",
             rusqlite::params![request_id],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                ))
+            },
         )
         .ok();
 
-    if let Some((_, _, _, payment_status)) = &row {
-        if payment_status == "paid" {
-            return (
-                StatusCode::FORBIDDEN,
-                "Нельзя отклонить оплаченную заявку без возврата средств",
-            )
-                .into_response();
+    let Some((user_id, resource_id, title, payment_status, payment_reference)) = row else {
+        return Redirect::temporary("/app/admin/promotions").into_response();
+    };
+
+    if payment_status == "paid" {
+        if let Err(error) = refund_promotion_payment(&payment_reference).await {
+            return Redirect::temporary(&format!(
+                "/app/admin/promotions?error={}",
+                urlencoding::encode(&error)
+            ))
+            .into_response();
         }
     }
 
     let _ = connection.execute(
         "UPDATE resource_promotion_requests
          SET status = 'rejected',
+             payment_status = CASE
+                 WHEN ?2 = 'paid' THEN 'refunded'
+                 ELSE payment_status
+             END,
              updated_at = strftime('%s','now')
          WHERE id = ?1
-           AND status IN ('pending', 'failed')
-           AND payment_status != 'paid'",
-        rusqlite::params![request_id],
+           AND status IN ('pending', 'failed')",
+        rusqlite::params![request_id, payment_status],
     );
 
-    if let Some((user_id, resource_id, title, _)) = row {
-        let _ = connection.execute(
-            "INSERT INTO user_notifications (
-                user_id,
-                resource_id,
-                kind,
-                title,
-                message,
-                is_read,
-                created_at
-             )
-             VALUES (
-                ?1,
-                ?2,
-                'promotion_rejected',
-                'Продвижение отклонено',
-                ?3,
-                0,
-                strftime('%s','now')
-             )",
-            rusqlite::params![
-                user_id,
-                resource_id,
-                format!(
-                    "Заявка на публикацию «{}» отклонена администратором.",
-                    title.trim()
-                ),
-            ],
-        );
-    }
+    let message = if payment_status == "paid" {
+        format!(
+            "Заявка на публикацию «{}» отклонена. Оплата будет возвращена.",
+            title.trim()
+        )
+    } else {
+        format!(
+            "Заявка на публикацию «{}» отклонена администратором.",
+            title.trim()
+        )
+    };
+
+    let _ = connection.execute(
+        "INSERT INTO user_notifications (
+            user_id,
+            resource_id,
+            kind,
+            title,
+            message,
+            is_read,
+            created_at
+         )
+         VALUES (
+            ?1,
+            ?2,
+            'promotion_rejected',
+            'Продвижение отклонено',
+            ?3,
+            0,
+            strftime('%s','now')
+         )",
+        rusqlite::params![user_id, resource_id, message],
+    );
 
     Redirect::temporary("/app/admin/promotions").into_response()
 }

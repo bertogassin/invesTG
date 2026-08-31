@@ -45,6 +45,43 @@ pub fn mock_promotion_payment_allowed() -> bool {
     }
 }
 
+pub fn promotion_payment_available() -> bool {
+    stripe_configured() || mock_promotion_payment_allowed()
+}
+
+pub async fn refund_promotion_payment(payment_reference: &str) -> Result<String, String> {
+    let reference = payment_reference.trim();
+    if reference.is_empty() || reference == "dev_mock_payment" {
+        return Ok("mock_refund".into());
+    }
+
+    let secret = stripe_secret_key().ok_or_else(|| "stripe_not_configured".to_string())?;
+
+    let response = reqwest::Client::new()
+        .post("https://api.stripe.com/v1/refunds")
+        .bearer_auth(secret)
+        .form(&[("payment_intent", reference)])
+        .send()
+        .await
+        .map_err(|error| error.to_string())?;
+
+    if !response.status().is_success() {
+        let body = response.text().await.unwrap_or_default();
+        return Err(format!("stripe_refund_failed:{body}"));
+    }
+
+    let payload: serde_json::Value = response
+        .json()
+        .await
+        .map_err(|error| error.to_string())?;
+
+    payload
+        .get("id")
+        .and_then(|value| value.as_str())
+        .map(str::to_string)
+        .ok_or_else(|| "stripe_refund_missing_id".to_string())
+}
+
 pub fn public_base_url() -> String {
     std::env::var("PUBLIC_BASE_URL")
         .ok()

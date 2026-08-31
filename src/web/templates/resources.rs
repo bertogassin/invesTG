@@ -1054,6 +1054,7 @@ pub fn render_promotion_payment(
 #[allow(clippy::type_complexity)]
 pub fn render_admin_promotion_queue(
     rows: &[(i64, i64, String, String, String, String, String, i64)],
+    notice: Option<&str>,
 ) -> String {
     fn listing_kind(raw: &str) -> &'static str {
         match raw.trim() {
@@ -1094,7 +1095,7 @@ pub fn render_admin_promotion_queue(
             <button type="submit" class="ui-button">Одобрить и опубликовать</button>
         </form>
         <form method="post" action="/app/admin/promotion/{request_id}/reject">
-            <button type="submit" class="ui-button rm-admin-reject-btn">Отклонить</button>
+            <button type="submit" class="ui-button rm-admin-reject-btn">Отклонить и вернуть оплату</button>
         </form>
     </div>
 </section>
@@ -1117,10 +1118,23 @@ pub fn render_admin_promotion_queue(
             .join("")
     };
 
+    let notice_html = notice
+        .filter(|value| !value.trim().is_empty())
+        .map(|value| {
+            format!(
+                r#"<div class="card rm-admin-promo-notice" role="status">{}</div>"#,
+                escape_html(value)
+            )
+        })
+        .unwrap_or_default();
+
     page_shell(
         "Продвижение · Админ",
         &topbar("Продвижение", "megaphone"),
-        r#"<section class="hero"><h1>Очередь продвижения</h1><p>Оплаченные заявки, требующие решения администратора.</p></section>"#,
+        &format!(
+            r#"<section class="hero"><h1>Очередь продвижения</h1><p>Оплаченные заявки, требующие решения администратора.</p></section>{notice_html}"#,
+            notice_html = notice_html,
+        ),
         &cards,
         "",
     )

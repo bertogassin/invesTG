@@ -3,7 +3,7 @@ use super::admin_access::{
 };
 use super::auth::verify_authenticated_user;
 use super::common::{
-    csrf_rejected_response, input_text_is_valid, request_is_cross_site, telegram_owner_user_id,
+    csrf_rejected_response, input_text_is_valid, request_is_cross_site, resource_owner_user_id,
 };
 use super::types::RejectResourceForm;
 use crate::state::app_state::AppState;
@@ -27,8 +27,7 @@ pub(crate) fn is_resource_moderation_session(state: &AppState, headers: &HeaderM
         return false;
     };
 
-    context.is_owner()
-        && context.has_permission(AdminPermission::ModerationReview)
+    context.has_permission(AdminPermission::ModerationReview)
         && verify_admin_v2_session(state, headers, context.user_id, context.assignment_id)
 }
 
@@ -1291,7 +1290,7 @@ pub async fn admin_approve_resource(
             .ok();
 
         if let Some((client_id, resource_title)) = owner {
-            if let Some(user_id) = telegram_owner_user_id(&client_id) {
+            if let Some(user_id) = resource_owner_user_id(&client_id) {
                 let _ = db.execute(
                     "INSERT INTO user_notifications (
                         user_id,
@@ -1399,7 +1398,7 @@ pub async fn admin_reject_resource(
             .ok();
 
         if let Some((client_id, resource_title)) = owner {
-            if let Some(user_id) = telegram_owner_user_id(&client_id) {
+            if let Some(user_id) = resource_owner_user_id(&client_id) {
                 let message = format!("Ресурс «{}» отклонён. Причина: {}", resource_title, reason);
 
                 let _ = db.execute(
@@ -1454,15 +1453,29 @@ pub async fn moderator_panel(State(state): State<AppState>, headers: HeaderMap) 
         }
     };
 
-    // Определим уровень модератора
-    let mod_level: i64 = state.db_pool.get()
+    if let Some(context) = load_admin_context(&state, user.user_id) {
+        if context.has_permission(AdminPermission::ModerationReview)
+            && verify_admin_v2_session(&state, &headers, context.user_id, context.assignment_id)
+        {
+            return Redirect::temporary("/app/admin/resources").into_response();
+        }
+    }
+
+    // Legacy moderator_roles table is optional; redirect Admin V2 moderators above.
+    let mod_level: i64 = state
+        .db_pool
+        .get()
         .ok()
         .and_then(|conn| {
             conn.query_row(
-                "SELECT COALESCE(MAX(level), 0) FROM moderator_roles WHERE user_id = ?1 AND is_active = 1",
+                "SELECT COALESCE(MAX(level), 0)
+                 FROM moderator_roles
+                 WHERE user_id = ?1
+                   AND is_active = 1",
                 rusqlite::params![user.user_id],
                 |row| row.get(0),
-            ).ok()
+            )
+            .ok()
         })
         .unwrap_or(0);
 
@@ -1582,19 +1595,27 @@ pub async fn moderate_resource(
         None => return (StatusCode::UNAUTHORIZED, Json(json!({"ok": false}))).into_response(),
     };
 
-    let mod_level: i64 = state.db_pool.get()
-        .ok()
-        .and_then(|conn| {
-            conn.query_row(
-                "SELECT COALESCE(MAX(level), 0) FROM moderator_roles WHERE user_id = ?1 AND is_active = 1",
-                rusqlite::params![user.user_id],
-                |row| row.get(0),
-            ).ok()
-        })
-        .unwrap_or(0);
+    if !is_resource_moderation_session(&state, &headers) {
+        let mod_level: i64 = state
+            .db_pool
+            .get()
+            .ok()
+            .and_then(|conn| {
+                conn.query_row(
+                    "SELECT COALESCE(MAX(level), 0)
+                     FROM moderator_roles
+                     WHERE user_id = ?1
+                       AND is_active = 1",
+                    rusqlite::params![user.user_id],
+                    |row| row.get(0),
+                )
+                .ok()
+            })
+            .unwrap_or(0);
 
-    if mod_level == 0 || mod_level == 4 {
-        return (StatusCode::FORBIDDEN, Json(json!({"ok": false}))).into_response();
+        if mod_level == 0 || mod_level == 4 {
+            return (StatusCode::FORBIDDEN, Json(json!({"ok": false}))).into_response();
+        }
     }
 
     let resource_id = payload.get("id").and_then(|v| v.as_i64()).unwrap_or(0);
@@ -1604,18 +1625,84 @@ pub async fn moderate_resource(
         return (StatusCode::BAD_REQUEST, Json(json!({"ok": false}))).into_response();
     }
 
-    let _ = state.db_pool.get().ok().map(|conn| {
+    let updated = state.db_pool.get().ok().and_then(|conn| {
         conn.execute(
-            "UPDATE resources SET moderation_status = ?1, updated_at = strftime('%s','now') WHERE id = ?2",
+            "UPDATE resources
+             SET moderation_status = ?1,
+                 updated_at = strftime('%s','now')
+             WHERE id = ?2",
             rusqlite::params![status, resource_id],
         )
+        .ok()
     });
 
-    let _ = state.db_pool.get().ok().map(|conn| {
+    if updated != Some(1) {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(json!({"ok": false, "error": "resource_not_found"})),
+        )
+            .into_response();
+    }
+
+    let owner_row: Option<(String, String)> = state.db_pool.get().ok().and_then(|conn| {
+        conn.query_row(
+            "SELECT client_id, title FROM resources WHERE id = ?1",
+            rusqlite::params![resource_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .ok()
+    });
+
+    if let Some((client_id, resource_title)) = owner_row {
+        if let Some(user_id) = resource_owner_user_id(&client_id) {
+            let (kind, title, message) = if status == "approved" {
+                (
+                    "resource_approved",
+                    "Ресурс одобрен",
+                    format!(
+                        "Ваш ресурс «{}» прошёл модерацию и опубликован.",
+                        resource_title
+                    ),
+                )
+            } else {
+                (
+                    "resource_rejected",
+                    "Ресурс отклонён",
+                    format!("Ваш ресурс «{}» отклонён модератором.", resource_title),
+                )
+            };
+
+            let _ = state.db_pool.get().ok().map(|conn| {
+                conn.execute(
+                    "INSERT INTO user_notifications (
+                        user_id,
+                        resource_id,
+                        kind,
+                        title,
+                        message,
+                        is_read,
+                        created_at
+                     )
+                     VALUES (?1, ?2, ?3, ?4, ?5, 0, strftime('%s','now'))",
+                    rusqlite::params![user_id, resource_id, kind, title, message],
+                )
+            });
+        }
+    }
+
+    let _ = state.db_pool.get().ok().and_then(|conn| {
         conn.execute(
-            "INSERT INTO moderation_actions (moderator_id, action_type, target_type, target_id, details) VALUES (?1, 'moderate_resource', 'resource', ?2, ?3)",
+            "INSERT INTO moderation_actions (
+                moderator_id,
+                action_type,
+                target_type,
+                target_id,
+                details
+             )
+             VALUES (?1, 'moderate_resource', 'resource', ?2, ?3)",
             rusqlite::params![user.user_id, resource_id, status],
         )
+        .ok()
     });
 
     Json(json!({"ok": true})).into_response()
