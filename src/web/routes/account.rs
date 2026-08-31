@@ -1,7 +1,8 @@
 use super::super::handlers::{
     api_attention_count, api_open_count, api_profile_get, api_profile_set, app_auth, app_auth_page,
     app_logout, app_me, app_revoke_other_sessions, app_revoke_session, email_auth_request,
-    email_auth_verify, favorites_page, notifications_page, public_user_profile, unread_count,
+    email_auth_verify, favorites_page, login_email, login_page, notifications_page,
+    public_user_profile, register_email, register_page, unread_count,
 };
 use crate::state::app_state::AppState;
 use axum::{
@@ -11,6 +12,10 @@ use axum::{
 
 pub(super) fn routes() -> Router<AppState> {
     Router::new()
+        .route("/login", get(login_page))
+        .route("/register", get(register_page))
+        .route("/auth/register-email", post(register_email))
+        .route("/auth/login-email", post(login_email))
         .route("/app/auth", get(app_auth_page).post(app_auth))
         .route("/app/logout", post(app_logout))
         .route(

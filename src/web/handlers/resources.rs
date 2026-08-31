@@ -263,7 +263,7 @@ pub async fn add_resource(
             "⚠ Авторизация",
             "Не удалось подтвердить пользователя",
             "Войдите в аккаунт и попробуйте добавить ресурс снова.",
-            &templates::navigation_card("/app/auth", "user", "Войти в аккаунт", ""),
+            &templates::navigation_card("/login", "user", "Войти в аккаунт", ""),
         ))
         .into_response();
     }
@@ -520,7 +520,7 @@ pub async fn edit_resource(
                 "⚠ Доступ",
                 "Не удалось подтвердить владельца",
                 "Войдите в аккаунт и попробуйте снова.",
-                &templates::navigation_card("/app/auth", "user", "Войти в аккаунт", ""),
+                &templates::navigation_card("/login", "user", "Войти в аккаунт", ""),
             ))
             .into_response();
         }

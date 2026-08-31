@@ -1990,10 +1990,16 @@ pub(crate) fn guest_mode_hint() -> &'static str {
 }
 
 pub(crate) fn guest_mode_panel(next_path: &str) -> String {
-    let auth_href = if next_path.is_empty() {
-        "/app/auth".to_string()
+    let login_href = if next_path.is_empty() {
+        "/login".to_string()
     } else {
-        format!("/app/auth?next={}", urlencoding::encode(next_path),)
+        format!("/login?next={}", urlencoding::encode(next_path),)
+    };
+
+    let register_href = if next_path.is_empty() {
+        "/register".to_string()
+    } else {
+        format!("/register?next={}", urlencoding::encode(next_path),)
     };
 
     format!(
@@ -2013,15 +2019,22 @@ pub(crate) fn guest_mode_panel(next_path: &str) -> String {
         {map_card}
         {search_card}
         {login_card}
+        {register_card}
     </div>
 </div>"#,
         map_card = navigation_card("/app", "globe", "Карта ресурсов", "Страны и города"),
         search_card = navigation_card("/app/search", "search", "Поиск", "Люди и ресурсы"),
         login_card = navigation_card(
-            &auth_href,
+            &login_href,
             "user",
-            "Войти в аккаунт",
-            "Telegram или email · необязательно",
+            "Войти",
+            "Email и пароль",
+        ),
+        register_card = navigation_card(
+            &register_href,
+            "edit",
+            "Регистрация",
+            "Создать аккаунт на сайте",
         ),
     )
 }

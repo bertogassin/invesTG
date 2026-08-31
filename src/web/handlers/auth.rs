@@ -5,7 +5,7 @@ use crate::state::app_state::AppState;
 use axum::{
     extract::State,
     http::{header, HeaderMap, HeaderValue, StatusCode},
-    response::{Html, IntoResponse, Response},
+    response::{IntoResponse, Response},
     Form, Json,
 };
 use hmac::{Hmac, Mac};
@@ -135,7 +135,7 @@ const EMAIL_CODE_MAX_ATTEMPTS: i64 = 5;
 // Email IDs live in a reserved positive range so they never collide
 // with existing/future Telegram numeric IDs while the compatibility
 // migration is active.
-const EMAIL_USER_ID_BASE: i64 = 4_000_000_000_000_000_000;
+pub(super) const EMAIL_USER_ID_BASE: i64 = 4_000_000_000_000_000_000;
 
 const USER_SESSION_TTL_SECONDS: i64 = 2_592_000;
 static USER_SESSION_SEQUENCE: AtomicU64 = AtomicU64::new(1);
@@ -151,7 +151,7 @@ pub struct EmailCodeVerifyRequest {
     pub code: String,
 }
 
-fn normalize_email(raw: &str) -> Option<String> {
+pub(super) fn normalize_email(raw: &str) -> Option<String> {
     let email = raw.trim().to_lowercase();
 
     if email.is_empty() || email.len() > 254 || email.chars().any(char::is_whitespace) {
@@ -177,7 +177,17 @@ fn normalize_email(raw: &str) -> Option<String> {
     Some(email)
 }
 
-fn email_rate_limit_id(state: &AppState, email: &str) -> i64 {
+pub(super) fn auth_redirect_target(raw: Option<&str>) -> String {
+    let next = raw.unwrap_or("").trim();
+
+    if next.starts_with("/app") && !next.starts_with("//") && !next.contains("://") {
+        return next.to_string();
+    }
+
+    "/app".to_string()
+}
+
+pub(super) fn email_rate_limit_id(state: &AppState, email: &str) -> i64 {
     type HmacSha256 = Hmac<Sha256>;
 
     let mut mac = HmacSha256::new_from_slice(state.admin_key.as_bytes()).expect("HMAC key");
@@ -209,7 +219,7 @@ fn cookie_security_flags() -> &'static str {
     }
 }
 
-fn append_user_session_cookie(response: &mut Response, session: &str) {
+pub(super) fn append_user_session_cookie(response: &mut Response, session: &str) {
     let cookie = format!(
         "resursmap_user={session}; Path=/; {}; Max-Age=2592000",
         cookie_security_flags()
@@ -220,7 +230,7 @@ fn append_user_session_cookie(response: &mut Response, session: &str) {
     }
 }
 
-fn ensure_profile_public_id(
+pub(super) fn ensure_profile_public_id(
     transaction: &rusqlite::Transaction<'_>,
     user_id: i64,
 ) -> Result<(), &'static str> {
@@ -260,10 +270,21 @@ fn provision_telegram_account(
                 id,
                 created_at,
                 updated_at,
-                is_active
+                is_active,
+                telegram_id
              )
-             VALUES (?1, ?2, ?2, 1)",
+             VALUES (?1, ?2, ?2, 1, ?1)",
             rusqlite::params![telegram_id, now],
+        )
+        .map_err(|_| "user_create_failed")?;
+
+    transaction
+        .execute(
+            "UPDATE users
+             SET telegram_id = ?2,
+                 updated_at = ?3
+             WHERE id = ?1",
+            rusqlite::params![telegram_id, telegram_id, now],
         )
         .map_err(|_| "user_create_failed")?;
 
@@ -711,9 +732,10 @@ pub async fn email_auth_verify(
                     id,
                     created_at,
                     updated_at,
-                    is_active
+                    is_active,
+                    telegram_id
                  )
-                 VALUES (?1, ?2, ?2, 1)",
+                 VALUES (?1, ?2, ?2, 1, NULL)",
                 rusqlite::params![next_id, unix_now()],
             )
             .is_err()
@@ -918,7 +940,7 @@ fn revoke_user_session(state: &AppState, headers: &HeaderMap) {
     );
 }
 
-fn create_user_session(
+pub(super) fn create_user_session(
     state: &AppState,
     user_id: i64,
     headers: &HeaderMap,
@@ -1156,686 +1178,6 @@ pub(super) fn is_admin_session(state: &AppState, headers: &HeaderMap) -> bool {
     verify_admin_session(state, headers)
 }
 
-pub async fn app_auth_page() -> Html<String> {
-    let main_html = r####"
-<div style="
-    width:min(100%,520px);
-    margin:0 auto;
-    padding:18px;
-">
-    <section class="card"
-             style="
-                 display:block;
-                 padding:26px 22px;
-                 border-color:rgba(214,183,122,.24);
-                 background:
-                     radial-gradient(
-                         circle at 85% 5%,
-                         rgba(214,183,122,.12),
-                         transparent 34%
-                     ),
-                     linear-gradient(
-                         145deg,
-                         rgba(255,255,255,.055),
-                         rgba(255,255,255,.018)
-                     );
-                 box-shadow:
-                     0 24px 70px rgba(0,0,0,.30),
-                     inset 0 1px 0 rgba(255,255,255,.065);
-             ">
-        <div style="
-            display:flex;
-            align-items:center;
-            gap:9px;
-            margin-bottom:14px;
-            color:var(--gold-light);
-            font-size:12px;
-            font-weight:800;
-            letter-spacing:.14em;
-        ">
-            <span aria-hidden="true"
-                  style="
-                      width:7px;
-                      height:7px;
-                      border-radius:50%;
-                      background:var(--gold);
-                      box-shadow:0 0 16px rgba(214,183,122,.65);
-                  ">
-            </span>
-            ResursMap
-        </div>
-
-        <h1 style="
-            margin:0 0 10px;
-            color:var(--text);
-            font-size:clamp(30px,8vw,42px);
-            line-height:1.04;
-            letter-spacing:-.035em;
-        ">
-            Вход в аккаунт
-        </h1>
-
-        <p style="
-            margin:0 0 24px;
-            color:var(--muted);
-            font-size:16px;
-            line-height:1.58;
-        ">
-            Карта и поиск работают без регистрации.
-            Вход нужен только для сообщений, избранного и публикаций.
-        </p>
-
-        <div id="telegram-section"
-             style="margin-bottom:22px;">
-            <button id="telegram-login-button"
-                    type="button"
-                    class="ui-button"
-                    style="
-                        width:100%;
-                        min-height:52px;
-                        padding:0 18px;
-                        border:1px solid rgba(88,166,255,.38);
-                        border-radius:14px;
-                        color:#f5fbff;
-                        background:
-                            linear-gradient(
-                                135deg,
-                                rgba(42,140,255,.92),
-                                rgba(26,102,210,.96)
-                            );
-                        box-shadow:
-                            0 14px 34px rgba(42,140,255,.18),
-                            inset 0 1px 0 rgba(255,255,255,.18);
-                        font-size:16px;
-                        font-weight:850;
-                        cursor:pointer;
-                    ">
-                Войти через Telegram
-            </button>
-
-            <p id="telegram-status"
-               class="ui-status"
-               role="status"
-               aria-live="polite"
-               style="
-                   min-height:22px;
-                   margin:12px 0 0;
-                   color:var(--muted);
-                   font-size:14px;
-                   line-height:1.5;
-               ">
-            </p>
-        </div>
-
-        <div style="
-            display:flex;
-            align-items:center;
-            gap:12px;
-            margin:0 0 22px;
-            color:rgba(255,255,255,.34);
-            font-size:12px;
-            font-weight:700;
-            letter-spacing:.12em;
-            text-transform:uppercase;
-        ">
-            <span style="
-                flex:1;
-                height:1px;
-                background:rgba(255,255,255,.08);
-            "></span>
-            или email
-            <span style="
-                flex:1;
-                height:1px;
-                background:rgba(255,255,255,.08);
-            "></span>
-        </div>
-
-        <label for="email-input"
-               style="
-                   display:block;
-                   margin-bottom:8px;
-                   color:var(--text);
-                   font-size:14px;
-                   font-weight:750;
-               ">
-            Email
-        </label>
-
-        <input id="email-input"
-               class="ui-input"
-               name="email"
-               type="email"
-               autocomplete="email"
-               inputmode="email"
-               maxlength="254"
-               placeholder="name@example.com"
-               style="
-                   width:100%;
-                   min-height:52px;
-                   padding:0 15px;
-                   border:1px solid rgba(255,255,255,.13);
-                   border-radius:14px;
-                   color:var(--text);
-                   background:rgba(6,8,11,.72);
-                   box-shadow:
-                       inset 0 1px 0 rgba(255,255,255,.025),
-                       0 8px 24px rgba(0,0,0,.16);
-                   font-size:16px;
-                   caret-color:var(--gold-light);
-               ">
-
-        <button id="email-request-button"
-                type="button"
-                class="ui-button"
-                style="
-                    width:100%;
-                    min-height:52px;
-                    margin-top:12px;
-                    padding:0 18px;
-                    border:1px solid rgba(240,214,156,.42);
-                    border-radius:14px;
-                    color:#17130c;
-                    background:
-                        linear-gradient(
-                            135deg,
-                            var(--gold-light),
-                            var(--gold)
-                        );
-                    box-shadow:
-                        0 14px 34px rgba(214,183,122,.18),
-                        inset 0 1px 0 rgba(255,255,255,.32);
-                    font-size:16px;
-                    font-weight:850;
-                    cursor:pointer;
-                ">
-            Получить код
-        </button>
-
-        <div id="code-section"
-             hidden
-             style="
-                 margin-top:22px;
-                 padding-top:21px;
-                 border-top:1px solid rgba(255,255,255,.08);
-             ">
-            <label for="code-input"
-                   style="
-                       display:block;
-                       margin-bottom:8px;
-                       color:var(--text);
-                       font-size:14px;
-                       font-weight:750;
-                   ">
-                Код из письма
-            </label>
-
-            <input id="code-input"
-                   class="ui-input"
-                   name="code"
-                   type="text"
-                   inputmode="numeric"
-                   autocomplete="one-time-code"
-                   pattern="[0-9]{6}"
-                   minlength="6"
-                   maxlength="6"
-                   placeholder="000000"
-                   style="
-                       width:100%;
-                       min-height:56px;
-                       padding:0 15px;
-                       border:1px solid rgba(255,255,255,.13);
-                       border-radius:14px;
-                       color:var(--text);
-                       background:rgba(6,8,11,.72);
-                       box-shadow:
-                           inset 0 1px 0 rgba(255,255,255,.025),
-                           0 8px 24px rgba(0,0,0,.16);
-                       font-size:22px;
-                       font-weight:750;
-                       letter-spacing:.24em;
-                       text-align:center;
-                       caret-color:var(--gold-light);
-                   ">
-
-            <button id="email-verify-button"
-                    type="button"
-                    class="ui-button"
-                    style="
-                        width:100%;
-                        min-height:52px;
-                        margin-top:12px;
-                        padding:0 18px;
-                        border:1px solid rgba(240,214,156,.42);
-                        border-radius:14px;
-                        color:#17130c;
-                        background:
-                            linear-gradient(
-                                135deg,
-                                var(--gold-light),
-                                var(--gold)
-                            );
-                        box-shadow:
-                            0 14px 34px rgba(214,183,122,.18),
-                            inset 0 1px 0 rgba(255,255,255,.32);
-                        font-size:16px;
-                        font-weight:850;
-                        cursor:pointer;
-                    ">
-                Подтвердить и войти
-            </button>
-        </div>
-
-        <p id="email-status"
-           class="ui-status"
-           role="status"
-           aria-live="polite"
-           style="
-               min-height:22px;
-               margin:15px 0 0;
-               color:var(--muted);
-               font-size:14px;
-               line-height:1.5;
-           ">
-        </p>
-
-        <p style="
-            margin:18px 0 0;
-            color:rgba(255,255,255,.40);
-            font-size:12px;
-            line-height:1.5;
-            text-align:center;
-        ">
-            Код действует 10 минут
-        </p>
-    </section>
-
-    <div style="
-        margin-top:18px;
-        text-align:center;
-    ">
-        <a href="/app"
-           style="
-               display:inline-block;
-               padding:10px 14px;
-               color:var(--muted);
-               text-decoration:none;
-               font-size:14px;
-           ">
-            ← Вернуться на карту
-        </a>
-    </div>
-</div>
-"####;
-
-    let body_after = r####"
-<script>
-(function () {
-    function authRedirectTarget() {
-        const params = new URLSearchParams(window.location.search);
-        const next = (params.get("next") || "").trim();
-
-        if (
-            next.startsWith("/app")
-            && !next.startsWith("//")
-            && !next.includes("://")
-        ) {
-            return next;
-        }
-
-        try {
-            const referrer = new URL(document.referrer);
-
-            if (
-                referrer.origin === window.location.origin
-                && referrer.pathname.startsWith("/app")
-                && referrer.pathname !== "/app/auth"
-            ) {
-                return referrer.pathname + referrer.search;
-            }
-        } catch (_) {}
-
-        return "/app";
-    }
-
-    const redirectTarget = authRedirectTarget();
-
-    const emailInput =
-        document.getElementById("email-input");
-
-    const codeInput =
-        document.getElementById("code-input");
-
-    const codeSection =
-        document.getElementById("code-section");
-
-    const requestButton =
-        document.getElementById("email-request-button");
-
-    const verifyButton =
-        document.getElementById("email-verify-button");
-
-    const emailStatus =
-        document.getElementById("email-status");
-
-    const telegramButton =
-        document.getElementById("telegram-login-button");
-
-    const telegramStatus =
-        document.getElementById("telegram-status");
-
-    const telegramSection =
-        document.getElementById("telegram-section");
-
-    function setEmailStatus(message, isError) {
-        emailStatus.textContent = message;
-        emailStatus.style.color =
-            isError ? "#ef6b72" : "var(--muted)";
-    }
-
-    function setTelegramStatus(message, isError) {
-        telegramStatus.textContent = message;
-        telegramStatus.style.color =
-            isError ? "#ef6b72" : "var(--muted)";
-    }
-
-    function emailErrorMessage(error) {
-        const messages = {
-            invalid_email: "Проверьте правильность email.",
-            rate_limited: "Слишком много попыток. Попробуйте позже.",
-            mail_unavailable: "Отправка писем временно недоступна.",
-            database_unavailable: "Сервис временно недоступен.",
-            code_store_failed: "Не удалось сохранить код.",
-            invalid_code: "Введите шестизначный код.",
-            code_not_found: "Сначала запросите новый код.",
-            code_used: "Этот код уже использован.",
-            code_already_used: "Этот код уже использован.",
-            code_expired: "Срок действия кода истёк.",
-            wrong_code: "Код введён неверно.",
-            too_many_attempts: "Слишком много неверных попыток.",
-            user_create_failed: "Не удалось создать аккаунт.",
-            identity_create_failed: "Не удалось создать способ входа.",
-            profile_create_failed: "Не удалось создать профиль.",
-            profile_update_failed: "Не удалось обновить профиль.",
-            transaction_failed: "Не удалось начать операцию.",
-            commit_failed: "Не удалось завершить вход.",
-            invalid_telegram_data: "Не удалось проверить Telegram."
-        };
-
-        return messages[error] || "Не удалось выполнить запрос.";
-    }
-
-    function telegramErrorMessage(error) {
-        const messages = {
-            invalid_telegram_data: "Не удалось проверить Telegram.",
-            rate_limited: "Слишком много попыток. Подождите немного.",
-            database_unavailable: "Сервис временно недоступен.",
-            user_create_failed: "Не удалось создать аккаунт.",
-            identity_create_failed: "Не удалось создать способ входа.",
-            profile_create_failed: "Не удалось создать профиль.",
-            profile_update_failed: "Не удалось обновить профиль.",
-            transaction_failed: "Не удалось начать операцию.",
-            commit_failed: "Не удалось завершить вход."
-        };
-
-        return messages[error] || emailErrorMessage(error);
-    }
-
-    async function readJson(response) {
-        try {
-            return await response.json();
-        } catch (_) {
-            return {
-                ok: false,
-                error: "invalid_response"
-            };
-        }
-    }
-
-    function getTelegramWebApp() {
-        return window.Telegram && window.Telegram.WebApp
-            ? window.Telegram.WebApp
-            : null;
-    }
-
-    async function loginWithTelegram(options) {
-        const auto = options && options.auto;
-
-        const tg = getTelegramWebApp();
-
-        if (!tg || !tg.initData) {
-            if (!auto) {
-                setTelegramStatus(
-                    "Откройте ResursMap через Telegram Mini App или используйте email.",
-                    true
-                );
-            }
-            return false;
-        }
-
-        tg.ready();
-
-        if (telegramButton) {
-            telegramButton.disabled = true;
-        }
-
-        setTelegramStatus(
-            auto ? "Проверяем Telegram…" : "Входим…",
-            false
-        );
-
-        try {
-            const response = await fetch("/app/auth", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    init_data: tg.initData
-                })
-            });
-
-            const data = await readJson(response);
-
-            if (!response.ok || !data.ok) {
-                setTelegramStatus(
-                    telegramErrorMessage(data.error),
-                    true
-                );
-                return false;
-            }
-
-            setTelegramStatus("✓ Вход выполнен", false);
-            window.location.replace(redirectTarget);
-            return true;
-        } catch (_) {
-            setTelegramStatus(
-                "Ошибка соединения. Попробуйте ещё раз.",
-                true
-            );
-            return false;
-        } finally {
-            if (telegramButton) {
-                telegramButton.disabled = false;
-            }
-        }
-    }
-
-    async function requestEmailCode() {
-        const email = emailInput.value.trim();
-
-        if (!email) {
-            setEmailStatus("Введите email.", true);
-            emailInput.focus();
-            return;
-        }
-
-        requestButton.disabled = true;
-        setEmailStatus("Отправляем код…", false);
-
-        try {
-            const response = await fetch(
-                "/app/auth/email/request",
-                {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify({ email })
-                }
-            );
-
-            const data = await readJson(response);
-
-            if (!response.ok || !data.ok) {
-                setEmailStatus(
-                    emailErrorMessage(data.error),
-                    true
-                );
-                return;
-            }
-
-            codeSection.hidden = false;
-            setEmailStatus(
-                "Код отправлен. Проверьте входящие и папку «Спам».",
-                false
-            );
-            codeInput.focus();
-        } catch (_) {
-            setEmailStatus(
-                "Ошибка соединения. Попробуйте ещё раз.",
-                true
-            );
-        } finally {
-            requestButton.disabled = false;
-        }
-    }
-
-    async function verifyEmailCode() {
-        const email = emailInput.value.trim();
-        const code = codeInput.value.trim();
-
-        if (!email) {
-            setEmailStatus("Введите email.", true);
-            emailInput.focus();
-            return;
-        }
-
-        if (!/^[0-9]{6}$/.test(code)) {
-            setEmailStatus(
-                "Введите шестизначный код.",
-                true
-            );
-            codeInput.focus();
-            return;
-        }
-
-        verifyButton.disabled = true;
-        setEmailStatus("Проверяем код…", false);
-
-        try {
-            const response = await fetch(
-                "/app/auth/email/verify",
-                {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify({ email, code })
-                }
-            );
-
-            const data = await readJson(response);
-
-            if (!response.ok || !data.ok) {
-                setEmailStatus(
-                    emailErrorMessage(data.error),
-                    true
-                );
-                return;
-            }
-
-            setEmailStatus("✓ Вход выполнен", false);
-            window.location.replace(redirectTarget);
-        } catch (_) {
-            setEmailStatus(
-                "Ошибка соединения. Попробуйте ещё раз.",
-                true
-            );
-        } finally {
-            verifyButton.disabled = false;
-        }
-    }
-
-    requestButton.addEventListener(
-        "click",
-        requestEmailCode
-    );
-
-    verifyButton.addEventListener(
-        "click",
-        verifyEmailCode
-    );
-
-    codeInput.addEventListener("input", function () {
-        codeInput.value =
-            codeInput.value.replace(/[^0-9]/g, "").slice(0, 6);
-    });
-
-    codeInput.addEventListener("keydown", function (event) {
-        if (event.key === "Enter") {
-            verifyEmailCode();
-        }
-    });
-
-    emailInput.addEventListener("keydown", function (event) {
-        if (event.key === "Enter") {
-            requestEmailCode();
-        }
-    });
-
-    if (telegramButton) {
-        telegramButton.addEventListener(
-            "click",
-            function () {
-                loginWithTelegram({ auto: false });
-            }
-        );
-    }
-
-    (async function () {
-        const tg = getTelegramWebApp();
-
-        if (tg && tg.initData) {
-            await loginWithTelegram({ auto: true });
-            return;
-        }
-
-        if (telegramSection) {
-            setTelegramStatus(
-                "Telegram-вход доступен в Mini App. Ниже — вход по email.",
-                false
-            );
-        }
-
-        emailInput.focus();
-    })();
-})();
-</script>
-"####;
-
-    let head_extra = r####"<script src="https://telegram.org/js/telegram-web-app.js"></script>"####;
-
-    Html(crate::web::templates::page_document(
-        "Вход · ResursMap",
-        head_extra,
-        "",
-        main_html,
-        "",
-        body_after,
-    ))
-}
-
 #[derive(Deserialize)]
 pub struct RevokeSessionForm {
     pub session_public_id: String,
@@ -1854,7 +1196,7 @@ pub async fn app_revoke_other_sessions(
         None => {
             return (
                 StatusCode::SEE_OTHER,
-                [(header::LOCATION, "/app/auth?next=/app/me")],
+                [(header::LOCATION, "/login?next=/app/me")],
             )
                 .into_response();
         }
@@ -1895,7 +1237,7 @@ pub async fn app_revoke_session(
         None => {
             return (
                 StatusCode::SEE_OTHER,
-                [(header::LOCATION, "/app/auth?next=/app/me")],
+                [(header::LOCATION, "/login?next=/app/me")],
             )
                 .into_response();
         }

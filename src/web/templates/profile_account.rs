@@ -2187,7 +2187,7 @@ pub fn render_public_user_profile(params: RenderPublicUserProfileParams<'_>) -> 
 
                 if (response.status === 401) {{
                     window.location.href =
-                        "/app/auth?next="
+                        "/login?next="
                         + encodeURIComponent(
                             window.location.pathname
                                 + window.location.search

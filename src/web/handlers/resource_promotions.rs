@@ -168,7 +168,7 @@ pub async fn resource_promotion_page(
                 "Войдите в аккаунт",
                 "Продвижение доступно владельцу объявления.",
                 &templates::navigation_card(
-                    "/app/auth?next=/app/my-resources",
+                    "/login?next=/app/my-resources",
                     "user",
                     "Войти",
                     "Личный кабинет",

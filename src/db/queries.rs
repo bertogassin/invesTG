@@ -66,6 +66,49 @@ pub fn init_db() -> Result<Connection> {
         [],
     )?;
 
+    let user_columns: Vec<String> = {
+        let mut stmt = conn.prepare("PRAGMA table_info(users)")?;
+        let columns = stmt
+            .query_map([], |row| row.get::<_, String>(1))?
+            .collect::<Result<Vec<_>, _>>()?;
+        columns
+    };
+
+    if !user_columns.iter().any(|name| name == "telegram_id") {
+        conn.execute("ALTER TABLE users ADD COLUMN telegram_id INTEGER", [])?;
+    }
+
+    conn.execute(
+        "UPDATE users
+         SET telegram_id = id
+         WHERE telegram_id IS NULL
+           AND id IN (
+             SELECT user_id
+             FROM auth_identities
+             WHERE provider = 'telegram'
+           )",
+        [],
+    )?;
+
+    let identity_columns: Vec<String> = {
+        let mut stmt = conn.prepare("PRAGMA table_info(auth_identities)")?;
+        let columns = stmt
+            .query_map([], |row| row.get::<_, String>(1))?
+            .collect::<Result<Vec<_>, _>>()?;
+        columns
+    };
+
+    if !identity_columns
+        .iter()
+        .any(|name| name == "password_hash")
+    {
+        conn.execute(
+            "ALTER TABLE auth_identities
+             ADD COLUMN password_hash TEXT NOT NULL DEFAULT ''",
+            [],
+        )?;
+    }
+
     conn.execute(
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_auth_email_unique
          ON auth_identities(email)
