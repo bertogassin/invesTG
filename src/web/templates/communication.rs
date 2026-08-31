@@ -297,7 +297,7 @@ pub fn render_messages(
    class="card chat-dialog-card"
    data-other-user-id="{other_user_id}">
 
-    <div class="card-icon">
+    <div class="card-icon chat-dialog-avatar">
         {chat_icon}
     </div>
 
@@ -714,6 +714,7 @@ pub fn render_chat(
         let message_cards = if messages.is_empty() {
             r#"
 <div class="chat-empty-thread">
+    <div class="chat-empty-thread-icon" aria-hidden="true">💬</div>
     <strong>Диалог открыт</strong>
     <p>Напишите первое сообщение — Enter для отправки.</p>
 </div>
