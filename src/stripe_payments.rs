@@ -27,6 +27,24 @@ pub fn stripe_configured() -> bool {
     stripe_secret_key().is_some()
 }
 
+pub fn mock_promotion_payment_allowed() -> bool {
+    if stripe_configured() {
+        return false;
+    }
+
+    match std::env::var("ALLOW_MOCK_PROMOTION_PAYMENT")
+        .ok()
+        .map(|value| value.trim().to_ascii_lowercase())
+    {
+        Some(value) if matches!(value.as_str(), "1" | "true" | "yes") => true,
+        Some(value) if matches!(value.as_str(), "0" | "false" | "no") => false,
+        _ => {
+            let base = public_base_url().to_ascii_lowercase();
+            base.contains("localhost") || base.contains("127.0.0.1")
+        }
+    }
+}
+
 pub fn public_base_url() -> String {
     std::env::var("PUBLIC_BASE_URL")
         .ok()

@@ -955,6 +955,7 @@ pub fn render_promotion_payment(
     bot_note: &str,
     bot_reason: Option<&str>,
     stripe_enabled: bool,
+    mock_allowed: bool,
 ) -> String {
     let price = escape_html(price_label);
     let note = escape_html(bot_note);
@@ -984,7 +985,7 @@ pub fn render_promotion_payment(
             ),
             "Оплата проходит через Stripe Checkout. После успешной оплаты объявление будет опубликовано автоматически.",
         )
-    } else {
+    } else if mock_allowed {
         (
             format!(
                 r#"<form method="post"
@@ -999,6 +1000,13 @@ pub fn render_promotion_payment(
                 price = price,
             ),
             "Тестовый контур: кнопка фиксирует оплату без Stripe. Для продакшена задайте STRIPE_SECRET_KEY.",
+        )
+    } else {
+        (
+            r#"<div class="card-meta rm-promo-payment-unavailable">
+        Оплата временно недоступна. Платёжный сервис не настроен на этом сервере.
+    </div>"#.to_string(),
+            "Для production требуется STRIPE_SECRET_KEY или явный ALLOW_MOCK_PROMOTION_PAYMENT=1 на localhost.",
         )
     };
 

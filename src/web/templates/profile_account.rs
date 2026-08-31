@@ -1211,6 +1211,10 @@ pub fn render_notifications(
                     let (icon_text, card_class, icon_class) = match kind.as_str() {
                         "resource_approved" => ("✓", "rm-notif-card--approved", "rm-notif-icon--approved"),
                         "resource_rejected" => ("!", "rm-notif-card--rejected", "rm-notif-icon--rejected"),
+                        "promotion_published" => ("📢", "rm-notif-card--approved", "rm-notif-icon--approved"),
+                        "promotion_moderation" => ("⏳", "rm-notif-card--contact", "rm-notif-icon--contact"),
+                        "promotion_publish_failed" => ("⚠", "rm-notif-card--rejected", "rm-notif-icon--rejected"),
+                        "promotion_rejected" => ("×", "rm-notif-card--rejected", "rm-notif-icon--rejected"),
                         "chat_message" => ("💬", "rm-notif-card--chat", "rm-notif-icon--chat"),
                         "contact_accepted" => ("✓", "rm-notif-card--contact", "rm-notif-icon--contact"),
                         "contact_rejected" => ("×", "rm-notif-card--rejected", "rm-notif-icon--rejected"),

@@ -18,6 +18,7 @@ pub fn promotion_price_label() -> String {
 
 struct PromotionPublishRow {
     _request_id: i64,
+    requester_user_id: i64,
     status: String,
     payment_status: String,
     bot_check_status: String,
@@ -31,11 +32,39 @@ struct PromotionPublishRow {
     city_name: String,
 }
 
+fn insert_promotion_notification(
+    connection: &Connection,
+    user_id: i64,
+    resource_id: i64,
+    kind: &str,
+    title: &str,
+    message: &str,
+) {
+    if user_id <= 0 {
+        return;
+    }
+
+    let _ = connection.execute(
+        "INSERT INTO user_notifications (
+            user_id,
+            resource_id,
+            kind,
+            title,
+            message,
+            is_read,
+            created_at
+         )
+         VALUES (?1, ?2, ?3, ?4, ?5, 0, strftime('%s','now'))",
+        params![user_id, resource_id, kind, title, message],
+    );
+}
+
 fn load_publish_row(connection: &Connection, request_id: i64) -> Option<PromotionPublishRow> {
     connection
         .query_row(
             "SELECT
                 pr.id,
+                pr.requester_user_id,
                 pr.status,
                 pr.payment_status,
                 COALESCE(pr.bot_check_status, 'unknown'),
@@ -56,17 +85,18 @@ fn load_publish_row(connection: &Connection, request_id: i64) -> Option<Promotio
             |row| {
                 Ok(PromotionPublishRow {
                     _request_id: row.get(0)?,
-                    status: row.get(1)?,
-                    payment_status: row.get(2)?,
-                    bot_check_status: row.get(3)?,
-                    resource_id: row.get(4)?,
-                    title: row.get(5)?,
-                    description: row.get(6)?,
-                    address: row.get(7)?,
-                    category: row.get(8)?,
-                    listing_type: row.get(9)?,
-                    telegram_chat_id: row.get(10)?,
-                    city_name: row.get(11)?,
+                    requester_user_id: row.get(1)?,
+                    status: row.get(2)?,
+                    payment_status: row.get(3)?,
+                    bot_check_status: row.get(4)?,
+                    resource_id: row.get(5)?,
+                    title: row.get(6)?,
+                    description: row.get(7)?,
+                    address: row.get(8)?,
+                    category: row.get(9)?,
+                    listing_type: row.get(10)?,
+                    telegram_chat_id: row.get(11)?,
+                    city_name: row.get(12)?,
                 })
             },
         )
@@ -230,6 +260,19 @@ pub async fn try_publish_promotion(
                 now,
             );
 
+            insert_promotion_notification(
+                &connection,
+                row.requester_user_id,
+                row.resource_id,
+                "promotion_published",
+                "Объявление опубликовано",
+                &format!(
+                    "«{}» опубликовано в Telegram-группе {}.",
+                    row.title.trim(),
+                    row.city_name.trim()
+                ),
+            );
+
             Ok(())
         }
         Err(error) => {
@@ -252,6 +295,20 @@ pub async fn try_publish_promotion(
                 &reason,
                 now,
             );
+
+            insert_promotion_notification(
+                &connection,
+                row.requester_user_id,
+                row.resource_id,
+                "promotion_publish_failed",
+                "Публикация отложена",
+                &format!(
+                    "«{}» оплачено, но отправка в группу {} не удалась. Администратор поможет завершить публикацию.",
+                    row.title.trim(),
+                    row.city_name.trim()
+                ),
+            );
+
             Err(reason)
         }
     }
@@ -323,27 +380,41 @@ pub async fn finalize_paid_promotion(
     state: &AppState,
     request_id: i64,
     actor_user_id: i64,
+    notify_user: bool,
 ) -> Result<PromotionFinalizeOutcome, String> {
     let connection = state
         .db_pool
         .get()
         .map_err(|_| "database_unavailable".to_string())?;
 
-    let row: Option<(String, String)> = connection
+    let row: Option<(String, String, i64, i64, String)> = connection
         .query_row(
-            "SELECT status, COALESCE(bot_check_status, 'unknown')
-             FROM resource_promotion_requests
-             WHERE id = ?1
-               AND payment_status = 'paid'
+            "SELECT pr.status,
+                    COALESCE(pr.bot_check_status, 'unknown'),
+                    pr.requester_user_id,
+                    pr.resource_id,
+                    r.title
+             FROM resource_promotion_requests pr
+             JOIN resources r ON r.id = pr.resource_id
+             WHERE pr.id = ?1
+               AND pr.payment_status = 'paid'
              LIMIT 1",
             params![request_id],
-            |row| Ok((row.get(0)?, row.get(1)?)),
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                ))
+            },
         )
         .ok();
 
     drop(connection);
 
-    let Some((status, bot_status)) = row else {
+    let Some((status, bot_status, requester_user_id, resource_id, title)) = row else {
         return Err("promotion_not_paid".into());
     };
 
@@ -355,6 +426,25 @@ pub async fn finalize_paid_promotion(
         try_publish_promotion(state, request_id, actor_user_id).await?;
         Ok(PromotionFinalizeOutcome::Published)
     } else {
+        if notify_user {
+            let connection = state
+                .db_pool
+                .get()
+                .map_err(|_| "database_unavailable".to_string())?;
+
+            insert_promotion_notification(
+                &connection,
+                requester_user_id,
+                resource_id,
+                "promotion_moderation",
+                "Продвижение на модерации",
+                &format!(
+                    "Оплата за «{}» принята. Администратор проверит объявление перед публикацией в группе.",
+                    title.trim()
+                ),
+            );
+        }
+
         Ok(PromotionFinalizeOutcome::AwaitingModeration)
     }
 }
