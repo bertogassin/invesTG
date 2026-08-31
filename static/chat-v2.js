@@ -508,6 +508,8 @@
                 img.src = String(message.attachment_url);
                 img.alt = "Фото";
                 img.loading = "lazy";
+                img.setAttribute("role", "button");
+                img.tabIndex = 0;
                 body.textContent = "";
                 body.appendChild(img);
                 if (message.message) {
@@ -1107,6 +1109,14 @@
     }
 
         function sendMessage() {
+            if (
+                window.ResursMapChatForward &&
+                typeof window.resursmapSendChatForward === "function"
+            ) {
+                window.resursmapSendChatForward();
+                return;
+            }
+
             var message = input.value.trim();
 
             if (!message) {
@@ -1586,6 +1596,10 @@
                         '<span>⧉</span>Копировать' +
                     '</button>' +
                     '<button type="button" ' +
+                        'data-chat-action="forward">' +
+                        '<span>↪</span>Переслать' +
+                    '</button>' +
+                    '<button type="button" ' +
                         'data-chat-action="edit">' +
                         '<span>✎</span>Изменить' +
                     '</button>' +
@@ -1652,6 +1666,25 @@
 
         document.body.appendChild(confirmBox);
 
+        var forwardPicker = document.createElement("div");
+        forwardPicker.id = "chat-forward-picker";
+        forwardPicker.className = "chat-editor";
+        forwardPicker.hidden = true;
+        forwardPicker.innerHTML =
+            '<button class="chat-sheet-backdrop" ' +
+                'type="button" data-close-forward></button>' +
+            '<section class="chat-editor-panel chat-forward-panel" ' +
+                'role="dialog" aria-modal="true">' +
+                '<div class="chat-sheet-handle"></div>' +
+                '<div class="chat-editor-title">Переслать сообщение</div>' +
+                '<div class="chat-forward-preview" ' +
+                    'id="chat-forward-picker-preview"></div>' +
+                '<div class="chat-forward-list" ' +
+                    'id="chat-forward-list"></div>' +
+            '</section>';
+
+        document.body.appendChild(forwardPicker);
+
         if (!replyText) {
             replyText =
                 document.getElementById("chat-reply-text");
@@ -1665,6 +1698,373 @@
             document.getElementById("chat-delete-apply");
         var sheetPreview =
             document.getElementById("chat-sheet-preview");
+        var forwardBar =
+            document.getElementById("chat-forward-bar");
+        var forwardText =
+            document.getElementById("chat-forward-text");
+        var forwardPickerPreview =
+            document.getElementById("chat-forward-picker-preview");
+        var forwardList =
+            document.getElementById("chat-forward-list");
+        var forwardDraftKey =
+            "resursmap-chat-forward:" + otherUserId;
+
+        function forwardPreviewLabel(message) {
+            if (Number(message.deleted_at) > 0) {
+                return "Сообщение удалено";
+            }
+
+            if (
+                message.attachment_kind === "image" &&
+                message.attachment_url
+            ) {
+                return message.message
+                    ? "📷 " + shortText(message.message, 90)
+                    : "📷 Фото";
+            }
+
+            return shortText(messageText(message), 110);
+        }
+
+        function buildForwardPayload(message) {
+            return {
+                text: messageText(message),
+                attachment_kind:
+                    String(message.attachment_kind || ""),
+                attachment_url:
+                    String(message.attachment_url || ""),
+                preview: forwardPreviewLabel(message)
+            };
+        }
+
+        function showForwardBar(payload) {
+            window.ResursMapChatForward = payload;
+
+            if (forwardBar && forwardText) {
+                forwardText.textContent =
+                    payload.preview || payload.text || "Сообщение";
+                forwardBar.hidden = false;
+            }
+
+            if (replyBar) {
+                clearReply();
+            }
+
+            input.removeAttribute("required");
+            input.focus();
+        }
+
+        function clearForward() {
+            window.ResursMapChatForward = null;
+
+            if (forwardBar) {
+                forwardBar.hidden = true;
+            }
+
+            if (forwardText) {
+                forwardText.textContent = "";
+            }
+
+            input.setAttribute("required", "required");
+        }
+
+        function buildForwardCaption(payload, comment) {
+            var core =
+                String(payload.text || "").trim() ||
+                "📷 Фото";
+            var block = "[Переслано]\n" + core;
+
+            if (comment) {
+                return comment + "\n\n" + block;
+            }
+
+            return block;
+        }
+
+        function closeForwardPicker() {
+            forwardPicker.hidden = true;
+            document.body.classList.remove("chat-overlay-open");
+        }
+
+        function openForwardPicker(message) {
+            if (Number(message.deleted_at) > 0) {
+                return;
+            }
+
+            closeSheet();
+            forwardPickerPreview.textContent =
+                forwardPreviewLabel(message);
+            forwardList.innerHTML =
+                '<div class="chat-forward-empty">Загрузка диалогов…</div>';
+            forwardPicker.hidden = false;
+            document.body.classList.add("chat-overlay-open");
+
+            requestJson("/api/chat/conversations")
+                .then(function (data) {
+                    var conversations =
+                        Array.isArray(data.conversations)
+                            ? data.conversations
+                            : [];
+
+                    conversations = conversations.filter(
+                        function (conversation) {
+                            return String(
+                                conversation.other_user_id
+                            ) !== otherUserId;
+                        }
+                    );
+
+                    if (!conversations.length) {
+                        forwardList.innerHTML =
+                            '<div class="chat-forward-empty">Нет других диалогов для пересылки.</div>';
+                        return;
+                    }
+
+                    forwardList.innerHTML = conversations
+                        .map(function (conversation) {
+                            var userId = String(
+                                conversation.other_user_id
+                            );
+                            var label = String(
+                                conversation.display_name || userId
+                            );
+                            var meta = String(
+                                conversation.last_message || ""
+                            );
+
+                            return (
+                                '<button type="button" ' +
+                                'class="chat-forward-target" ' +
+                                'data-forward-target="' +
+                                userId +
+                                '"><span class="chat-forward-target-name">' +
+                                label +
+                                '</span><span class="chat-forward-target-meta">' +
+                                meta +
+                                "</span></button>"
+                            );
+                        })
+                        .join("");
+
+                    forwardList
+                        .querySelectorAll("[data-forward-target]")
+                        .forEach(function (button) {
+                            button.addEventListener(
+                                "click",
+                                function () {
+                                    var targetId =
+                                        button.dataset.forwardTarget;
+                                    var payload =
+                                        buildForwardPayload(message);
+
+                                    closeForwardPicker();
+
+                                    if (targetId === otherUserId) {
+                                        showForwardBar(payload);
+                                        return;
+                                    }
+
+                                    try {
+                                        sessionStorage.setItem(
+                                            forwardDraftKey,
+                                            JSON.stringify(payload)
+                                        );
+                                    } catch (_) {
+                                        return;
+                                    }
+
+                                    window.location.href =
+                                        "/app/chat/" +
+                                        encodeURIComponent(targetId) +
+                                        "#chat-end";
+                                }
+                            );
+                        });
+                })
+                .catch(function () {
+                    forwardList.innerHTML =
+                        '<div class="chat-forward-empty">Не удалось загрузить диалоги.</div>';
+                });
+        }
+
+        function createForwardClientMessageId() {
+            if (
+                window.crypto &&
+                typeof window.crypto.randomUUID === "function"
+            ) {
+                return window.crypto.randomUUID();
+            }
+
+            return (
+                "fwd_" +
+                Date.now().toString(36) +
+                "_" +
+                Math.random().toString(36).slice(2, 10)
+            );
+        }
+
+        function setSendState(text) {
+            var node = document.getElementById("chat-send-state");
+
+            if (node) {
+                node.textContent = text;
+            }
+        }
+
+        window.resursmapSendChatForward = function () {
+            var payload = window.ResursMapChatForward;
+
+            if (!payload) {
+                return;
+            }
+
+            var comment = input.value.trim();
+            var caption = buildForwardCaption(payload, comment);
+
+            clearForward();
+            input.value = "";
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+
+            if (
+                payload.attachment_kind === "image" &&
+                payload.attachment_url
+            ) {
+                setSendState("Пересылка фото…");
+
+                fetch(payload.attachment_url, {
+                    credentials: "same-origin"
+                })
+                    .then(function (response) {
+                        if (!response.ok) {
+                            throw new Error("forward_fetch_failed");
+                        }
+
+                        return response.blob();
+                    })
+                    .then(function (blob) {
+                        var formData = new FormData();
+                        formData.append("image", blob, "forward.jpg");
+                        formData.append(
+                            "client_message_id",
+                            createForwardClientMessageId()
+                        );
+                        formData.append("caption", caption);
+
+                        return fetch(
+                            "/api/chat/" + otherUserId + "/send-image",
+                            {
+                                method: "POST",
+                                body: formData,
+                                credentials: "same-origin"
+                            }
+                        );
+                    })
+                    .then(function (response) {
+                        return response.json().then(function (data) {
+                            return { response: response, data: data };
+                        });
+                    })
+                    .then(function (pack) {
+                        if (!pack.response.ok || !pack.data.ok) {
+                            throw new Error("forward_send_failed");
+                        }
+
+                        if (pack.data.message) {
+                            document.dispatchEvent(
+                                new CustomEvent(
+                                    "resursmap:chat-sync-messages",
+                                    {
+                                        detail: {
+                                            messages: [pack.data.message],
+                                            peer_read_through_id: 0
+                                        }
+                                    }
+                                )
+                            );
+                        }
+
+                        setSendState("Переслано · Enter — отправить");
+                    })
+                    .catch(function () {
+                        setSendState("Не удалось переслать фото");
+                    });
+
+                return;
+            }
+
+            setSendState("Пересылка…");
+
+            requestJson("/api/chat/" + otherUserId + "/send", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    message: caption,
+                    client_message_id: createForwardClientMessageId()
+                })
+            })
+                .then(function (data) {
+                    if (data.message) {
+                        document.dispatchEvent(
+                            new CustomEvent(
+                                "resursmap:chat-sync-messages",
+                                {
+                                    detail: {
+                                        messages: [data.message],
+                                        peer_read_through_id: 0
+                                    }
+                                }
+                            )
+                        );
+                    }
+
+                    setSendState("Переслано · Enter — отправить");
+                })
+                .catch(function () {
+                    setSendState("Не удалось переслать сообщение");
+                });
+        };
+
+        function restoreForwardDraft() {
+            var raw = null;
+
+            try {
+                raw = sessionStorage.getItem(forwardDraftKey);
+            } catch (_) {
+                return;
+            }
+
+            if (!raw) {
+                return;
+            }
+
+            try {
+                sessionStorage.removeItem(forwardDraftKey);
+            } catch (_) {
+                // Ignore storage cleanup errors.
+            }
+
+            try {
+                showForwardBar(JSON.parse(raw));
+            } catch (_) {
+                // Ignore invalid draft payloads.
+            }
+        }
+
+        restoreForwardDraft();
+
+        if (document.getElementById("chat-forward-close")) {
+            document
+                .getElementById("chat-forward-close")
+                .addEventListener("click", clearForward);
+        }
+
+        forwardPicker.addEventListener("click", function (event) {
+            if (event.target.closest("[data-close-forward]")) {
+                closeForwardPicker();
+            }
+        });
 
         function requestJson(url, options) {
             return fetch(url, {
@@ -1780,6 +2180,8 @@
                 img.src = String(message.attachment_url);
                 img.alt = "Фото";
                 img.loading = "lazy";
+                img.setAttribute("role", "button");
+                img.tabIndex = 0;
                 body.appendChild(img);
 
                 if (message.message) {
@@ -2016,7 +2418,11 @@
                 delivered_at:
                     Number(row.dataset.deliveredAt || 0),
                 created_at:
-                    Number(row.dataset.createdAt || 0)
+                    Number(row.dataset.createdAt || 0),
+                attachment_kind:
+                    row.dataset.attachmentKind || "",
+                attachment_url:
+                    row.dataset.attachmentUrl || ""
             };
         }
 
@@ -2125,6 +2531,9 @@
             var deleteButton = sheet.querySelector(
                 '[data-chat-action="delete"]'
             );
+            var forwardButton = sheet.querySelector(
+                '[data-chat-action="forward"]'
+            );
 
             var mine = Boolean(message.is_mine);
             var deleted =
@@ -2132,6 +2541,10 @@
 
             editButton.hidden = !mine || deleted;
             deleteButton.hidden = !mine || deleted;
+
+            if (forwardButton) {
+                forwardButton.hidden = deleted;
+            }
 
             var reactionsRow =
                 document.getElementById("chat-sheet-reactions");
@@ -2339,6 +2752,8 @@
                         .catch(function () {
                             closeSheet();
                         });
+                } else if (action.dataset.chatAction === "forward") {
+                    openForwardPicker(selectedMessage);
                 } else if (action.dataset.chatAction === "react") {
                     reactToMessage(
                         selectedMessage,
@@ -2370,6 +2785,16 @@
             ) {
                 event.preventDefault();
                 clearReply();
+                return;
+            }
+
+            if (
+                event.key === "Escape" &&
+                forwardBar &&
+                !forwardBar.hidden
+            ) {
+                event.preventDefault();
+                clearForward();
             }
         });
 
@@ -2881,5 +3306,90 @@
         );
 
         connect();
+    });
+})();
+
+(function () {
+    "use strict";
+
+    function ensureLightbox() {
+        var existing = document.getElementById("chat-image-lightbox");
+
+        if (existing) {
+            return existing;
+        }
+
+        var lightbox = document.createElement("div");
+        lightbox.id = "chat-image-lightbox";
+        lightbox.className = "chat-image-lightbox";
+        lightbox.hidden = true;
+        lightbox.innerHTML =
+            '<button type="button" class="chat-lightbox-backdrop" aria-label="Закрыть"></button>' +
+            '<img class="chat-lightbox-image" alt="">';
+
+        document.body.appendChild(lightbox);
+        return lightbox;
+    }
+
+    function closeLightbox() {
+        var lightbox = document.getElementById("chat-image-lightbox");
+
+        if (!lightbox) {
+            return;
+        }
+
+        lightbox.hidden = true;
+        document.body.classList.remove("chat-lightbox-open");
+
+        var image = lightbox.querySelector(".chat-lightbox-image");
+
+        if (image) {
+            image.removeAttribute("src");
+        }
+    }
+
+    function openLightbox(src) {
+        var lightbox = ensureLightbox();
+        var image = lightbox.querySelector(".chat-lightbox-image");
+
+        if (!image || !src) {
+            return;
+        }
+
+        image.src = src;
+        lightbox.hidden = false;
+        document.body.classList.add("chat-lightbox-open");
+    }
+
+    document.addEventListener("click", function (event) {
+        var thumb = event.target.closest(".chat-message-image");
+
+        if (!thumb || !thumb.src) {
+            return;
+        }
+
+        event.preventDefault();
+        openLightbox(thumb.src);
+    });
+
+    document.addEventListener("keydown", function (event) {
+        if (event.key === "Escape") {
+            closeLightbox();
+        }
+    });
+
+    document.addEventListener("click", function (event) {
+        var lightbox = document.getElementById("chat-image-lightbox");
+
+        if (!lightbox || lightbox.hidden) {
+            return;
+        }
+
+        if (
+            event.target.closest(".chat-lightbox-backdrop") ||
+            event.target.classList.contains("chat-lightbox-image")
+        ) {
+            closeLightbox();
+        }
     });
 })();

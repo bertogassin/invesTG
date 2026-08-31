@@ -431,7 +431,7 @@ fn chat_message_body_html(message: &crate::web::view_models::ChatMessageRow) -> 
         };
 
         return format!(
-            r#"<div class="chat-message-body"><img class="chat-message-image" src="{url}" alt="Фото" loading="lazy">{caption}</div>"#,
+            r#"<div class="chat-message-body"><img class="chat-message-image" src="{url}" alt="Фото" loading="lazy" role="button" tabindex="0">{caption}</div>"#,
             url = escape_html(&message.attachment_url),
             caption = caption_html,
         );
@@ -774,6 +774,21 @@ pub fn render_chat(
         <button id="chat-reply-close"
                 type="button"
                 aria-label="Отменить ответ">
+            ×
+        </button>
+    </div>
+
+    <div id="chat-forward-bar"
+         class="chat-forward-bar"
+         hidden>
+        <div class="chat-forward-accent"></div>
+        <div class="chat-reply-copy">
+            <strong>Переслать</strong>
+            <span id="chat-forward-text"></span>
+        </div>
+        <button id="chat-forward-close"
+                type="button"
+                aria-label="Отменить пересылку">
             ×
         </button>
     </div>
