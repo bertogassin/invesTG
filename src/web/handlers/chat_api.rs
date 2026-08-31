@@ -43,7 +43,7 @@ fn message_can_be_edited(created_at: i64, deleted_at: i64, now: i64) -> bool {
         && now.saturating_sub(created_at) <= 86_400
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 struct MessageReaction {
     emoji: String,
     count: i64,
@@ -92,13 +92,34 @@ fn attach_reactions(
         return;
     }
 
-    let mut placeholders = Vec::with_capacity(messages.len());
-    let mut params: Vec<rusqlite::types::Value> = Vec::with_capacity(messages.len() + 1);
+    let message_ids: Vec<i64> = messages.iter().map(|message| message.id).collect();
+    let reactions_by_message = load_message_reactions(connection, &message_ids, viewer_user_id);
+
+    for message in messages.iter_mut() {
+        if let Some(reactions) = reactions_by_message.get(&message.id) {
+            message.reactions = reactions.clone();
+        }
+    }
+}
+
+fn load_message_reactions(
+    connection: &rusqlite::Connection,
+    message_ids: &[i64],
+    viewer_user_id: i64,
+) -> std::collections::HashMap<i64, Vec<MessageReaction>> {
+    let mut reactions_by_message = std::collections::HashMap::new();
+
+    if message_ids.is_empty() {
+        return reactions_by_message;
+    }
+
+    let mut placeholders = Vec::with_capacity(message_ids.len());
+    let mut params: Vec<rusqlite::types::Value> = Vec::with_capacity(message_ids.len() + 1);
     params.push(rusqlite::types::Value::from(viewer_user_id));
 
-    for (index, message) in messages.iter().enumerate() {
+    for (index, message_id) in message_ids.iter().enumerate() {
         placeholders.push(format!("?{}", index + 2));
-        params.push(rusqlite::types::Value::from(message.id));
+        params.push(rusqlite::types::Value::from(*message_id));
     }
 
     let sql = format!(
@@ -116,7 +137,7 @@ fn attach_reactions(
 
     let mut statement = match connection.prepare(&sql) {
         Ok(statement) => statement,
-        Err(_) => return,
+        Err(_) => return reactions_by_message,
     };
 
     let rows = match statement.query_map(rusqlite::params_from_iter(params), |row| {
@@ -128,11 +149,8 @@ fn attach_reactions(
         ))
     }) {
         Ok(rows) => rows,
-        Err(_) => return,
+        Err(_) => return reactions_by_message,
     };
-
-    let mut reactions_by_message: std::collections::HashMap<i64, Vec<MessageReaction>> =
-        std::collections::HashMap::new();
 
     for row in rows.flatten() {
         let (message_id, emoji, count, mine_count) = row;
@@ -146,11 +164,30 @@ fn attach_reactions(
             });
     }
 
-    for message in messages.iter_mut() {
-        if let Some(reactions) = reactions_by_message.remove(&message.id) {
-            message.reactions = reactions;
-        }
-    }
+    reactions_by_message
+}
+
+pub fn reactions_for_view(
+    connection: &rusqlite::Connection,
+    message_ids: &[i64],
+    viewer_user_id: i64,
+) -> std::collections::HashMap<i64, Vec<crate::web::view_models::ChatReactionRow>> {
+    load_message_reactions(connection, message_ids, viewer_user_id)
+        .into_iter()
+        .map(|(message_id, reactions)| {
+            (
+                message_id,
+                reactions
+                    .into_iter()
+                    .map(|reaction| crate::web::view_models::ChatReactionRow {
+                        emoji: reaction.emoji,
+                        count: reaction.count,
+                        mine: reaction.mine,
+                    })
+                    .collect(),
+            )
+        })
+        .collect()
 }
 
 fn normalized_pair(current_user_id: i64, other_user_id: i64) -> Option<(i64, i64)> {
@@ -640,6 +677,21 @@ pub async fn api_chat_messages(
     attach_reactions(&connection, &mut messages, user_id);
 
     let latest_visible_id = messages.iter().map(|message| message.id).max().unwrap_or(0);
+
+    if query.after_id.is_some() && latest_visible_id > 0 {
+        let now = crate::web::handlers::common::unix_now();
+
+        let _ = connection.execute(
+            "UPDATE messages
+             SET delivered_at = ?4
+             WHERE conversation_id = ?1
+               AND sender_user_id = ?2
+               AND id <= ?3
+               AND delivered_at = 0",
+            rusqlite::params![conversation_id, other_user_id, latest_visible_id, now],
+        );
+    }
+
     let should_mark_read = query.mark_read.unwrap_or(false);
 
     if should_mark_read {

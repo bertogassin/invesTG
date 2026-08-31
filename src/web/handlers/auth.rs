@@ -465,6 +465,7 @@ pub async fn email_auth_request(
         "UPDATE email_login_codes
          SET consumed_at = ?2
          WHERE email = ?1
+           AND purpose = 'login'
            AND consumed_at = 0",
         rusqlite::params![&email, unix_now()],
     );

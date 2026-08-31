@@ -342,6 +342,57 @@ pub async fn api_chat_send_image(
         user_id,
         other_user_id,
     );
+
+    let should_notify_telegram = connection
+        .execute(
+            "INSERT INTO user_notifications (
+                user_id,
+                resource_id,
+                kind,
+                title,
+                message,
+                is_read,
+                created_at
+             )
+             SELECT ?1, ?2, 'chat_message', 'Новое сообщение',
+                    'У вас новое сообщение в ResursMap.', 0, ?3
+             WHERE NOT EXISTS (
+                SELECT 1
+                FROM user_notifications
+                WHERE user_id = ?1
+                  AND kind = 'chat_message'
+                  AND is_read = 0
+             )",
+            rusqlite::params![other_user_id, user_id, now],
+        )
+        .unwrap_or(0)
+        == 1;
+
+    let telegram_id: Option<i64> = if should_notify_telegram {
+        connection
+            .query_row(
+                "SELECT telegram_id
+                 FROM users
+                 WHERE id = ?1
+                   AND is_active = 1",
+                rusqlite::params![other_user_id],
+                |row| row.get(0),
+            )
+            .ok()
+    } else {
+        None
+    };
+
+    if let Some(telegram_id) = telegram_id {
+        if telegram_id > 0 {
+            crate::telegram_notify::notify_telegram_user(
+                state.bot_token.as_deref(),
+                telegram_id,
+                "📷 У вас новое фото в ResursMap!\n\nОткройте чат: https://resursmap.de/app/messages",
+            );
+        }
+    }
+
     (
         StatusCode::OK,
         Json(json!({"ok": true, "message": message})),

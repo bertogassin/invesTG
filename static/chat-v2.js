@@ -1336,6 +1336,14 @@
         );
 
         document.addEventListener(
+            "resursmap:chat-read-update",
+            function (event) {
+                var detail = event.detail || {};
+                updateReadStatuses(Number(detail.message_id || 0));
+            }
+        );
+
+        document.addEventListener(
             "resursmap:chat-realtime-sync",
             function () {
                 pollMessages(true);
@@ -3209,6 +3217,26 @@
                         payload.type === "sync_required" ||
                         payload.type === "ready"
                     ) {
+                        if (
+                            payload.type === "chat_event" &&
+                            payload.event &&
+                            payload.event.kind === "message.read"
+                        ) {
+                            document.dispatchEvent(
+                                new CustomEvent(
+                                    "resursmap:chat-read-update",
+                                    {
+                                        detail: {
+                                            message_id: Number(
+                                                payload.event.message_id || 0
+                                            ),
+                                        },
+                                    }
+                                )
+                            );
+                            return;
+                        }
+
                         requestSync();
                     }
 

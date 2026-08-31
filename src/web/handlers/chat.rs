@@ -199,7 +199,7 @@ pub async fn chat_page(
     let (other_username, other_first_name, other_last_name) =
         other_profile.unwrap_or_else(|| (String::new(), String::new(), String::new()));
 
-    let messages: Vec<crate::web::view_models::ChatMessageRow> = db
+    let mut messages: Vec<crate::web::view_models::ChatMessageRow> = db
         .prepare(
             "SELECT
                 messages.id,
@@ -274,11 +274,22 @@ pub async fn chat_page(
                     } else {
                         String::new()
                     },
+                    reactions: Vec::new(),
                 })
             })?
             .collect::<Result<Vec<_>, _>>()
         })
         .unwrap_or_default();
+
+    let message_ids: Vec<i64> = messages.iter().map(|message| message.id).collect();
+    let reactions_by_message =
+        super::chat_api::reactions_for_view(&db, &message_ids, user_id);
+
+    for message in &mut messages {
+        if let Some(reactions) = reactions_by_message.get(&message.id) {
+            message.reactions = reactions.clone();
+        }
+    }
 
     let _ = db.execute(
         "UPDATE user_notifications

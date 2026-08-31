@@ -25,6 +25,13 @@ pub struct UserSessionRow {
     pub is_current: bool,
 }
 
+#[derive(Clone)]
+pub struct ChatReactionRow {
+    pub emoji: String,
+    pub count: i64,
+    pub mine: bool,
+}
+
 pub struct ChatMessageRow {
     pub id: i64,
     pub sender_user_id: i64,
@@ -40,6 +47,7 @@ pub struct ChatMessageRow {
     pub deleted_at: i64,
     pub attachment_kind: String,
     pub attachment_url: String,
+    pub reactions: Vec<ChatReactionRow>,
 }
 
 pub type PublicProfileResourceRow = (i64, String, String, String, f64, i64, i64, i64);

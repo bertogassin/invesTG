@@ -575,6 +575,32 @@ fn render_chat_message_row(
     let attachment_kind = escape_html(&message.attachment_kind);
     let attachment_url = escape_html(&message.attachment_url);
 
+    let reactions_html = if message.reactions.is_empty() {
+        String::new()
+    } else {
+        let pills = message
+            .reactions
+            .iter()
+            .map(|reaction| {
+                let mine_class = if reaction.mine {
+                    " is-mine"
+                } else {
+                    ""
+                };
+
+                format!(
+                    r#"<button type="button" class="chat-reaction-pill{mine_class}" data-emoji="{emoji}">{emoji} <span>{count}</span></button>"#,
+                    mine_class = mine_class,
+                    emoji = escape_html(&reaction.emoji),
+                    count = reaction.count,
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("");
+
+        format!(r#"<div class="chat-message-reactions">{pills}</div>"#)
+    };
+
     format!(
         r#"
 {date_separator}
@@ -597,6 +623,7 @@ fn render_chat_message_row(
     <div class="{bubble_class}">
         {reply_html}
         {display_body}
+        {reactions_html}
         {edited_html}
         <div class="chat-message-meta">
             <span>{chat_time}</span>
@@ -621,6 +648,7 @@ fn render_chat_message_row(
         bubble_class = bubble_class,
         reply_html = reply_html,
         display_body = display_body,
+        reactions_html = reactions_html,
         attachment_kind = attachment_kind,
         attachment_url = attachment_url,
         edited_html = edited_html,
