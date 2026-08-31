@@ -502,7 +502,19 @@
             bubble.className = "chat-bubble";
             body.className = "chat-message-body";
             body.textContent = String(message.message || "");
-            if (message.attachment_kind === "image" && message.attachment_url) {
+            if (message.attachment_kind === "voice" && message.attachment_url) {
+                body.textContent = "";
+                body.classList.add("chat-message-body--voice");
+                var voicePlayer = document.createElement("div");
+                voicePlayer.className = "chat-voice-player";
+                var voiceAudio = document.createElement("audio");
+                voiceAudio.className = "chat-voice-audio";
+                voiceAudio.controls = true;
+                voiceAudio.preload = "metadata";
+                voiceAudio.src = String(message.attachment_url);
+                voicePlayer.appendChild(voiceAudio);
+                body.appendChild(voicePlayer);
+            } else if (message.attachment_kind === "image" && message.attachment_url) {
                 var img = document.createElement("img");
                 img.className = "chat-message-image";
                 img.src = String(message.attachment_url);
@@ -1232,6 +1244,258 @@
                 sendState.textContent = "Фото не отправлено";
               });
         });
+
+        var voiceBtn = document.getElementById("chat-voice-btn");
+        var voiceRecording = false;
+        var voiceRecorder = null;
+        var voiceChunks = [];
+        var voiceStartedAt = 0;
+        var voiceTimerId = null;
+        var voiceStopTimerId = null;
+        var voiceOverlay = document.createElement("div");
+        voiceOverlay.id = "chat-voice-recording";
+        voiceOverlay.className = "chat-voice-recording";
+        voiceOverlay.hidden = true;
+        voiceOverlay.innerHTML =
+            '<div class="chat-voice-recording-inner">' +
+                '<div class="chat-voice-recording-pulse"></div>' +
+                '<span class="chat-voice-recording-label">Запись…</span>' +
+                '<span class="chat-voice-recording-timer">0:00</span>' +
+            '</div>';
+        if (form) {
+            form.appendChild(voiceOverlay);
+        }
+
+        function formatVoiceDuration(ms) {
+            var total = Math.max(0, Math.floor(ms / 1000));
+            var minutes = Math.floor(total / 60);
+            var seconds = total % 60;
+            return minutes + ":" + String(seconds).padStart(2, "0");
+        }
+
+        function updateVoiceTimer() {
+            var timer = voiceOverlay.querySelector(
+                ".chat-voice-recording-timer"
+            );
+            if (timer) {
+                timer.textContent = formatVoiceDuration(
+                    Date.now() - voiceStartedAt
+                );
+            }
+        }
+
+        function hideVoiceRecording() {
+            voiceRecording = false;
+            voiceOverlay.hidden = true;
+            if (voiceBtn) {
+                voiceBtn.classList.remove("is-recording");
+            }
+            if (voiceTimerId) {
+                window.clearInterval(voiceTimerId);
+                voiceTimerId = null;
+            }
+            if (voiceStopTimerId) {
+                window.clearTimeout(voiceStopTimerId);
+                voiceStopTimerId = null;
+            }
+        }
+
+        function sendVoiceBlob(blob, mimeType) {
+            if (!blob || !blob.size) {
+                return;
+            }
+            var clientMessageId = createClientMessageId();
+            var formData = new FormData();
+            formData.append("voice", blob, "voice.webm");
+            formData.append("client_message_id", clientMessageId);
+            var reply = window.ResursMapChatReply || null;
+            if (reply && reply.id) {
+                formData.append("reply_to_message_id", String(reply.id));
+            }
+            sendState.textContent = "Отправка голосового…";
+            fetch("/api/chat/" + otherUserId + "/send-voice", {
+                method: "POST",
+                body: formData,
+                credentials: "same-origin"
+            }).then(function (res) {
+                return res.json().then(function (data) {
+                    return { res: res, data: data };
+                });
+            }).then(function (pack) {
+                if (!pack.res.ok || !pack.data || !pack.data.ok) {
+                    throw new Error(
+                        (pack.data && pack.data.error) || "send_failed"
+                    );
+                }
+                if (pack.data.message) {
+                    appendMessages([pack.data.message]);
+                }
+                window.ResursMapChatReply = null;
+                var replyBarEl =
+                    document.getElementById("chat-reply-bar");
+                if (replyBarEl) {
+                    replyBarEl.hidden = true;
+                }
+                setConnection("В сети", "is-online");
+                sendState.textContent = "Отправлено · Enter — отправить";
+                if (typeof window.playChatSend === "function") {
+                    window.playChatSend();
+                }
+            }).catch(function () {
+                setConnection("Ошибка голосового", "is-error");
+                sendState.textContent = "Голосовое не отправлено";
+                if (typeof window.playChatError === "function") {
+                    window.playChatError();
+                }
+            });
+        }
+
+        function stopVoiceRecording(sendIt) {
+            if (!voiceRecording || !voiceRecorder) {
+                hideVoiceRecording();
+                return;
+            }
+
+            var recorder = voiceRecorder;
+            var duration = Date.now() - voiceStartedAt;
+            voiceRecorder = null;
+            hideVoiceRecording();
+
+            recorder.onstop = function () {
+                var mimeType =
+                    recorder.mimeType || "audio/webm";
+                var blob = new Blob(voiceChunks, {
+                    type: mimeType
+                });
+                voiceChunks = [];
+                if (sendIt && duration >= 600 && blob.size > 0) {
+                    sendVoiceBlob(blob, mimeType);
+                } else if (sendIt && duration < 600) {
+                    sendState.textContent = "Слишком короткая запись";
+                }
+            };
+
+            if (recorder.state !== "inactive") {
+                recorder.stop();
+            }
+
+            if (recorder.stream) {
+                recorder.stream.getTracks().forEach(function (track) {
+                    track.stop();
+                });
+            }
+        }
+
+        function startVoiceRecording() {
+            if (voiceRecording || !voiceBtn) {
+                return;
+            }
+
+            if (
+                !navigator.mediaDevices ||
+                typeof navigator.mediaDevices.getUserMedia !== "function" ||
+                typeof MediaRecorder === "undefined"
+            ) {
+                sendState.textContent =
+                    "Запись голоса недоступна в этом браузере";
+                return;
+            }
+
+            navigator.mediaDevices.getUserMedia({ audio: true })
+                .then(function (stream) {
+                    voiceChunks = [];
+                    var mimeType = "";
+                    if (MediaRecorder.isTypeSupported(
+                        "audio/webm;codecs=opus"
+                    )) {
+                        mimeType = "audio/webm;codecs=opus";
+                    } else if (MediaRecorder.isTypeSupported("audio/webm")) {
+                        mimeType = "audio/webm";
+                    } else if (MediaRecorder.isTypeSupported("audio/ogg")) {
+                        mimeType = "audio/ogg";
+                    }
+
+                    voiceRecorder = mimeType
+                        ? new MediaRecorder(stream, { mimeType: mimeType })
+                        : new MediaRecorder(stream);
+
+                    voiceRecorder.ondataavailable = function (event) {
+                        if (event.data && event.data.size > 0) {
+                            voiceChunks.push(event.data);
+                        }
+                    };
+
+                    voiceRecorder.start(250);
+                    voiceRecording = true;
+                    voiceStartedAt = Date.now();
+                    voiceBtn.classList.add("is-recording");
+                    voiceOverlay.hidden = false;
+                    updateVoiceTimer();
+                    voiceTimerId = window.setInterval(
+                        updateVoiceTimer,
+                        500
+                    );
+                    voiceStopTimerId = window.setTimeout(function () {
+                        stopVoiceRecording(true);
+                    }, 120000);
+                    sendState.textContent = "Запись… отпустите для отправки";
+                })
+                .catch(function () {
+                    sendState.textContent =
+                        "Нет доступа к микрофону";
+                    if (typeof window.playChatError === "function") {
+                        window.playChatError();
+                    }
+                });
+        }
+
+        if (voiceBtn) {
+            voiceBtn.addEventListener("pointerdown", function (event) {
+                event.preventDefault();
+                startVoiceRecording();
+            });
+
+            ["pointerup", "pointerleave", "pointercancel"].forEach(
+                function (eventName) {
+                    voiceBtn.addEventListener(eventName, function () {
+                        if (voiceRecording) {
+                            stopVoiceRecording(true);
+                        }
+                    });
+                }
+            );
+        }
+
+        var soundToggle = document.getElementById("chat-sound-toggle");
+        if (soundToggle) {
+            function syncSoundToggle() {
+                var enabled = true;
+                try {
+                    enabled =
+                        localStorage.getItem("resursmap-chat-sounds") !==
+                        "off";
+                } catch (_) {}
+                soundToggle.setAttribute(
+                    "aria-pressed",
+                    enabled ? "true" : "false"
+                );
+                soundToggle.textContent = enabled ? "🔊" : "🔇";
+                soundToggle.classList.toggle("is-muted", !enabled);
+            }
+
+            syncSoundToggle();
+            soundToggle.addEventListener("click", function () {
+                var enabled =
+                    soundToggle.getAttribute("aria-pressed") !== "true";
+                try {
+                    localStorage.setItem(
+                        "resursmap-chat-sounds",
+                        enabled ? "on" : "off"
+                    );
+                } catch (_) {}
+                syncSoundToggle();
+            });
+        }
 
         form.addEventListener(
             "submit",
@@ -2171,11 +2435,29 @@
 
         function applyMessageBody(body, message) {
             body.classList.remove("is-deleted");
+            body.classList.remove("chat-message-body--voice");
             body.innerHTML = "";
 
             if (Number(message.deleted_at) > 0) {
                 body.classList.add("is-deleted");
                 body.textContent = "Сообщение удалено";
+                return;
+            }
+
+            if (
+                message.attachment_kind === "voice" &&
+                message.attachment_url
+            ) {
+                body.classList.add("chat-message-body--voice");
+                var voiceWrap = document.createElement("div");
+                voiceWrap.className = "chat-voice-player";
+                var voiceEl = document.createElement("audio");
+                voiceEl.className = "chat-voice-audio";
+                voiceEl.controls = true;
+                voiceEl.preload = "metadata";
+                voiceEl.src = String(message.attachment_url);
+                voiceWrap.appendChild(voiceEl);
+                body.appendChild(voiceWrap);
                 return;
             }
 

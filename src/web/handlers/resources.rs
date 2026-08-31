@@ -292,17 +292,27 @@ pub async fn add_resource(
         }
     };
 
+    let listing_type = if category.eq_ignore_ascii_case("work") {
+        match form.listing_type.as_deref().map(str::trim) {
+            Some("seeker") => "seeker",
+            Some("offer") => "offer",
+            _ => "offer",
+        }
+    } else {
+        "general"
+    };
+
     let result = db.execute(
         "INSERT INTO resources
         (client_id, continent_index, country_index, city_index,
          category, title, description, contact, address,
          rating, votes, is_premium, is_verified, is_active,
-         moderation_status, rejection_reason,
+         moderation_status, rejection_reason, listing_type,
          created_at, updated_at)
         VALUES
         (?9, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8,
          0, 0, 0, 0, 1,
-         'pending', '',
+         'pending', '', ?10,
          strftime('%s','now'), strftime('%s','now'))",
         rusqlite::params![
             ci,
@@ -314,6 +324,7 @@ pub async fn add_resource(
             contact,
             address,
             owner_client_id,
+            listing_type,
         ],
     );
 

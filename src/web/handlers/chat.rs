@@ -267,7 +267,7 @@ pub async fn chat_page(
                     deleted_at,
                     attachment_kind: attachment_kind.clone(),
                     attachment_url: if deleted_at == 0
-                        && attachment_kind == "image"
+                        && (attachment_kind == "image" || attachment_kind == "voice")
                         && !attachment_path.is_empty()
                     {
                         format!("/api/chat/media/{message_id}")

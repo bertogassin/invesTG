@@ -15,6 +15,7 @@ use std::fs;
 use std::path::{Path as FsPath, PathBuf};
 
 const MAX_IMAGE_BYTES: usize = 2 * 1024 * 1024;
+const MAX_VOICE_BYTES: usize = 512 * 1024;
 
 #[derive(Debug, Serialize)]
 struct MediaChatMessage {
@@ -95,11 +96,32 @@ fn detect_image(bytes: &[u8]) -> Option<(&'static str, &'static str)> {
     None
 }
 
+fn detect_audio(bytes: &[u8]) -> Option<(&'static str, &'static str)> {
+    if bytes.len() >= 4 && &bytes[0..4] == b"OggS" {
+        return Some(("voice", "audio/ogg"));
+    }
+    if bytes.len() >= 4
+        && bytes[0] == 0x1a
+        && bytes[1] == 0x45
+        && bytes[2] == 0xdf
+        && bytes[3] == 0xa3
+    {
+        return Some(("voice", "audio/webm"));
+    }
+    if bytes.len() >= 12 && &bytes[4..8] == b"ftyp" {
+        return Some(("voice", "audio/mp4"));
+    }
+    None
+}
+
 fn extension_for_mime(mime: &str) -> &'static str {
     match mime {
         "image/jpeg" => "jpg",
         "image/png" => "png",
         "image/webp" => "webp",
+        "audio/ogg" => "ogg",
+        "audio/webm" => "webm",
+        "audio/mp4" => "m4a",
         _ => "bin",
     }
 }
@@ -139,7 +161,10 @@ fn load_message(
             let deleted_at: i64 = row.get(10)?;
             let kind: String = row.get(12)?;
             let path: String = row.get(15)?;
-            let attachment_url = if deleted_at == 0 && kind == "image" && !path.is_empty() {
+            let attachment_url = if deleted_at == 0
+                && (kind == "image" || kind == "voice")
+                && !path.is_empty()
+            {
                 format!("/api/chat/media/{id}")
             } else { String::new() };
             Ok(MediaChatMessage {
@@ -389,6 +414,243 @@ pub async fn api_chat_send_image(
                 state.bot_token.as_deref(),
                 telegram_id,
                 "📷 У вас новое фото в ResursMap!\n\nОткройте чат: https://resursmap.de/app/messages",
+            );
+        }
+    }
+
+    (
+        StatusCode::OK,
+        Json(json!({"ok": true, "message": message})),
+    )
+        .into_response()
+}
+
+pub async fn api_chat_send_voice(
+    State(state): State<AppState>,
+    Path(other_user_id): Path<i64>,
+    headers: HeaderMap,
+    mut multipart: Multipart,
+) -> Response {
+    if request_is_cross_site(&headers) {
+        return json_error(StatusCode::FORBIDDEN, "cross_site_request_rejected");
+    }
+    let user_id = match verify_user_session(&state, &headers) {
+        Some(v) => v,
+        None => return json_error(StatusCode::UNAUTHORIZED, "login_required"),
+    };
+    if normalized_pair(user_id, other_user_id).is_none() {
+        return json_error(StatusCode::BAD_REQUEST, "invalid_user");
+    }
+    if let Some(retry_after) =
+        rate_limit_retry_after(&state, user_id, "chat_api_send_voice", 12, 60).await
+    {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            [(header::RETRY_AFTER, retry_after.to_string())],
+            Json(json!({"ok": false, "error": "rate_limited", "retry_after": retry_after})),
+        )
+            .into_response();
+    }
+
+    let mut client_message_id = String::new();
+    let mut reply_to_message_id: Option<i64> = None;
+    let mut file_bytes: Option<Vec<u8>> = None;
+
+    while let Ok(Some(field)) = multipart.next_field().await {
+        let name = field.name().unwrap_or("").to_string();
+        match name.as_str() {
+            "client_message_id" => {
+                if let Ok(t) = field.text().await {
+                    client_message_id = t.trim().to_string();
+                }
+            }
+            "reply_to_message_id" => {
+                if let Ok(t) = field.text().await {
+                    if let Ok(id) = t.trim().parse::<i64>() {
+                        if id > 0 {
+                            reply_to_message_id = Some(id);
+                        }
+                    }
+                }
+            }
+            "voice" | "audio" | "file" => {
+                if let Ok(b) = field.bytes().await {
+                    file_bytes = Some(b.to_vec());
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let file_bytes = match file_bytes {
+        Some(b) if !b.is_empty() => b,
+        _ => return json_error(StatusCode::BAD_REQUEST, "voice_required"),
+    };
+    if file_bytes.len() > MAX_VOICE_BYTES {
+        return json_error(StatusCode::BAD_REQUEST, "voice_too_large");
+    }
+    let (kind, mime) = match detect_audio(&file_bytes) {
+        Some(p) => p,
+        None => return json_error(StatusCode::BAD_REQUEST, "unsupported_voice"),
+    };
+    if !client_message_id.is_empty() && !client_message_id_is_valid(&client_message_id) {
+        return json_error(StatusCode::BAD_REQUEST, "invalid_client_message_id");
+    }
+
+    let mut connection = match state.db_pool.get() {
+        Ok(c) => c,
+        Err(_) => return json_error(StatusCode::SERVICE_UNAVAILABLE, "database_unavailable"),
+    };
+    if users_are_blocked(&connection, user_id, other_user_id) {
+        return json_error(StatusCode::FORBIDDEN, "user_blocked");
+    }
+    let conversation_id = match conversation_id(&connection, user_id, other_user_id) {
+        Some(id) => id,
+        None => return json_error(StatusCode::FORBIDDEN, "conversation_not_open"),
+    };
+
+    if !client_message_id.is_empty() {
+        if let Ok(existing_id) = connection.query_row(
+            "SELECT id FROM messages WHERE sender_user_id = ?1 AND client_message_id = ?2 LIMIT 1",
+            rusqlite::params![user_id, client_message_id],
+            |row| row.get::<_, i64>(0),
+        ) {
+            if let Some(message) = load_message(&connection, conversation_id, existing_id, user_id)
+            {
+                return (
+                    StatusCode::OK,
+                    Json(json!({"ok": true, "duplicate": true, "message": message})),
+                )
+                    .into_response();
+            }
+        }
+    }
+
+    if let Some(reply_id) = reply_to_message_id {
+        let exists: i64 = connection.query_row(
+            "SELECT COUNT(*) FROM messages WHERE id = ?1 AND conversation_id = ?2 AND deleted_at = 0",
+            rusqlite::params![reply_id, conversation_id],
+            |row| row.get(0),
+        ).unwrap_or(0);
+        if exists != 1 {
+            return json_error(StatusCode::BAD_REQUEST, "invalid_reply");
+        }
+    }
+
+    let relative = format!(
+        "{}/{}.{}",
+        conversation_id,
+        random_file_stem(),
+        extension_for_mime(mime)
+    );
+    let absolute = media_root().join(&relative);
+    if let Some(parent) = absolute.parent() {
+        if fs::create_dir_all(parent).is_err() {
+            return json_error(StatusCode::INTERNAL_SERVER_ERROR, "media_store_failed");
+        }
+    }
+    match fs::File::create(&absolute) {
+        Ok(mut file) => {
+            use std::io::Write;
+            if file.write_all(&file_bytes).is_err() {
+                let _ = fs::remove_file(&absolute);
+                return json_error(StatusCode::INTERNAL_SERVER_ERROR, "media_store_failed");
+            }
+        }
+        Err(_) => return json_error(StatusCode::INTERNAL_SERVER_ERROR, "media_store_failed"),
+    }
+
+    let now = unix_now();
+    let transaction =
+        match connection.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate) {
+            Ok(tx) => tx,
+            Err(_) => {
+                let _ = fs::remove_file(&absolute);
+                return json_error(StatusCode::CONFLICT, "chat_busy");
+            }
+        };
+
+    if transaction.execute(
+        "INSERT INTO messages (
+            conversation_id, sender_user_id, message, is_read, delivered_at, read_at, created_at,
+            reply_to_message_id, client_message_id, attachment_kind, attachment_mime, attachment_size, attachment_path
+         ) VALUES (?1,?2,'',0,0,0,?3,?4,?5,?6,?7,?8,?9)",
+        rusqlite::params![
+            conversation_id, user_id, now, reply_to_message_id, client_message_id,
+            kind, mime, file_bytes.len() as i64, relative
+        ],
+    ).unwrap_or(0) != 1 {
+        let _ = fs::remove_file(&absolute);
+        return json_error(StatusCode::INTERNAL_SERVER_ERROR, "message_store_failed");
+    }
+    let message_id = transaction.last_insert_rowid();
+    let _ = transaction.execute(
+        "UPDATE conversations SET updated_at = ?2 WHERE id = ?1",
+        rusqlite::params![conversation_id, now],
+    );
+    if transaction.commit().is_err() {
+        let _ = fs::remove_file(&absolute);
+        return json_error(StatusCode::INTERNAL_SERVER_ERROR, "message_store_failed");
+    }
+
+    let message = match load_message(&connection, conversation_id, message_id, user_id) {
+        Some(m) => m,
+        None => return json_error(StatusCode::INTERNAL_SERVER_ERROR, "message_load_failed"),
+    };
+    state.publish_chat_event(
+        "message.created",
+        conversation_id,
+        message_id,
+        user_id,
+        other_user_id,
+    );
+
+    let should_notify_telegram = connection
+        .execute(
+            "INSERT INTO user_notifications (
+                user_id,
+                resource_id,
+                kind,
+                title,
+                message,
+                is_read,
+                created_at
+             )
+             SELECT ?1, ?2, 'chat_message', 'Новое сообщение',
+                    'У вас новое сообщение в ResursMap.', 0, ?3
+             WHERE NOT EXISTS (
+                SELECT 1
+                FROM user_notifications
+                WHERE user_id = ?1
+                  AND kind = 'chat_message'
+                  AND is_read = 0
+             )",
+            rusqlite::params![other_user_id, user_id, now],
+        )
+        .unwrap_or(0)
+        == 1;
+
+    let telegram_id: Option<i64> = if should_notify_telegram {
+        connection
+            .query_row(
+                "SELECT telegram_id
+                 FROM users
+                 WHERE id = ?1
+                   AND is_active = 1",
+                rusqlite::params![other_user_id],
+                |row| row.get(0),
+            )
+            .ok()
+    } else {
+        None
+    };
+
+    if let Some(telegram_id) = telegram_id {
+        if telegram_id > 0 {
+            crate::telegram_notify::notify_telegram_user(
+                state.bot_token.as_deref(),
+                telegram_id,
+                "🎤 У вас новое голосовое в ResursMap!\n\nОткройте чат: https://resursmap.de/app/messages",
             );
         }
     }

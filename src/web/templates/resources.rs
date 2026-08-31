@@ -735,7 +735,11 @@ pub struct RenderResourcePromotionParams<'a> {
     pub city_name: &'a str,
     pub target_name: &'a str,
     pub target_id: i64,
+    pub listing_type_label: &'a str,
+    pub price_label: &'a str,
     pub existing_status: Option<&'a str>,
+    pub existing_payment_status: Option<&'a str>,
+    pub existing_request_id: Option<i64>,
 }
 
 pub fn render_resource_promotion(params: RenderResourcePromotionParams<'_>) -> String {
@@ -746,14 +750,31 @@ pub fn render_resource_promotion(params: RenderResourcePromotionParams<'_>) -> S
     let city_name = escape_html(params.city_name);
     let target_name = escape_html(params.target_name);
 
-    let action_html = if params.existing_status.is_some() {
+    let listing_type = escape_html(params.listing_type_label);
+    let price_label = escape_html(params.price_label);
+
+    let action_html = if params.existing_payment_status == Some("pending") {
+        if let Some(request_id) = params.existing_request_id {
+            format!(
+                r#"
+<a class="ui-button rm-promo-submit"
+   href="/app/resource/{}/promote/pay/{}">
+    Перейти к оплате · {}
+</a>
+"#,
+                params.resource_id, request_id, price_label
+            )
+        } else {
+            String::new()
+        }
+    } else if params.existing_status.is_some() {
         r#"
 <div class="card rm-promo-pending">
     <div class="card-title">
-        Заявка ожидает подтверждения
+        Заявка уже в обработке
     </div>
     <div class="card-meta rm-promo-pending-copy">
-        Повторная заявка не требуется.
+        Повторная заявка не требуется. Дождитесь публикации или решения администратора.
     </div>
 </div>
 "#
@@ -768,13 +789,18 @@ pub fn render_resource_promotion(params: RenderResourcePromotionParams<'_>) -> S
            name="target_id"
            value="{target_id}">
 
+    <div class="card-meta rm-promo-price-note">
+        Стоимость публикации в группе: <strong>{price_label}</strong>
+    </div>
+
     <button type="submit" class="ui-button rm-promo-submit">
-        Отправить на модерацию
+        Продвинуть в Telegram-группу
     </button>
 </form>
 "#,
             resource_id = params.resource_id,
             target_id = params.target_id,
+            price_label = price_label,
         )
     };
 
@@ -789,7 +815,7 @@ pub fn render_resource_promotion(params: RenderResourcePromotionParams<'_>) -> S
     <div class="rm-promo-preview-body">
 
         <div class="rm-promo-preview-category">
-            {category}
+            {listing_type} · {category}
         </div>
 
         <h2 class="rm-promo-preview-title">
@@ -825,14 +851,15 @@ pub fn render_resource_promotion(params: RenderResourcePromotionParams<'_>) -> S
     </div>
 
     <div class="card-meta rm-promo-target-note">
-        Перед публикацией заявка проверяется администратором.
-        Контактные данные остаются на странице объявления.
+        Сначала оплата, затем — автопубликация (если проверка пройдена)
+        или модерация администратором. Контакты остаются на странице объявления.
     </div>
 </section>
 
 {action_html}
 "#,
         city_name = city_name,
+        listing_type = listing_type,
         category = category,
         title = title,
         description = description,
@@ -856,6 +883,135 @@ pub fn render_resource_promotion(params: RenderResourcePromotionParams<'_>) -> S
             "Предварительный просмотр публикации ResursMap.",
         ),
         &content,
+        "",
+    )
+}
+
+pub fn render_promotion_payment(
+    resource_id: i64,
+    request_id: i64,
+    price_label: &str,
+    bot_note: &str,
+    bot_reason: Option<&str>,
+) -> String {
+    let price = escape_html(price_label);
+    let note = escape_html(bot_note);
+    let reason_html = bot_reason
+        .filter(|value| !value.trim().is_empty())
+        .map(|value| {
+            format!(
+                r#"<div class="card-meta rm-promo-bot-reason">Причина проверки: {}</div>"#,
+                escape_html(value)
+            )
+        })
+        .unwrap_or_default();
+
+    let content = format!(
+        r#"
+<section class="card rm-promo-payment-card">
+    <div class="card-title">Оплата публикации в группе</div>
+    <div class="card-meta rm-promo-price-note">
+        К оплате: <strong>{price}</strong>
+    </div>
+    <div class="card-meta">{note}</div>
+    {reason_html}
+    <form method="post"
+          action="/app/resource/{resource_id}/promote/pay/{request_id}"
+          class="ui-form rm-promo-form">
+        <button type="submit" class="ui-button rm-promo-submit">
+            Подтвердить оплату · {price}
+        </button>
+    </form>
+    <div class="card-meta rm-promo-payment-footnote">
+        Платёжный шлюз подключается отдельно. Сейчас кнопка фиксирует оплату для тестового контура.
+    </div>
+</section>
+"#,
+        price = price,
+        note = note,
+        reason_html = reason_html,
+        resource_id = resource_id,
+        request_id = request_id,
+    );
+
+    page_shell(
+        "Оплата · ResursMap",
+        &topbar("Оплата", "credit-card"),
+        &back_hero(
+            &back_link(
+                &format!("/app/resource/{resource_id}/promote"),
+                "Назад",
+                "arrow-left",
+            ),
+            "credit-card",
+            "Публикация в группе",
+            "Оплата",
+            "После оплаты объявление отправится в Telegram-группу города.",
+        ),
+        &content,
+        "",
+    )
+}
+
+pub fn render_admin_promotion_queue(
+    rows: &[(i64, i64, String, String, String, String, String, i64)],
+) -> String {
+    fn listing_kind(raw: &str) -> &'static str {
+        match raw.trim() {
+            "seeker" => "Ищу работу",
+            "offer" => "Предложение",
+            _ => "Объявление",
+        }
+    }
+
+    let cards = if rows.is_empty() {
+        r#"<div class="card"><div class="card-meta">Нет оплаченных заявок, ожидающих модерации.</div></div>"#
+            .to_string()
+    } else {
+        rows.iter()
+            .map(|(request_id, resource_id, title, category, listing_type, bot_status, bot_reason, _created_at)| {
+                let safe_title = escape_html(title);
+                let safe_category = escape_html(category);
+                let kind = escape_html(listing_kind(listing_type));
+                let safe_reason = escape_html(bot_reason);
+                format!(
+                    r#"
+<section class="card rm-admin-promo-card">
+    <div class="card-title">{safe_title}</div>
+    <div class="card-meta">{kind} · {safe_category} · ID {resource_id}</div>
+    <div class="card-meta">Проверка бота: {bot_status}{reason}</div>
+    <div class="rm-admin-promo-actions">
+        <form method="post" action="/app/admin/promotion/{request_id}/approve">
+            <button type="submit" class="ui-button">Одобрить и опубликовать</button>
+        </form>
+        <form method="post" action="/app/admin/promotion/{request_id}/reject">
+            <button type="submit" class="ui-button rm-admin-reject-btn">Отклонить</button>
+        </form>
+    </div>
+</section>
+"#,
+                    safe_title = safe_title,
+                    kind = kind,
+                    safe_category = safe_category,
+                    resource_id = resource_id,
+                    bot_status = escape_html(bot_status),
+                    reason = if safe_reason.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" · {safe_reason}")
+                    },
+                    request_id = request_id,
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("")
+    };
+
+    page_shell(
+        "Продвижение · Админ",
+        &topbar("Продвижение", "megaphone"),
+        r#"<section class="hero"><h1>Очередь продвижения</h1><p>Оплаченные заявки, требующие решения администратора.</p></section>"#,
+        &cards,
         "",
     )
 }
@@ -1132,11 +1288,26 @@ pub fn render_edit_resource(
 
 pub fn render_add_resource(ci: usize, si: usize, zi: usize, category: &str) -> String {
     let back_url = format!("/app/{}/{}/{}", ci, si, zi);
+    let listing_type_field = if category.eq_ignore_ascii_case("work") {
+        r#"
+    <label class="ui-field">
+        <span class="ui-field-label">Тип объявления</span>
+        <select name="listing_type" class="ui-input">
+            <option value="offer">Предложение работы / услуги</option>
+            <option value="seeker">Ищу работу</option>
+        </select>
+    </label>
+"#
+    } else {
+        ""
+    };
 
     let content = format!(
         r####"<form method="post"
       action="/app/{}/{}/{}/cat/{}/add"
       class="ui-form ui-form-stack">
+
+    {listing_type_field}
 
     <label class="ui-field">
         <span class="ui-field-label">Название</span>
@@ -1183,6 +1354,7 @@ pub fn render_add_resource(ci: usize, si: usize, zi: usize, category: &str) -> S
 
 </form>"####,
         ci, si, zi, category,
+        listing_type_field = listing_type_field,
     );
 
     let main_html = format!(

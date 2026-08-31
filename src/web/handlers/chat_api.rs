@@ -43,6 +43,22 @@ fn message_can_be_edited(created_at: i64, deleted_at: i64, now: i64) -> bool {
         && now.saturating_sub(created_at) <= 86_400
 }
 
+pub(crate) fn chat_media_attachment_url(
+    id: i64,
+    deleted_at: i64,
+    kind: &str,
+    path: &str,
+) -> String {
+    if deleted_at == 0
+        && !path.is_empty()
+        && (kind == "image" || kind == "voice")
+    {
+        format!("/api/chat/media/{id}")
+    } else {
+        String::new()
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 struct MessageReaction {
     emoji: String,
@@ -322,11 +338,7 @@ fn load_api_message_by_id(
                         let kind: String = row.get(12)?;
                         let path: String = row.get(15)?;
                         let id: i64 = row.get(0)?;
-                        if deleted_at == 0 && kind == "image" && !path.is_empty() {
-                            format!("/api/chat/media/{id}")
-                        } else {
-                            String::new()
-                        }
+                        chat_media_attachment_url(id, deleted_at, &kind, &path)
                     },
                     reactions: Vec::new(),
                 })
@@ -475,11 +487,7 @@ pub async fn api_chat_messages(
                                     let kind: String = row.get(12)?;
                                     let path: String = row.get(15)?;
                                     let id: i64 = row.get(0)?;
-                                    if deleted_at == 0 && kind == "image" && !path.is_empty() {
-                                        format!("/api/chat/media/{id}")
-                                    } else {
-                                        String::new()
-                                    }
+                                    chat_media_attachment_url(id, deleted_at, &kind, &path)
                                 },
                                 reactions: Vec::new(),
                             })
@@ -561,11 +569,7 @@ pub async fn api_chat_messages(
                                     let kind: String = row.get(12)?;
                                     let path: String = row.get(15)?;
                                     let id: i64 = row.get(0)?;
-                                    if deleted_at == 0 && kind == "image" && !path.is_empty() {
-                                        format!("/api/chat/media/{id}")
-                                    } else {
-                                        String::new()
-                                    }
+                                    chat_media_attachment_url(id, deleted_at, &kind, &path)
                                 },
                                 reactions: Vec::new(),
                             })
@@ -644,11 +648,7 @@ pub async fn api_chat_messages(
                                 let kind: String = row.get(12)?;
                                 let path: String = row.get(15)?;
                                 let id: i64 = row.get(0)?;
-                                if deleted_at == 0 && kind == "image" && !path.is_empty() {
-                                    format!("/api/chat/media/{id}")
-                                } else {
-                                    String::new()
-                                }
+                                chat_media_attachment_url(id, deleted_at, &kind, &path)
                             },
                             reactions: Vec::new(),
                         })

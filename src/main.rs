@@ -2,6 +2,8 @@ use std::env;
 
 mod db;
 mod geography;
+mod resource_publisher;
+mod resource_screening;
 mod state;
 mod telegram_notify;
 mod utils;

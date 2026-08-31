@@ -191,7 +191,56 @@ pub fn init_promotion_schema(connection: &Connection) -> Result<()> {
             );
         END;
         "#,
-    )
+    )?;
+
+    apply_promotion_flow_migrations(connection)?;
+
+    Ok(())
+}
+
+fn add_column_if_missing(
+    connection: &Connection,
+    table: &str,
+    column: &str,
+    alter_sql: &str,
+) -> Result<()> {
+    let sql = format!("PRAGMA table_info({table})");
+    let mut statement = connection.prepare(&sql)?;
+
+    let columns = statement
+        .query_map([], |row| row.get::<_, String>(1))?
+        .collect::<Result<Vec<_>>>()?;
+
+    if !columns.iter().any(|name| name == column) {
+        connection.execute(alter_sql, [])?;
+    }
+
+    Ok(())
+}
+
+fn apply_promotion_flow_migrations(connection: &Connection) -> Result<()> {
+    add_column_if_missing(
+        connection,
+        "resource_promotion_requests",
+        "bot_check_status",
+        "ALTER TABLE resource_promotion_requests ADD COLUMN bot_check_status TEXT NOT NULL DEFAULT 'unknown'",
+    )?;
+
+    add_column_if_missing(
+        connection,
+        "resource_promotion_requests",
+        "bot_check_reason",
+        "ALTER TABLE resource_promotion_requests ADD COLUMN bot_check_reason TEXT NOT NULL DEFAULT ''",
+    )?;
+
+    add_column_if_missing(
+        connection,
+        "resources",
+        "listing_type",
+        "ALTER TABLE resources ADD COLUMN listing_type TEXT NOT NULL DEFAULT 'general'",
+    )?;
+
+    Ok(())
 }
 
 #[cfg(test)]

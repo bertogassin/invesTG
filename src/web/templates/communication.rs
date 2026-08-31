@@ -420,6 +420,13 @@ fn chat_message_body_html(message: &crate::web::view_models::ChatMessageRow) -> 
         return r#"<div class="chat-message-body is-deleted">Сообщение удалено</div>"#.to_string();
     }
 
+    if message.attachment_kind == "voice" && !message.attachment_url.is_empty() {
+        return format!(
+            r#"<div class="chat-message-body chat-message-body--voice"><div class="chat-voice-player"><audio controls preload="metadata" class="chat-voice-audio" src="{url}"></audio></div></div>"#,
+            url = escape_html(&message.attachment_url),
+        );
+    }
+
     if message.attachment_kind == "image" && !message.attachment_url.is_empty() {
         let caption_html = if message.message.is_empty() {
             String::new()
@@ -757,6 +764,15 @@ pub fn render_chat(
                   class="chat-peer-state"
                   hidden></span>
 
+            <button id="chat-sound-toggle"
+                    type="button"
+                    class="chat-sound-toggle"
+                    aria-label="Звуки чата"
+                    aria-pressed="true"
+                    title="Звуки чата">
+                🔊
+            </button>
+
             <button id="chat-block-toggle"
                     type="button"
                     class="chat-block-toggle"
@@ -847,6 +863,14 @@ pub fn render_chat(
            id="chat-image-input"
            accept="image/jpeg,image/png,image/webp"
            hidden>
+
+    <button id="chat-voice-btn"
+            type="button"
+            class="chat-voice-btn"
+            aria-label="Голосовое сообщение"
+            title="Удерживайте для записи">
+        🎤
+    </button>
 
     <button id="chat-image-btn"
             type="button"

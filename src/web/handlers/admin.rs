@@ -18,7 +18,7 @@ use axum::{
 use serde_json::json;
 use std::collections::BTreeMap;
 
-fn is_resource_moderation_session(state: &AppState, headers: &HeaderMap) -> bool {
+pub(crate) fn is_resource_moderation_session(state: &AppState, headers: &HeaderMap) -> bool {
     // Admin V2 uses email session + short-lived admin app cookie.
     let Some(user) = verify_authenticated_user(state, headers) else {
         return false;
@@ -892,6 +892,10 @@ pub async fn admin_resources(
 
     <a href="/app/admin/reports{key_query}" class="rm-mod-chip rm-mod-chip--reports-alert">
         🚩 Жалобы ({pending_reports_count})
+    </a>
+
+    <a href="/app/admin/promotions{key_query}" class="rm-mod-chip rm-mod-chip--premium">
+        📣 Продвижение
     </a>
 
     <a href="/app/admin/resources{key_query}{key_join}filter=all" class="rm-mod-chip">

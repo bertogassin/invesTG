@@ -76,6 +76,13 @@
         var duration = options.duration || 0.18;
         var oscillator = ctx.createOscillator();
         var gain = ctx.createGain();
+        var filter = ctx.createBiquadFilter();
+
+        filter.type = "lowpass";
+        filter.frequency.setValueAtTime(
+            options.filter || 1800,
+            start
+        );
 
         oscillator.type = options.type || "sine";
         oscillator.frequency.setValueAtTime(
@@ -93,14 +100,15 @@
         gain.gain.setValueAtTime(0.0001, start);
         gain.gain.exponentialRampToValueAtTime(
             options.peak || 0.08,
-            start + 0.018
+            start + 0.022
         );
         gain.gain.exponentialRampToValueAtTime(
             0.0001,
             start + duration
         );
 
-        oscillator.connect(gain);
+        oscillator.connect(filter);
+        filter.connect(gain);
         gain.connect(ctx.destination);
         oscillator.start(start);
         oscillator.stop(start + duration + 0.02);
@@ -108,33 +116,46 @@
 
     function playChatReceive() {
         tone({
-            from: 740,
-            to: 980,
-            peak: 0.07,
-            duration: 0.22,
-            type: "triangle"
+            from: 620,
+            to: 880,
+            peak: 0.065,
+            duration: 0.24,
+            type: "triangle",
+            filter: 2200
         });
+        window.setTimeout(function () {
+            tone({
+                from: 880,
+                to: 980,
+                peak: 0.04,
+                duration: 0.16,
+                type: "sine",
+                filter: 2400
+            });
+        }, 90);
         chatHaptic("receive");
     }
 
     function playChatSend() {
         tone({
-            from: 560,
-            to: 720,
-            peak: 0.05,
-            duration: 0.14,
-            type: "sine"
+            from: 520,
+            to: 760,
+            peak: 0.045,
+            duration: 0.16,
+            type: "sine",
+            filter: 1600
         });
         chatHaptic("send");
     }
 
     function playChatError() {
         tone({
-            from: 280,
-            to: 220,
-            peak: 0.06,
-            duration: 0.2,
-            type: "square"
+            from: 320,
+            to: 240,
+            peak: 0.055,
+            duration: 0.22,
+            type: "triangle",
+            filter: 900
         });
         chatHaptic("error");
     }
@@ -153,10 +174,21 @@
         }
     }
 
+    function setChatSoundsEnabled(enabled) {
+        try {
+            localStorage.setItem(
+                "resursmap-chat-sounds",
+                enabled ? "on" : "off"
+            );
+        } catch (_) {}
+    }
+
     window.playChatReceive = playChatReceive;
     window.playChatSend = playChatSend;
     window.playChatError = playChatError;
     window.chatHaptic = chatHaptic;
+    window.setChatSoundsEnabled = setChatSoundsEnabled;
+    window.chatSoundsAreEnabled = soundsEnabled;
 
     if (!window.playNotificationSound) {
         window.playNotificationSound = playChatReceive;

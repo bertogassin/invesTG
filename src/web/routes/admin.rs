@@ -1,3 +1,6 @@
+use super::super::handlers::{
+    admin_approve_promotion, admin_promotion_queue, admin_reject_promotion,
+};
 use super::super::handlers::administrators_panel;
 use super::super::handlers::city_admin_panel;
 use super::super::handlers::manage_admin_assignment;
@@ -97,5 +100,14 @@ pub(super) fn routes() -> Router<AppState> {
         .route(
             "/app/admin/resource/{id}/toggle-active",
             post(admin_toggle_active),
+        )
+        .route("/app/admin/promotions", get(admin_promotion_queue))
+        .route(
+            "/app/admin/promotion/{id}/approve",
+            post(admin_approve_promotion),
+        )
+        .route(
+            "/app/admin/promotion/{id}/reject",
+            post(admin_reject_promotion),
         )
 }

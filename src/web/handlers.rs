@@ -17,7 +17,7 @@ pub use chat_api::{
     api_chat_conversations, api_chat_delete, api_chat_edit, api_chat_messages, api_chat_peer,
     api_chat_react, api_chat_send,
 };
-pub use chat_media::{api_chat_media, api_chat_send_image};
+pub use chat_media::{api_chat_media, api_chat_send_image, api_chat_send_voice};
 pub use chat_realtime::api_chat_realtime;
 
 mod profiles;
@@ -27,7 +27,11 @@ mod resources;
 pub use resources::*;
 
 mod resource_promotions;
-pub use resource_promotions::{request_resource_promotion, resource_promotion_page};
+pub use resource_promotions::{
+    admin_approve_promotion, admin_promotion_queue, admin_reject_promotion,
+    confirm_promotion_payment, promotion_payment_page, request_resource_promotion,
+    resource_promotion_page,
+};
 
 mod admin;
 mod admin_access;
