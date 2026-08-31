@@ -15,6 +15,7 @@ use crate::stripe_payments::{
 };
 use crate::state::app_state::AppState;
 use crate::web::handlers::admin::is_resource_moderation_session;
+use crate::web::handlers::admin::moderation_scope_filter;
 use crate::web::templates;
 use axum::{
     body::Bytes,
@@ -985,9 +986,12 @@ pub async fn admin_promotion_queue(
         }
     };
 
+    let scope_filter = moderation_scope_filter(&state, &headers).replace("resources.", "r.");
+
     let rows: Vec<(i64, i64, String, String, String, String, String, i64)> = connection
         .prepare(
-            "SELECT
+            &format!(
+                "SELECT
                 pr.id,
                 pr.resource_id,
                 r.title,
@@ -1000,8 +1004,10 @@ pub async fn admin_promotion_queue(
              JOIN resources r ON r.id = pr.resource_id
              WHERE pr.payment_status = 'paid'
                AND pr.status IN ('pending', 'failed')
+               {scope_filter}
              ORDER BY pr.created_at ASC, pr.id ASC
-             LIMIT 100",
+             LIMIT 100"
+            ),
         )
         .and_then(|mut stmt| {
             stmt.query_map([], |row| {

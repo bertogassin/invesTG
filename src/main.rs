@@ -58,11 +58,20 @@ async fn main() {
 
     let app = web::routes::routes(state);
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000")
-        .await
-        .expect("Не удалось открыть порт 3000");
+    let listener = tokio::net::TcpListener::bind(format!(
+        "0.0.0.0:{}",
+        env::var("PORT")
+            .ok()
+            .and_then(|value| value.parse::<u16>().ok())
+            .unwrap_or(3000)
+    ))
+    .await
+    .expect("Не удалось открыть HTTP порт");
 
-    println!("ResursMap запущен на http://0.0.0.0:3000");
+    println!(
+        "ResursMap запущен на http://0.0.0.0:{}",
+        env::var("PORT").unwrap_or_else(|_| "3000".into())
+    );
 
     axum::serve(listener, app)
         .await

@@ -1,5 +1,10 @@
-// Заставка ResursMap — показывается только при первом заходе
+// Заставка ResursMap — только при первом заходе на /app
 (function() {
+    var path = window.location.pathname || "";
+    if (path !== "/app" && !path.startsWith("/app/")) {
+        return;
+    }
+
     function assetVersion() {
         var meta = document.querySelector(
             'meta[name="resursmap-asset-version"]'
@@ -9,7 +14,7 @@
             return meta.content;
         }
 
-        return "4.9.31";
+        return "4.9.33";
     }
 
     try {

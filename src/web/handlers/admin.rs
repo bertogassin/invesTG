@@ -1,5 +1,6 @@
 use super::admin_access::{
-    load_admin_context, verify_admin_session as verify_admin_v2_session, AdminPermission,
+    admin_resource_scope_filter, load_admin_context,
+    verify_admin_session as verify_admin_v2_session, AdminPermission,
 };
 use super::auth::verify_authenticated_user;
 use super::common::{
@@ -18,7 +19,6 @@ use serde_json::json;
 use std::collections::BTreeMap;
 
 pub(crate) fn is_resource_moderation_session(state: &AppState, headers: &HeaderMap) -> bool {
-    // Admin V2 uses email session + short-lived admin app cookie.
     let Some(user) = verify_authenticated_user(state, headers) else {
         return false;
     };
@@ -29,6 +29,16 @@ pub(crate) fn is_resource_moderation_session(state: &AppState, headers: &HeaderM
 
     context.has_permission(AdminPermission::ModerationReview)
         && verify_admin_v2_session(state, headers, context.user_id, context.assignment_id)
+}
+
+pub(crate) fn moderation_scope_filter(state: &AppState, headers: &HeaderMap) -> String {
+    let Some(user) = verify_authenticated_user(state, headers) else {
+        return String::new();
+    };
+
+    load_admin_context(state, user.user_id)
+        .map(|context| admin_resource_scope_filter(&context, "resources"))
+        .unwrap_or_default()
 }
 
 pub async fn admin_login_page() -> Redirect {
@@ -74,9 +84,12 @@ pub async fn admin_reports(State(state): State<AppState>, headers: HeaderMap) ->
         }
     };
 
+    let scope_filter = moderation_scope_filter(&state, &headers).replace("resources.", "r.");
+
     let rows: Vec<crate::web::view_models::AdminReportRow> = db
         .prepare(
-            "SELECT
+            &format!(
+                "SELECT
                 rr.id,
                 rr.reporter_user_id,
                 rr.resource_id,
@@ -90,13 +103,16 @@ pub async fn admin_reports(State(state): State<AppState>, headers: HeaderMap) ->
              FROM resource_reports rr
              LEFT JOIN resources r
                ON r.id = rr.resource_id
+             WHERE 1 = 1
+               {scope_filter}
              ORDER BY
                 CASE rr.status
                     WHEN 'pending' THEN 0
                     ELSE 1
                 END,
                 rr.created_at DESC,
-                rr.id DESC",
+                rr.id DESC"
+            ),
         )
         .and_then(|mut stmt| {
             stmt.query_map([], |row| {
@@ -583,6 +599,8 @@ pub async fn admin_resources(
           OR LOWER(description) LIKE LOWER(?1))"
     };
 
+    let scope_filter = moderation_scope_filter(&state, &headers);
+
     let sql = format!(
         "SELECT
             id,
@@ -599,12 +617,13 @@ pub async fn admin_resources(
          FROM resources
          WHERE {}
            AND {}
+           {}
          ORDER BY
             is_verified ASC,
             is_active DESC,
             is_premium DESC,
             id DESC",
-        filter_clause, search_clause
+        filter_clause, search_clause, scope_filter
     );
 
     let rows: Vec<crate::web::view_models::AdminResourceRow> = if q.is_empty() {
@@ -1483,106 +1502,7 @@ pub async fn moderator_panel(State(state): State<AppState>, headers: HeaderMap) 
         return (StatusCode::NOT_FOUND, "404").into_response();
     }
 
-    // Загрузим pending ресурсы
-    let pending_resources: Vec<(i64, String, String, String)> = state.db_pool.get()
-        .ok()
-        .map(|conn| {
-            let mut stmt = conn.prepare(
-                "SELECT id, title, category, description FROM resources WHERE moderation_status = 'pending' ORDER BY created_at DESC LIMIT 50"
-            ).ok();
-            let mut result = Vec::new();
-            if let Some(stmt) = stmt.as_mut() {
-                let rows = stmt.query_map([], |row| {
-                    Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
-                });
-                if let Ok(rows) = rows {
-                    for row in rows.flatten() {
-                        result.push(row);
-                    }
-                }
-            }
-            result
-        })
-        .unwrap_or_default();
-
-    let level_title = match mod_level {
-        1 => "🏙 Модератор города",
-        2 => "🇫🇷 Модератор страны",
-        3 => "🌍 Модератор континента",
-        _ => "Модератор",
-    };
-
-    let resources_html = pending_resources
-        .iter()
-        .map(|(id, title, category, description)| {
-            let safe_title = templates::escape_html(title);
-            let safe_category = templates::escape_html(category);
-            let safe_description = templates::escape_html(description);
-
-            format!(
-                r#"<article class="rm-mod-quick-card">
-    <div class="rm-mod-card-kicker">#{id} · {category}</div>
-    <div class="rm-mod-quick-title">{title}</div>
-    <div class="rm-mod-card-desc">{description}</div>
-
-    <div class="rm-mod-quick-actions">
-        <button type="button" onclick="moderateResource({id}, 'approved')" class="rm-mod-quick-btn rm-mod-quick-btn--approve">✓ Одобрить</button>
-        <button type="button" onclick="moderateResource({id}, 'rejected')" class="rm-mod-quick-btn rm-mod-quick-btn--reject">✕ Отклонить</button>
-    </div>
-</article>"#,
-                id = id,
-                category = safe_category,
-                title = safe_title,
-                description = safe_description,
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("");
-
-    let empty_html = if pending_resources.is_empty() {
-        r#"<div class="rm-mod-empty-dashed">Нет ресурсов на проверке</div>"#
-    } else {
-        ""
-    };
-
-    let main_html = format!(
-        r#"
-<section class="hero">
-    <h1>{level_title}</h1>
-    <p>Ресурсы, ожидающие модерации</p>
-</section>
-
-<h2>На проверке ({count})</h2>
-{empty}
-{resources}
-"#,
-        level_title = level_title,
-        count = pending_resources.len(),
-        empty = empty_html,
-        resources = resources_html,
-    );
-
-    let body_after = r#"<script>
-function moderateResource(id, status) {
-    fetch('/api/moderator/moderate-resource', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ id: id, status: status })
-    }).then(r => r.json()).then(d => {
-        if (d.ok) { location.reload(); }
-    });
-}
-</script>"#;
-
-    Html(templates::page_document(
-        "Панель модератора · ResursMap",
-        "",
-        "",
-        &main_html,
-        "",
-        body_after,
-    ))
-    .into_response()
+    Redirect::temporary("/app/admin/resources").into_response()
 }
 
 pub async fn moderate_resource(

@@ -7,7 +7,7 @@ pub fn escape_html(value: &str) -> String {
         .replace('\'', "&#39;")
 }
 
-pub const STATIC_ASSET_VERSION: &str = "4.9.31";
+pub const STATIC_ASSET_VERSION: &str = "4.9.33";
 
 pub fn profession_label(raw: &str) -> String {
     match raw.trim().to_lowercase().as_str() {
@@ -2836,9 +2836,38 @@ a.feature.rm-feature-add {
     margin-bottom: 16px;
 }
 
+.rm-pwa-panel--compact {
+    padding: 12px 14px;
+    margin-bottom: 12px;
+}
+
+.rm-pwa-compact-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.rm-pwa-compact-copy {
+    min-width: 0;
+}
+
+.rm-pwa-compact-title {
+    font-size: 14px;
+    line-height: 1.25;
+}
+
+.rm-pwa-install-btn {
+    flex-shrink: 0;
+    min-height: 40px;
+    padding: 0 14px;
+    white-space: nowrap;
+}
+
 .rm-pwa-hint {
     margin-top: 5px;
     line-height: 1.45;
+    font-size: 12px;
 }
 
 .rm-home-start-card {

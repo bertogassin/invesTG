@@ -36,6 +36,17 @@
         );
     }
 
+    function isMobileLike() {
+        if (window.matchMedia("(max-width: 900px)").matches) {
+            return true;
+        }
+
+        return (
+            "ontouchstart" in window ||
+            navigator.maxTouchPoints > 0
+        );
+    }
+
     function assetVersion() {
         var meta = document.querySelector(
             'meta[name="resursmap-asset-version"]'
@@ -59,7 +70,7 @@
             }
         }
 
-        return "4.9.31";
+        return "4.9.33";
     }
 
     function registerServiceWorker() {
@@ -113,26 +124,19 @@
     );
 
     ready(function () {
-        var androidButton =
-            document.getElementById(
-                "resursmap-install-android"
-            );
+        var panel = document.getElementById(
+            "resursmap-install-panel"
+        );
 
-        var iosButton =
-            document.getElementById(
-                "resursmap-install-ios"
-            );
+        var installButton = document.getElementById(
+            "resursmap-install-pwa"
+        );
 
-        var hint =
-            document.getElementById(
-                "resursmap-install-hint"
-            );
+        var hint = document.getElementById(
+            "resursmap-install-hint"
+        );
 
-        if (
-            !androidButton &&
-            !iosButton &&
-            !hint
-        ) {
+        if (!panel && !installButton && !hint) {
             return;
         }
 
@@ -142,25 +146,24 @@
             }
         }
 
+        function hidePanel() {
+            if (panel) {
+                panel.hidden = true;
+            }
+        }
+
         function markInstalled() {
             setHint(
-                "ResursMap уже установлен на этом устройстве."
+                "ResursMap уже на главном экране."
             );
 
-            if (androidButton) {
-                androidButton.disabled = true;
-                androidButton.setAttribute(
+            if (installButton) {
+                installButton.disabled = true;
+                installButton.setAttribute(
                     "aria-disabled",
                     "true"
                 );
-            }
-
-            if (iosButton) {
-                iosButton.disabled = true;
-                iosButton.setAttribute(
-                    "aria-disabled",
-                    "true"
-                );
+                installButton.textContent = "✓ Добавлено";
             }
         }
 
@@ -169,17 +172,22 @@
             return;
         }
 
+        if (!isMobileLike()) {
+            hidePanel();
+            return;
+        }
+
         if (isIOSDevice()) {
             setHint(
-                "На iPhone установка выполняется через Safari."
+                "Safari → Поделиться → На экран «Домой»."
             );
         } else if (isTelegramBrowser()) {
             setHint(
-                "Для установки откройте эту страницу в Chrome."
+                "Откройте страницу в Chrome, затем добавьте ярлык."
             );
         } else {
             setHint(
-                "Установите ResursMap на главный экран телефона."
+                "Создаётся ярлык сайта, не загрузка из Play/App Store."
             );
         }
 
@@ -188,7 +196,7 @@
             function () {
                 if (!isIOSDevice()) {
                     setHint(
-                        "Приложение готово к установке."
+                        "Можно добавить одним нажатием."
                     );
                 }
             }
@@ -199,8 +207,8 @@
             markInstalled
         );
 
-        if (androidButton) {
-            androidButton.addEventListener(
+        if (installButton) {
+            installButton.addEventListener(
                 "click",
                 async function () {
                     if (isStandaloneMode()) {
@@ -208,15 +216,26 @@
                         return;
                     }
 
+                    if (isIOSDevice()) {
+                        alert(
+                            "На iPhone:\n\n" +
+                            "1. Откройте ResursMap в Safari.\n" +
+                            "2. Нажмите «Поделиться».\n" +
+                            "3. Выберите «На экран Домой».\n" +
+                            "4. Нажмите «Добавить»."
+                        );
+                        return;
+                    }
+
                     if (deferredPrompt) {
-                        androidButton.disabled = true;
+                        installButton.disabled = true;
 
                         try {
                             await deferredPrompt.prompt();
                             await deferredPrompt.userChoice;
                         } finally {
                             deferredPrompt = null;
-                            androidButton.disabled = false;
+                            installButton.disabled = false;
                         }
 
                         return;
@@ -224,37 +243,18 @@
 
                     if (isTelegramBrowser()) {
                         alert(
-                            "Откройте меню Telegram и выберите " +
-                            "«Открыть в Chrome». Затем снова " +
-                            "нажмите «Установить»."
+                            "Откройте меню Telegram → «Открыть в Chrome», " +
+                            "затем снова нажмите «Добавить»."
                         );
                         return;
                     }
 
                     alert(
-                        "Если окно установки не появилось:\n\n" +
-                        "1. Откройте меню браузера ⋮.\n" +
-                        "2. Выберите «Установить приложение» " +
-                        "или «Добавить на главный экран»."
-                    );
-                }
-            );
-        }
-
-        if (iosButton) {
-            iosButton.addEventListener(
-                "click",
-                function () {
-                    if (isStandaloneMode()) {
-                        markInstalled();
-                        return;
-                    }
-
-                    alert(
-                        "На iPhone откройте ResursMap в Safari.\n\n" +
-                        "1. Нажмите «Поделиться».\n" +
-                        "2. Выберите «На экран Домой».\n" +
-                        "3. Нажмите «Добавить»."
+                        "Если окно не появилось:\n\n" +
+                        "1. Меню браузера ⋮.\n" +
+                        "2. «Установить приложение» или " +
+                        "«Добавить на главный экран».\n\n" +
+                        "Это ярлык сайта, не APK из магазина."
                     );
                 }
             );

@@ -32,7 +32,6 @@ pub fn render_continents(
     }
 
     let section_head_countries = section_head("Страны", "Выберите страну для продолжения", None);
-    let section_head_features = section_head("Возможности", "Всё необходимое в одном месте", None);
 
     let head_extra = r####"<style id="resursmap-home-layout-v1">
     .rm-home-section {
@@ -176,53 +175,6 @@ pub fn render_continents(
         font-weight:850;
     }
 
-    .rm-install-grid {
-        display:grid;
-        grid-template-columns:1fr 1fr;
-        gap:10px;
-        margin-top:14px;
-    }
-
-    .rm-install-button {
-        min-height:54px;
-        padding:9px 10px;
-        border-radius:14px;
-        border:1px solid var(--line);
-        background:
-            linear-gradient(145deg, rgba(255,255,255,.04), rgba(255,255,255,.015));
-        color:var(--text);
-        cursor:pointer;
-        font:inherit;
-        text-align:left;
-        transition:
-            transform .18s ease,
-            border-color .18s ease,
-            box-shadow .18s ease;
-    }
-
-    .rm-install-button:hover {
-        transform:translateY(-2px);
-        border-color:rgba(232,204,150,.32);
-        box-shadow:0 10px 28px rgba(0,0,0,.22);
-    }
-
-    .rm-install-button strong {
-        display:block;
-        font-size:14px;
-        line-height:1.15;
-    }
-
-    .rm-install-button span {
-        display:block;
-        margin-bottom:3px;
-        font-size:10px;
-        color:var(--muted);
-    }
-
-    .rm-install-android {
-        border-color:rgba(74,222,128,.28);
-    }
-
     .rm-flow {
         display:grid;
         gap:10px;
@@ -290,38 +242,11 @@ pub fn render_continents(
             letter-spacing:.06em;
         }
     }
-
-    @media (max-width: 420px) {
-        .rm-install-grid {
-            gap:8px;
-        }
-
-        .rm-install-button {
-            min-height:50px;
-            padding:8px;
-        }
-    }
 </style>"####;
 
     let body_before_main = r####""####;
 
     let guest_hint = if guest_mode { guest_mode_hint() } else { "" };
-
-    let my_resources_href = if guest_mode {
-        format!("/login?next={}", urlencoding::encode("/app/my-resources"))
-    } else {
-        "/app/my-resources".to_string()
-    };
-    let favorites_href = if guest_mode {
-        format!("/login?next={}", urlencoding::encode("/app/favorites"))
-    } else {
-        "/app/favorites".to_string()
-    };
-    let messages_href = if guest_mode {
-        format!("/login?next={}", urlencoding::encode("/app/messages"))
-    } else {
-        "/app/messages".to_string()
-    };
 
     let hero = format!(
         r#"<section class="hero">
@@ -407,39 +332,6 @@ pub fn render_continents(
 
     let main_html = format!(
         r####"
-<section id="resursmap-install-panel"
-         class="card rm-pwa-panel">
-
-    <div class="card-title">
-        Установить приложение
-    </div>
-
-    <div id="resursmap-install-hint"
-         class="card-meta rm-pwa-hint">
-        Приложение ResursMap
-    </div>
-
-    <div class="rm-install-grid">
-
-        <button id="resursmap-install-android"
-                type="button"
-                class="rm-install-button rm-install-android">
-            <span>Android</span>
-            <strong>＋ Установить</strong>
-        </button>
-
-        <button id="resursmap-install-ios"
-                type="button"
-                class="rm-install-button">
-            <span>iPhone</span>
-            <strong>＋ Установить</strong>
-        </button>
-
-    </div>
-
-</section>
-
-
 {topbar}
 
 {hero}
@@ -449,29 +341,6 @@ pub fn render_continents(
 <div class="grid">
     {cards}
 </div>
-
-{section_head_features}
-
-<div class="feature-grid">
-    <a href="{my_resources_href}" class="feature">
-        {map_icon}
-        <strong>Мои ресурсы</strong>
-        <span>Публикации и управление.</span>
-    </a>
-
-    <a href="{favorites_href}" class="feature">
-        {heart_icon}
-        <strong>Избранное</strong>
-        <span>Сохранённые ресурсы.</span>
-    </a>
-
-    <a href="{messages_href}" class="feature">
-        {message_icon}
-        <strong>Сообщения</strong>
-        <span>Личные диалоги.</span>
-    </a>
-</div>
-
 
 <section id="resursmap-app-home" class="rm-home-section">
 
@@ -491,13 +360,9 @@ pub fn render_continents(
 
                 <div class="card-meta rm-home-start-copy">
                     Найдите человека, специалиста, услугу,
-                    бизнес или другой ресурс через поиск и карту.
+                    бизнес или другой ресурс через карту
+                    или вкладку «Поиск» внизу.
                 </div>
-
-                <a href="/app/search"
-                   class="ui-button rm-home-search-btn">
-                    Открыть поиск
-                </a>
 
             </div>
         </div>
@@ -550,17 +415,6 @@ pub fn render_continents(
         topbar = topbar("Карта", "globe"),
         hero = hero,
         cards = cards,
-        my_resources_href = my_resources_href,
-        favorites_href = favorites_href,
-        messages_href = messages_href,
-        map_icon = icon("map"),
-        heart_icon = icon("heart"),
-        message_icon = icon("message-circle"),
-    );
-
-    let body_after = format!(
-        r####"<script src="{pwa_install_js}" defer></script>"####,
-        pwa_install_js = crate::web::templates::common::static_asset("pwa-install.js"),
     );
 
     page_document(
@@ -569,7 +423,7 @@ pub fn render_continents(
         body_before_main,
         &main_html,
         &bottom_nav("map"),
-        &body_after,
+        "",
     )
 }
 
@@ -1072,9 +926,33 @@ pub fn render_search(
 // ============================================================
 
 pub fn render_menu() -> String {
+    let pwa_install_js = super::common::static_asset("pwa-install.js");
+
     let content = format!(
         r#"<section>
     {section_head_settings}
+
+    <section id="resursmap-install-panel"
+             class="card rm-pwa-panel rm-pwa-panel--compact">
+
+        <div class="rm-pwa-compact-row">
+            <div class="rm-pwa-compact-copy">
+                <div class="card-title rm-pwa-compact-title">
+                    На главный экран
+                </div>
+                <div id="resursmap-install-hint"
+                     class="card-meta rm-pwa-hint">
+                    Ярлык сайта — не загрузка из магазина
+                </div>
+            </div>
+
+            <button id="resursmap-install-pwa"
+                    type="button"
+                    class="ui-button rm-pwa-install-btn">
+                ＋ Добавить
+            </button>
+        </div>
+    </section>
 
     <div class="card rm-settings-card">
         <div class="card-title rm-settings-title">Тема оформления</div>
@@ -1098,16 +976,30 @@ pub fn render_menu() -> String {
         section_head_settings = section_head("Меню", "Настройки приложения", None),
     );
 
-    page_shell(
-        "Меню · ResursMap",
-        &topbar("Меню", "menu"),
-        &simple_hero(
+    let main_html = format!(
+        r#"{topbar}
+
+{hero}
+
+{content}"#,
+        topbar = topbar("Меню", "menu"),
+        hero = simple_hero(
             "settings",
             "ResursMap",
             "Меню",
-            "Настройки приложения и персонализация.",
+            "Тема, звук и ярлык на главном экране.",
         ),
-        &content,
+        content = content,
+    );
+
+    let body_after = format!(r#"<script src="{pwa_install_js}" defer></script>"#);
+
+    page_document(
+        "Меню · ResursMap",
+        "",
+        "",
+        &main_html,
         &bottom_nav("menu"),
+        &body_after,
     )
 }

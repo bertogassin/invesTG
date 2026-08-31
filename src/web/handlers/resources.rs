@@ -11,6 +11,7 @@ use axum::{
     response::{Html, IntoResponse, Redirect, Response},
     Json,
 };
+use rusqlite::OptionalExtension;
 use serde_json::json;
 
 pub async fn app_cat(
@@ -298,15 +299,31 @@ pub async fn add_resource(
         "general"
     };
 
+    let city_id: Option<i64> = db
+        .query_row(
+            "SELECT city.id
+             FROM geo_cities AS city
+             WHERE city.legacy_continent_index = ?1
+               AND city.legacy_country_index = ?2
+               AND city.legacy_city_index = ?3
+               AND city.is_active = 1
+             LIMIT 1",
+            rusqlite::params![ci, si, zi],
+            |row| row.get(0),
+        )
+        .optional()
+        .ok()
+        .flatten();
+
     let result = db.execute(
         "INSERT INTO resources
-        (client_id, continent_index, country_index, city_index,
+        (client_id, continent_index, country_index, city_index, city_id,
          category, title, description, contact, address,
          rating, votes, is_premium, is_verified, is_active,
          moderation_status, rejection_reason, listing_type,
          created_at, updated_at)
         VALUES
-        (?9, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8,
+        (?9, ?1, ?2, ?3, ?11, ?4, ?5, ?6, ?7, ?8,
          0, 0, 0, 0, 1,
          'pending', '', ?10,
          strftime('%s','now'), strftime('%s','now'))",
@@ -321,6 +338,7 @@ pub async fn add_resource(
             address,
             owner_client_id,
             listing_type,
+            city_id,
         ],
     );
 

@@ -1,5 +1,4 @@
 use rusqlite::{params, Connection, Transaction, TransactionBehavior};
-use std::path::Path;
 use std::time::Duration;
 
 const ADMIN_V2_FOUNDATION_VERSION: i64 = 1;
@@ -341,7 +340,7 @@ const PERMISSIONS: &[(&str, i64, i64, &str, i64)] = &[
 ];
 
 pub fn initialize() -> rusqlite::Result<()> {
-    let database_path = Path::new("data/votes.db");
+    let database_path = crate::db::path::database_path();
     let mut connection = Connection::open(database_path)?;
 
     connection.busy_timeout(Duration::from_secs(10))?;

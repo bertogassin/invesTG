@@ -209,7 +209,7 @@ pub async fn start_handler(bot: Bot, msg: Message) -> ResponseResult<()> {
 
     if admin_telegram_id.is_some() && current_user_id == admin_telegram_id {
         let admin_web_app = WebAppInfo {
-            url: "https://resursmap.de/app/admin/login"
+            url: "https://resursmap.de/login?next=%2Fapp%2Fcenter"
                 .to_string()
                 .parse()
                 .unwrap(),

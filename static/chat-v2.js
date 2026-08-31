@@ -1797,6 +1797,15 @@
                 700
             );
         }
+
+        window.addEventListener("online", function () {
+            if (
+                pendingQueue.length > 0 &&
+                navigator.onLine !== false
+            ) {
+                flushPendingQueue();
+            }
+        });
     });
 })();
 

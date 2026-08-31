@@ -4,7 +4,6 @@ use argon2::{
     Argon2,
 };
 use rusqlite::{params, Connection};
-use std::path::Path;
 use std::time::Duration;
 
 fn hash_password(password: &str) -> Result<String, String> {
@@ -42,7 +41,7 @@ pub fn bootstrap_owner_from_env() -> rusqlite::Result<()> {
         }
     };
 
-    let mut connection = Connection::open(Path::new("data/votes.db"))?;
+    let mut connection = Connection::open(crate::db::path::database_path())?;
     connection.busy_timeout(Duration::from_secs(5))?;
     connection.pragma_update(None, "foreign_keys", "ON")?;
 

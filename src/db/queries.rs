@@ -2,7 +2,7 @@ use rusqlite::{Connection, Result};
 use std::time::Duration;
 
 pub fn init_db() -> Result<Connection> {
-    let conn = Connection::open("data/votes.db")?;
+    let conn = Connection::open(crate::db::path::database_path())?;
 
     // SQLite production settings.
     //

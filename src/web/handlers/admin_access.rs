@@ -266,6 +266,76 @@ pub(super) fn scope_is_authorized(
         .unwrap_or(false)
 }
 
+/// Territory filter for global moderation lists (`/app/admin/*`).
+/// Owner sees everything; regional admins only resources in their scope tree.
+pub(super) fn admin_resource_scope_filter(context: &AdminContext, alias: &str) -> String {
+    if context.is_owner() {
+        return String::new();
+    }
+
+    let scope_id = context.scope_id;
+    let assignment_id = context.assignment_id;
+
+    format!(
+        " AND (
+            {alias}.city_id IN (
+                SELECT city.id
+                FROM geo_cities AS city
+                JOIN geographic_scopes AS city_scope
+                  ON city_scope.external_key = 'city:' || city.stable_key
+                 AND city_scope.scope_type = 'city'
+                 AND city_scope.is_active = 1
+                WHERE city_scope.id IN (
+                    WITH RECURSIVE authorized_scopes(id) AS (
+                        SELECT {scope_id}
+                        UNION
+                        SELECT additional.scope_id
+                        FROM admin_additional_scopes AS additional
+                        WHERE additional.assignment_id = {assignment_id}
+                        UNION
+                        SELECT child.id
+                        FROM geographic_scopes AS child
+                        JOIN authorized_scopes AS parent
+                          ON child.parent_scope_id = parent.id
+                        WHERE child.is_active = 1
+                    )
+                    SELECT id FROM authorized_scopes
+                )
+            )
+            OR (
+                {alias}.city_id IS NULL
+                AND EXISTS (
+                    SELECT 1
+                    FROM geo_cities AS city
+                    JOIN geographic_scopes AS city_scope
+                      ON city_scope.external_key = 'city:' || city.stable_key
+                     AND city_scope.scope_type = 'city'
+                     AND city_scope.is_active = 1
+                    WHERE city.legacy_continent_index = {alias}.continent_index
+                      AND city.legacy_country_index = {alias}.country_index
+                      AND city.legacy_city_index = {alias}.city_index
+                      AND city_scope.id IN (
+                        WITH RECURSIVE authorized_scopes(id) AS (
+                            SELECT {scope_id}
+                            UNION
+                            SELECT additional.scope_id
+                            FROM admin_additional_scopes AS additional
+                            WHERE additional.assignment_id = {assignment_id}
+                            UNION
+                            SELECT child.id
+                            FROM geographic_scopes AS child
+                            JOIN authorized_scopes AS parent
+                              ON child.parent_scope_id = parent.id
+                            WHERE child.is_active = 1
+                        )
+                        SELECT id FROM authorized_scopes
+                      )
+                )
+            )
+        )"
+    )
+}
+
 pub(super) fn valid_admin_session_public_id(
     state: &AppState,
     headers: &HeaderMap,

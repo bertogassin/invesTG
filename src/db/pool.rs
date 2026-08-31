@@ -6,7 +6,8 @@ pub type DbPool = Pool<SqliteConnectionManager>;
 pub type DbConnection = PooledConnection<SqliteConnectionManager>;
 
 pub fn create_pool() -> Result<DbPool, r2d2::Error> {
-    let manager = SqliteConnectionManager::file("data/votes.db").with_init(|conn| {
+    let db_path = crate::db::path::database_path();
+    let manager = SqliteConnectionManager::file(db_path).with_init(|conn| {
         // Эти настройки применяются к КАЖДОМУ соединению пула.
         //
         // foreign_keys является настройкой конкретного SQLite connection,

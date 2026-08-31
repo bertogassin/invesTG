@@ -4,6 +4,7 @@ pub mod moderation_legacy;
 pub mod geography_countries;
 pub mod geography_v2;
 pub mod owner_bootstrap;
+pub mod path;
 pub mod pool;
 pub mod promotions;
 pub mod queries;

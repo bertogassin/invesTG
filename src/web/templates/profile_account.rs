@@ -840,8 +840,6 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
         String::new()
     };
 
-    let section_head_account = section_head("Ваш аккаунт", "Управление аккаунтом", None);
-
     let content_html = format!(
         r####"{personal_center}
 
@@ -891,12 +889,13 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
 
     <div class="rm-profile-settings-block">
         <div class="rm-profile-settings-kicker">
-            Настройки приложения
+            Настройки
         </div>
 
-        <button class="theme-toggle-btn rm-profile-theme-btn" type="button">
-            ☀️ Светлая тема
-        </button>
+        <a href="/app/menu"
+           class="ui-button rm-profile-settings-link">
+            ⚙️ Тема, звук и ярлык
+        </a>
     </div>
 
 
@@ -992,56 +991,13 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
     <div id="profile-save-status" class="ui-status rm-profile-save-status">
     </div>
 
-</section>
-
-
-{section_head_account}
-
-
-<div class="rm-profile-nav-grid">
-
-{contact_requests_card}
-
-
-
-{notifications_card}</div>"####,
+</section>"####,
         account_header = account_header,
         statistics = statistics,
         settings_icon = icon("settings"),
         intent_status_text = intent_status_text,
         safe_intent_text = safe_intent_text,
         safe_category = safe_category,
-        contact_requests_card =
-            super::extended_navigation_card(super::ExtendedNavigationCardParams {
-                id: None,
-                href: "/app/contact-requests",
-                icon_html: "👥",
-                title: "Архив запросов",
-                meta: "Ранее полученные запросы",
-                trailing_html: Some(&format!(
-                    r#"<div class="rm-profile-trailing">
-    <span class="rm-profile-trailing-count">{}</span>
-    <div class="card-arrow">{}</div>
-</div>"#,
-                    pending_contact_requests_count,
-                    icon("chevron"),
-                ),),
-            },),
-        notifications_card = super::extended_navigation_card(super::ExtendedNavigationCardParams {
-            id: None,
-            href: "/app/notifications",
-            icon_html: "🔔",
-            title: "Уведомления",
-            meta: "Модерация и изменения ваших ресурсов",
-            trailing_html: Some(&format!(
-                r#"<div class="rm-profile-trailing">
-    <span class="rm-profile-trailing-count">{}</span>
-    <div class="card-arrow">{}</div>
-</div>"#,
-                unread_notifications_count,
-                icon("chevron"),
-            ),),
-        },),
     );
 
     let body_after_html = r####"

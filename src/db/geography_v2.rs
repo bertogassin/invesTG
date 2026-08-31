@@ -32,7 +32,7 @@ const CITIES: &[(&str, &str, &str, i64, i64, i64)] = &[
 ];
 
 pub fn initialize() -> Result<()> {
-    let mut connection = Connection::open("data/votes.db")?;
+    let mut connection = Connection::open(crate::db::path::database_path())?;
 
     connection.pragma_update(None, "foreign_keys", "ON")?;
     connection.pragma_update(None, "journal_mode", "WAL")?;
