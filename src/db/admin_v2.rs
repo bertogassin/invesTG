@@ -858,7 +858,7 @@ mod tests {
             .expect("schema version");
 
         assert_eq!(table_count, 1);
-        assert_eq!(version, ADMIN_V2_SCHEMA_VERSION);
+        assert_eq!(version, ADMIN_V2_EMAIL_OWNER_MIGRATION_VERSION);
     }
 
     #[test]

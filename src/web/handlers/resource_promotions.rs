@@ -569,8 +569,8 @@ pub async fn request_resource_promotion(
             rusqlite::params![
                 request_id,
                 authenticated.user_id,
+                screening.reason,
                 unix_now(),
-                bot_check_status,
             ],
         )
         .unwrap_or(0)
@@ -1054,29 +1054,40 @@ pub async fn admin_reject_promotion(
         Err(_) => return (StatusCode::SERVICE_UNAVAILABLE, "DB error").into_response(),
     };
 
-    let row: Option<(i64, i64, String)> = connection
+    let row: Option<(i64, i64, String, String)> = connection
         .query_row(
-            "SELECT pr.requester_user_id, pr.resource_id, r.title
+            "SELECT pr.requester_user_id, pr.resource_id, r.title, pr.payment_status
              FROM resource_promotion_requests pr
              JOIN resources r ON r.id = pr.resource_id
              WHERE pr.id = ?1
                AND pr.status IN ('pending', 'failed')
              LIMIT 1",
             rusqlite::params![request_id],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
         )
         .ok();
+
+    if let Some((_, _, _, payment_status)) = &row {
+        if payment_status == "paid" {
+            return (
+                StatusCode::FORBIDDEN,
+                "Нельзя отклонить оплаченную заявку без возврата средств",
+            )
+                .into_response();
+        }
+    }
 
     let _ = connection.execute(
         "UPDATE resource_promotion_requests
          SET status = 'rejected',
              updated_at = strftime('%s','now')
          WHERE id = ?1
-           AND status IN ('pending', 'failed')",
+           AND status IN ('pending', 'failed')
+           AND payment_status != 'paid'",
         rusqlite::params![request_id],
     );
 
-    if let Some((user_id, resource_id, title)) = row {
+    if let Some((user_id, resource_id, title, _)) = row {
         let _ = connection.execute(
             "INSERT INTO user_notifications (
                 user_id,

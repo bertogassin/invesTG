@@ -202,6 +202,16 @@ pub fn verify_webhook_signature(payload: &[u8], signature_header: &str, secret: 
         return false;
     }
 
+    let timestamp_secs: i64 = match timestamp.parse() {
+        Ok(value) => value,
+        Err(_) => return false,
+    };
+
+    let now = chrono::Utc::now().timestamp();
+    if (now - timestamp_secs).abs() > 300 {
+        return false;
+    }
+
     let signed_payload = format!("{timestamp}.{}", String::from_utf8_lossy(payload));
     let mut mac = match HmacSha256::new_from_slice(secret.as_bytes()) {
         Ok(mac) => mac,

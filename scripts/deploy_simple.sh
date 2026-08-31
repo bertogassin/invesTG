@@ -23,12 +23,22 @@ sqlite3 data/votes.db 'PRAGMA integrity_check;'
 
 systemctl restart resursmap
 
-for i in $(seq 1 30); do
-  curl -fsS http://127.0.0.1:3000/health && break
+health_ok=false
+for _ in $(seq 1 30); do
+  if curl -fsS http://127.0.0.1:3000/health | grep -qx ok; then
+    health_ok=true
+    break
+  fi
   sleep 1
 done
 
+if [[ "$health_ok" != true ]]; then
+  echo "DEPLOY_ABORTED=health_failed"
+  exit 1
+fi
+
 echo "HEAD_AFTER=$(git rev-parse --short HEAD)"
 echo "SERVICE=$(systemctl is-active resursmap)"
-echo "CACHE_VERSION=4.9.24"
+echo "HEALTH=ok"
+echo "CACHE_VERSION=4.9.29"
 echo "DEPLOY=COMPLETE"

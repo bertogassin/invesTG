@@ -1,4 +1,5 @@
 /target/
+/target-web/
 /data/*.db
 /data/*.db-*
 .env
@@ -27,5 +28,6 @@ RESURSMAP_AUDIT.txt
 $root/
 scripts/chat_v50_bundle.tar.gz
 # Rust build
-target/
+/target/
+/target-web/
 # Environment / secrets

@@ -112,13 +112,14 @@ fn format_group_message(row: &PromotionPublishRow) -> String {
     };
 
     format!(
-        "📢 ResursMap · {}\n{} · {}\n\n{}\n\n{}{}\n\n🔗 https://resursmap.de/app/resource/{}",
+        "📢 ResursMap · {}\n{} · {}\n\n{}\n\n{}{}\n\n🔗 {}/app/resource/{}",
         row.city_name.trim(),
         kind,
         row.category.trim(),
         row.title.trim(),
         row.description.trim(),
         address,
+        crate::stripe_payments::public_base_url(),
         row.resource_id,
     )
 }
