@@ -955,6 +955,29 @@ pub fn render_menu() -> String {
     </section>
 
     <div class="card rm-settings-card">
+        <div class="card-title rm-settings-title">Звук и вибрация</div>
+
+        <div class="rm-settings-toggle-stack">
+            <button id="rm-menu-sound-toggle"
+                    type="button"
+                    class="rm-settings-toggle-btn">
+                🔔 Звук включён
+            </button>
+
+            <button id="rm-menu-haptics-toggle"
+                    type="button"
+                    class="rm-settings-toggle-btn">
+                📳 Вибрация включена
+            </button>
+        </div>
+
+        <button class="ui-button sound-test-btn rm-settings-sound-btn"
+                type="button">
+            ▶ Прослушать уведомление
+        </button>
+    </div>
+
+    <div class="card rm-settings-card rm-settings-card--spaced">
         <div class="card-title rm-settings-title">Тема оформления</div>
 
         <button class="theme-toggle-btn rm-settings-theme-btn" type="button">
@@ -966,12 +989,6 @@ pub fn render_menu() -> String {
         <div class="card-title rm-settings-title--sm">Язык</div>
         <div class="card-meta">Русский</div>
     </div>
-
-    <button class="ui-button sound-test-btn rm-settings-sound-btn"
-            type="button"
-            onclick="playNotificationSound()">
-        🔊 Тест звука
-    </button>
 </section>"#,
         section_head_settings = section_head("Меню", "Настройки приложения", None),
     );
@@ -992,7 +1009,12 @@ pub fn render_menu() -> String {
         content = content,
     );
 
-    let body_after = format!(r#"<script src="{pwa_install_js}" defer></script>"#);
+    let body_after = format!(
+        r#"<script src="{pwa_install_js}" defer></script>
+<script src="{menu_settings_js}" defer></script>"#,
+        pwa_install_js = pwa_install_js,
+        menu_settings_js = super::common::static_asset("menu-settings.js"),
+    );
 
     page_document(
         "Меню · ResursMap",

@@ -29,9 +29,13 @@ git diff --check
 if command -v node >/dev/null 2>&1; then
   node --check static/chat-v2.js
   node --check static/chat-sounds.js
+  node --check static/menu-settings.js
+  node --check static/nav-badge.js
 else
   echo "NODE_CHECK=SKIPPED"
 fi
+
+bash scripts/check_asset_version.sh
 
 sqlite3 data/votes.db 'PRAGMA integrity_check;'
 sqlite3 data/votes.db 'PRAGMA foreign_key_check;'
@@ -55,6 +59,6 @@ fi
 echo "SERVICE=$(systemctl is-active resursmap)"
 echo "HEALTH=ok"
 echo "SQLITE=ok"
-echo "CACHE_VERSION=4.9.33"
+echo "CACHE_VERSION=4.9.34"
 git status --short --branch
 echo "DEPLOY=COMPLETE"

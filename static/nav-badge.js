@@ -1,6 +1,12 @@
 (function () {
     "use strict";
 
+    function notifySound() {
+        if (typeof window.resursmapPlayNotificationSound === "function") {
+            window.resursmapPlayNotificationSound();
+        }
+    }
+
     var lastAttention = 0;
     var lastNotifications = 0;
 
@@ -33,6 +39,7 @@
                 badge.remove();
             }
 
+            link.classList.remove("has-attention");
             return;
         }
 
@@ -43,12 +50,7 @@
         }
 
         badge.textContent = label;
-    }
-
-    function playNotificationSound() {
-        if (typeof window.resursmapPlayNotificationSound === "function") {
-            window.resursmapPlayNotificationSound();
-        }
+        link.classList.add("has-attention");
     }
 
     function refreshAttention() {
@@ -68,7 +70,7 @@
                 var notifications = Number(data.notifications) || 0;
 
                 if (notifications > lastNotifications && lastNotifications > 0) {
-                    playNotificationSound();
+                    notifySound();
                 }
 
                 lastNotifications = notifications;

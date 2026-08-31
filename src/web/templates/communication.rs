@@ -901,13 +901,11 @@ pub fn render_chat(
     </div>
 </form>
 
-<script src="{chat_sounds_js}" defer></script>
 <script src="{chat_js}" defer></script>
 <script src="{chat_blocks_js}" defer></script>
 
 "#,
             chat_css = static_asset("chat-v2.css"),
-            chat_sounds_js = static_asset("chat-sounds.js"),
             chat_js = static_asset("chat-v2.js"),
             chat_blocks_js = static_asset("chat-blocks.js"),
             other_user_id = other_user_id,

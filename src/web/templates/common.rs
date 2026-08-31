@@ -7,7 +7,7 @@ pub fn escape_html(value: &str) -> String {
         .replace('\'', "&#39;")
 }
 
-pub const STATIC_ASSET_VERSION: &str = "4.9.33";
+pub const STATIC_ASSET_VERSION: &str = "4.9.34";
 
 pub fn profession_label(raw: &str) -> String {
     match raw.trim().to_lowercase().as_str() {
@@ -2922,6 +2922,7 @@ a.feature.rm-feature-add {
 }
 
 .rm-settings-theme-btn,
+.rm-settings-toggle-btn,
 .rm-settings-sound-btn {
     width: 100%;
     min-height: 48px;
@@ -2935,10 +2936,46 @@ a.feature.rm-feature-add {
     color: var(--gold-light);
     font-size: 14px;
     font-weight: 700;
+    cursor: pointer;
+    transition:
+        border-color .18s ease,
+        background .18s ease,
+        transform .18s ease;
+}
+
+.rm-settings-toggle-stack {
+    display: grid;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.rm-settings-toggle-btn.is-off {
+    color: var(--muted);
+    border-color: rgba(255, 255, 255, .08);
+    background: rgba(255, 255, 255, .03);
+}
+
+.rm-settings-toggle-btn:active,
+.rm-settings-theme-btn:active,
+.rm-settings-sound-btn:active {
+    transform: scale(.98);
 }
 
 .rm-settings-sound-btn {
-    margin-top: 12px;
+    margin-top: 0;
+}
+
+.nav-item.has-attention .nav-badge {
+    animation: rm-badge-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes rm-badge-pulse {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(232, 92, 92, .35);
+    }
+    50% {
+        box-shadow: 0 0 0 6px rgba(232, 92, 92, 0);
+    }
 }
 
 .rm-search-person-username {
@@ -3625,8 +3662,8 @@ pub(crate) fn page_document(
 
 {body_after}
 
+<script src="{chat_sounds_js}" defer></script>
 <script src="{splash_js}" defer></script>
-<script src="{notification_sound_js}" defer></script>
 <script src="{nav_badge_js}" defer></script>
 <script src="{theme_toggle_js}" defer></script>
 
@@ -3642,7 +3679,7 @@ pub(crate) fn page_document(
         bottom_nav = bottom_nav_html,
         body_after = body_after_html,
         splash_js = static_asset("splash.js"),
-        notification_sound_js = static_asset("notification-sound.js"),
+        chat_sounds_js = static_asset("chat-sounds.js"),
         nav_badge_js = static_asset("nav-badge.js"),
         theme_toggle_js = static_asset("theme-toggle.js"),
     )

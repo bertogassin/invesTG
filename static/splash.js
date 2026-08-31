@@ -14,7 +14,7 @@
             return meta.content;
         }
 
-        return "4.9.33";
+        return "";
     }
 
     try {
@@ -86,28 +86,9 @@
     document.body.appendChild(splash);
 
     function playSoftSound() {
-        try {
-            var AudioContext = window.AudioContext || window.webkitAudioContext;
-            if (!AudioContext) return;
-
-            var ctx = new AudioContext();
-            var oscillator = ctx.createOscillator();
-            var gainNode = ctx.createGain();
-
-            oscillator.type = 'sine';
-            oscillator.frequency.setValueAtTime(440, ctx.currentTime);
-            oscillator.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.15);
-
-            gainNode.gain.setValueAtTime(0, ctx.currentTime);
-            gainNode.gain.linearRampToValueAtTime(0.15, ctx.currentTime + 0.05);
-            gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.8);
-
-            oscillator.connect(gainNode);
-            gainNode.connect(ctx.destination);
-
-            oscillator.start(ctx.currentTime);
-            oscillator.stop(ctx.currentTime + 0.8);
-        } catch(e) {}
+        if (typeof window.resursmapPlaySplashSound === "function") {
+            window.resursmapPlaySplashSound();
+        }
     }
 
     setTimeout(function() {
