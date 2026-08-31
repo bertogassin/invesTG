@@ -7,7 +7,7 @@ pub fn escape_html(value: &str) -> String {
         .replace('\'', "&#39;")
 }
 
-pub const STATIC_ASSET_VERSION: &str = "4.9.14";
+pub const STATIC_ASSET_VERSION: &str = "4.9.15";
 
 pub fn profession_label(raw: &str) -> String {
     match raw.trim().to_lowercase().as_str() {
@@ -1737,6 +1737,843 @@ a.feature.rm-feature-add {
     overflow-wrap: anywhere;
 }
 
+.rm-session-form {
+    margin: 0;
+}
+
+.rm-session-revoke-btn {
+    min-height: 34px;
+    padding: 0 12px;
+    font-size: 11px;
+}
+
+.rm-session-ip {
+    margin-top: 4px;
+}
+
+.rm-sessions-title {
+    font-size: 16px;
+    margin-bottom: 8px;
+}
+
+.rm-sessions-copy {
+    margin-bottom: 10px;
+    line-height: 1.5;
+}
+
+.rm-sessions-revoke-all {
+    margin-top: 14px;
+}
+
+.rm-sessions-revoke-all-btn {
+    width: 100%;
+    min-height: 42px;
+}
+
+.rm-mod-level-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: .04em;
+    text-decoration: none;
+}
+
+.rm-mod-level-badge--1 {
+    background: rgba(42, 199, 133, .10);
+    border: 1px solid rgba(42, 199, 133, .34);
+    color: #69e6ae;
+}
+
+.rm-mod-level-badge--2 {
+    background: rgba(100, 168, 255, .10);
+    border: 1px solid rgba(100, 168, 255, .36);
+    color: #8fc2ff;
+}
+
+.rm-mod-level-badge--3 {
+    background: linear-gradient(90deg, rgba(100, 168, 255, .09), rgba(214, 183, 122, .08));
+    border: 1px solid rgba(214, 183, 122, .38);
+    color: #e6d09f;
+}
+
+.rm-mod-level-badge--4 {
+    background: linear-gradient(90deg, rgba(137, 116, 255, .12), rgba(214, 183, 122, .08));
+    border: 1px solid rgba(137, 116, 255, .42);
+    color: #c2b7ff;
+}
+
+.rm-mod-level-badge--5 {
+    background: linear-gradient(90deg, rgba(214, 183, 122, .15), rgba(137, 116, 255, .10));
+    border: 1px solid rgba(214, 183, 122, .48);
+    color: #f0d69c;
+    box-shadow: 0 0 24px rgba(214, 183, 122, .14);
+}
+
+.rm-me-account-card {
+    display: block;
+    margin-bottom: 20px;
+    padding: 20px;
+    border: 1px solid rgba(214, 183, 122, .22);
+}
+
+.rm-me-account-row {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.rm-me-avatar {
+    width: 58px;
+    height: 58px;
+    border-radius: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    background: rgba(214, 183, 122, .08);
+    border: 1px solid rgba(214, 183, 122, .28);
+}
+
+.rm-me-name-wrap {
+    min-width: 0;
+}
+
+.rm-me-name {
+    font-size: 21px;
+    line-height: 1.2;
+    font-weight: 850;
+    overflow-wrap: anywhere;
+}
+
+.rm-me-username {
+    margin-top: 5px;
+    color: var(--muted);
+    font-size: 14px;
+}
+
+.rm-me-username--guest {
+    font-size: 13px;
+}
+
+.rm-me-account-id {
+    margin-top: 10px;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: .04em;
+}
+
+.rm-me-logout-form {
+    margin-top: 12px;
+}
+
+.rm-me-logout-btn {
+    width: 100%;
+    min-height: 44px;
+}
+
+.rm-me-stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 24px;
+}
+
+.rm-me-stat-card {
+    display: block;
+    padding: 16px;
+}
+
+.rm-me-stat-value {
+    font-size: 26px;
+    font-weight: 900;
+    line-height: 1;
+}
+
+.rm-me-stat-value--md {
+    font-size: 24px;
+}
+
+.rm-me-stat-value--ok {
+    color: #16a34a;
+}
+
+.rm-me-stat-value--warn {
+    color: #d97706;
+}
+
+.rm-me-stat-meta {
+    margin-top: 7px;
+}
+
+.rm-me-rejected-row {
+    display: flex;
+    margin-bottom: 20px;
+    padding: 14px 16px;
+    border: 1px solid rgba(220, 38, 38, .14);
+}
+
+.rm-me-rejected-title {
+    font-size: 14px;
+}
+
+.rm-me-rejected-copy {
+    margin-top: 3px;
+}
+
+.rm-me-rejected-count {
+    font-size: 22px;
+    font-weight: 900;
+    color: #dc2626;
+}
+
+.rm-profile-section {
+    display: block;
+    padding: 20px;
+    margin-bottom: 24px;
+}
+
+.rm-profile-section--compact {
+    margin-bottom: 18px;
+}
+
+.rm-profile-section-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+    margin-bottom: 18px;
+}
+
+.rm-profile-section-title {
+    font-size: 18px;
+}
+
+.rm-profile-section-copy {
+    margin-top: 5px;
+    line-height: 1.45;
+}
+
+.rm-profile-icon-box {
+    width: 42px;
+    height: 42px;
+    border-radius: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    background: rgba(214, 183, 122, .08);
+    border: 1px solid rgba(214, 183, 122, .24);
+}
+
+.rm-profile-intent-box {
+    padding: 12px 14px;
+    border-radius: 13px;
+    background: rgba(0, 0, 0, .03);
+    border: 1px solid rgba(0, 0, 0, .07);
+    margin-bottom: 16px;
+}
+
+.rm-profile-intent-kicker {
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    font-weight: 800;
+    margin-bottom: 5px;
+}
+
+.rm-profile-intent-text {
+    font-size: 14px;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+.rm-profile-settings-block {
+    margin-top: 20px;
+    padding-top: 18px;
+    border-top: 1px solid var(--line);
+}
+
+.rm-profile-settings-kicker {
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 12px;
+}
+
+.theme-toggle-btn.rm-profile-theme-btn {
+    width: 100%;
+    min-height: 48px;
+    gap: 8px;
+    padding: 0 16px;
+    border-color: rgba(214, 183, 122, .28);
+    border-radius: 14px;
+    background: rgba(214, 183, 122, .06);
+    color: var(--gold-light);
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.rm-profile-field {
+    display: block;
+}
+
+.rm-profile-field--spaced {
+    margin-top: 15px;
+}
+
+.rm-profile-field-label {
+    margin-bottom: 7px;
+    font-size: 13px;
+    font-weight: 800;
+}
+
+.rm-profile-save-btn {
+    width: 100%;
+    min-height: 50px;
+    margin-top: 17px;
+    border: 0;
+    border-radius: 15px;
+    font-size: 15px;
+    font-weight: 900;
+    color: #111;
+    background: linear-gradient(135deg, var(--gold), var(--gold-light));
+}
+
+.rm-profile-save-status {
+    margin-top: 9px;
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.4;
+}
+
+.rm-profile-nav-grid {
+    display: grid;
+    gap: 12px;
+}
+
+.rm-profile-trailing {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.rm-profile-trailing-count {
+    min-width: 28px;
+    height: 28px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 900;
+    background: rgba(214, 183, 122, .12);
+    border: 1px solid rgba(214, 183, 122, .28);
+    color: var(--gold-light);
+}
+
+.rm-public-section {
+    display: block;
+    padding: 20px;
+    margin-bottom: 18px;
+}
+
+.rm-public-section--intent {
+    border: 1px solid rgba(214, 183, 122, .24);
+}
+
+.rm-public-kicker {
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .07em;
+    font-weight: 800;
+    margin-bottom: 8px;
+}
+
+.rm-public-copy {
+    line-height: 1.5;
+    margin-bottom: 14px;
+}
+
+.rm-public-chat-link {
+    width: 100%;
+    min-height: 48px;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 14px;
+    border: 1px solid rgba(22, 163, 74, .38);
+    background: rgba(22, 163, 74, .10);
+    color: var(--text);
+    text-decoration: none;
+    font-weight: 850;
+}
+
+.rm-public-contact-btn {
+    width: 100%;
+    min-height: 48px;
+}
+
+.rm-public-contact-panel {
+    display: none;
+    margin-top: 14px;
+}
+
+.rm-public-contact-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.rm-public-contact-send {
+    min-height: 44px;
+    border-color: rgba(22, 163, 74, .35);
+    background: rgba(22, 163, 74, .10);
+}
+
+.rm-public-contact-cancel {
+    min-height: 44px;
+    background: rgba(0, 0, 0, .03);
+    font-weight: 750;
+}
+
+.rm-public-contact-status {
+    margin-top: 9px;
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.4;
+}
+
+.rm-public-profile-card {
+    display: block;
+    margin-bottom: 20px;
+    padding: 20px;
+    border: 1px solid rgba(214, 183, 122, .22);
+}
+
+.rm-public-profile-row {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.rm-public-intent-text {
+    margin: 0;
+    line-height: 1.55;
+    white-space: pre-wrap;
+}
+
+.rm-public-name {
+    font-size: 20px;
+    line-height: 1.25;
+    font-weight: 900;
+    overflow-wrap: anywhere;
+}
+
+.rm-public-resource-meta {
+    margin-top: 5px;
+}
+
+.rm-public-intent-body {
+    font-size: 16px;
+    line-height: 1.55;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+}
+
+.rm-mod-login-wrap {
+    max-width: 520px;
+    margin: auto;
+}
+
+.rm-mod-nav {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+}
+
+.rm-mod-chip {
+    padding: 9px 12px;
+    border-radius: 999px;
+    text-decoration: none;
+    border: 1px solid rgba(255, 255, 255, .14);
+    color: inherit;
+    font-weight: 700;
+}
+
+.rm-mod-chip--reports {
+    border-color: rgba(217, 119, 6, .38);
+    background: rgba(217, 119, 6, .08);
+    font-weight: 800;
+}
+
+.rm-mod-chip--reports-alert {
+    border-color: rgba(220, 38, 38, .38);
+    background: rgba(220, 38, 38, .08);
+    font-weight: 800;
+}
+
+.rm-mod-chip--pending {
+    border-color: rgba(217, 119, 6, .35);
+}
+
+.rm-mod-chip--verified {
+    border-color: rgba(22, 163, 74, .35);
+}
+
+.rm-mod-chip--rejected {
+    border-color: rgba(220, 38, 38, .35);
+}
+
+.rm-mod-chip--premium {
+    border-color: rgba(214, 183, 122, .45);
+}
+
+.rm-mod-chip--hidden {
+    border-color: rgba(220, 38, 38, .32);
+}
+
+.rm-mod-metrics {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px;
+    margin-bottom: 24px;
+}
+
+.rm-mod-metrics--2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.rm-mod-card {
+    border: 1px solid rgba(214, 183, 122, .22);
+    border-radius: 20px;
+    padding: 18px;
+    margin-bottom: 16px;
+    background: rgba(255, 255, 255, .035);
+}
+
+.rm-mod-card--resource {
+    margin: 0 0 16px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .12);
+}
+
+.rm-mod-card-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    align-items: flex-start;
+}
+
+.rm-mod-card-head--resource {
+    gap: 14px;
+}
+
+.rm-mod-card-kicker {
+    font-size: 11px;
+    color: #8f96a3;
+    margin-bottom: 6px;
+}
+
+.rm-mod-card-title {
+    margin: 0 0 6px;
+    font-size: 20px;
+}
+
+.rm-mod-card-title--resource {
+    margin: 0 0 8px;
+}
+
+.rm-mod-card-category {
+    color: #9ca3af;
+    font-size: 13px;
+}
+
+.rm-mod-card-desc {
+    color: #9ca3af;
+    line-height: 1.5;
+    max-width: 620px;
+}
+
+.rm-mod-badges {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    font-size: 12px;
+}
+
+.rm-mod-badges--resource {
+    gap: 12px;
+    margin-top: 14px;
+}
+
+.rm-mod-badge--pending {
+    color: #d97706;
+    font-weight: 800;
+}
+
+.rm-mod-badge--ok {
+    color: #16a34a;
+    font-weight: 800;
+}
+
+.rm-mod-badge--bad {
+    color: #dc2626;
+    font-weight: 800;
+}
+
+.rm-mod-badge--active {
+    color: #16a34a;
+}
+
+.rm-mod-badge--hidden {
+    color: #dc2626;
+}
+
+.rm-mod-rating {
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+.rm-mod-reason {
+    margin-top: 16px;
+    padding: 14px;
+    border-radius: 14px;
+    background: rgba(217, 119, 6, .07);
+    border: 1px solid rgba(217, 119, 6, .20);
+    line-height: 1.5;
+}
+
+.rm-mod-rejection {
+    margin-top: 12px;
+    padding: 11px 13px;
+    border-radius: 12px;
+    border: 1px solid rgba(220, 38, 38, .22);
+    background: rgba(220, 38, 38, .07);
+    color: #dc2626;
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+.rm-mod-meta {
+    margin-top: 10px;
+    font-size: 11px;
+    color: var(--muted);
+}
+
+.rm-mod-actions {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+    gap: 9px;
+    margin-top: 18px;
+}
+
+.rm-mod-actions--bulk {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 8px;
+}
+
+.rm-mod-btn {
+    width: 100%;
+    min-height: 44px;
+    border-radius: 12px;
+    color: inherit;
+    font-weight: 800;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.rm-mod-btn--ok {
+    border: 1px solid rgba(22, 163, 74, .35);
+    background: rgba(22, 163, 74, .10);
+}
+
+.rm-mod-btn--warn {
+    border: 1px solid rgba(217, 119, 6, .35);
+    background: rgba(217, 119, 6, .08);
+}
+
+.rm-mod-btn--danger {
+    border: 1px solid rgba(220, 38, 38, .30);
+    background: rgba(220, 38, 38, .07);
+}
+
+.rm-mod-btn--danger-strong {
+    border: 1px solid rgba(220, 38, 38, .40);
+    background: rgba(220, 38, 38, .12);
+}
+
+.rm-mod-btn--gold {
+    border: 1px solid rgba(214, 183, 122, .42);
+    background: rgba(214, 183, 122, .10);
+}
+
+.rm-mod-btn--neutral {
+    border: 1px solid rgba(220, 38, 38, .28);
+    background: rgba(220, 38, 38, .07);
+}
+
+.rm-mod-link {
+    min-height: 42px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, .12);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    color: inherit;
+    font-weight: 800;
+}
+
+.rm-mod-search {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.rm-mod-search-input {
+    flex: 1;
+    min-width: 0;
+    padding: 13px 14px;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, .14);
+    background: rgba(255, 255, 255, .04);
+    color: inherit;
+    font-size: 15px;
+    font-family: inherit;
+}
+
+.rm-mod-search-btn {
+    min-width: 92px;
+    border-radius: 14px;
+    border: 1px solid rgba(214, 183, 122, .35);
+    background: rgba(214, 183, 122, .10);
+    color: inherit;
+    font-weight: 800;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.rm-mod-reject-form {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 9px;
+}
+
+.rm-mod-reject-input {
+    min-width: 0;
+    min-height: 44px;
+    box-sizing: border-box;
+    padding: 0 13px;
+    border-radius: 12px;
+    border: 1px solid rgba(220, 38, 38, .30);
+    background: rgba(255, 255, 255, .04);
+    color: inherit;
+    font-size: 14px;
+    font-family: inherit;
+}
+
+.rm-mod-reject-btn {
+    min-height: 44px;
+    padding: 0 16px;
+    border-radius: 12px;
+    border: 1px solid rgba(220, 38, 38, .38);
+    background: rgba(220, 38, 38, .10);
+    color: inherit;
+    font-weight: 800;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.rm-mod-bulk-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+}
+
+.rm-mod-bulk-note {
+    font-size: 12px;
+    color: var(--muted);
+}
+
+.rm-mod-empty.card {
+    display: block;
+}
+
+.rm-mod-result.card {
+    display: block;
+    padding: 20px;
+}
+
+.rm-mod-result-meta {
+    margin-top: 8px;
+}
+
+.rm-mod-quick-card {
+    border: 1px solid rgba(214, 183, 122, .22);
+    border-radius: 18px;
+    padding: 16px;
+    margin-bottom: 12px;
+    background: rgba(214, 183, 122, .05);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .15);
+}
+
+.rm-mod-quick-title {
+    font-size: 16px;
+    font-weight: 800;
+    color: #f0d69c;
+    margin-bottom: 6px;
+}
+
+.rm-mod-quick-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+}
+
+.rm-mod-quick-btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 800;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.rm-mod-quick-btn--approve {
+    background: #16a34a;
+    color: #fff;
+}
+
+.rm-mod-quick-btn--reject {
+    background: #dc2626;
+    color: #fff;
+}
+
+.rm-mod-empty-dashed {
+    padding: 30px;
+    text-align: center;
+    color: #8f96a3;
+    border: 1px dashed rgba(214, 183, 122, .25);
+    border-radius: 18px;
+}
+
 @media (hover:hover) {
     .ui-button:hover {
         opacity: .94;
@@ -2450,6 +3287,59 @@ pub(crate) fn workflow_status_label_or_raw(status: &str) -> String {
     } else {
         label.to_string()
     }
+}
+
+pub(crate) fn moderation_queue_badge(status: &str) -> &'static str {
+    match status {
+        "approved" => r#"<span class="rm-mod-badge rm-mod-badge--ok">✓ Одобрен</span>"#,
+        "rejected" => r#"<span class="rm-mod-badge rm-mod-badge--bad">✕ Отклонён</span>"#,
+        _ => r#"<span class="rm-mod-badge rm-mod-badge--pending">● Ожидает проверки</span>"#,
+    }
+}
+
+pub(crate) fn report_queue_badge(status: &str) -> &'static str {
+    match status {
+        "pending" => r#"<span class="rm-mod-badge rm-mod-badge--pending">● Ожидает</span>"#,
+        _ => r#"<span class="rm-mod-badge rm-mod-badge--ok">✓ Закрыта</span>"#,
+    }
+}
+
+pub(crate) fn resource_visibility_badge(active: i64) -> &'static str {
+    if active == 1 {
+        r#"<span class="rm-mod-badge rm-mod-badge--active">● Активен</span>"#
+    } else {
+        r#"<span class="rm-mod-badge rm-mod-badge--hidden">● Скрыт</span>"#
+    }
+}
+
+pub(crate) fn resource_visibility_with_status(active: i64, status: &str) -> String {
+    let safe_status = escape_html(status);
+    if active == 1 {
+        format!(
+            r#"<span class="rm-mod-badge rm-mod-badge--active">● Активен · {safe_status}</span>"#
+        )
+    } else {
+        format!(
+            r#"<span class="rm-mod-badge rm-mod-badge--hidden">● Скрыт · {safe_status}</span>"#
+        )
+    }
+}
+
+pub(crate) fn moderator_level_badge(level: i64) -> String {
+    let (text, class) = match level {
+        1 => ("Уровень 1 · Помощник группы", "rm-mod-level-badge--1"),
+        2 => ("Уровень 2 · Администратор города", "rm-mod-level-badge--2"),
+        3 => ("Уровень 3 · Администратор страны", "rm-mod-level-badge--3"),
+        4 => ("Уровень 4 · Администратор континента", "rm-mod-level-badge--4"),
+        5 => ("Уровень 5 · Владелец ResursMap", "rm-mod-level-badge--5"),
+        _ => return String::new(),
+    };
+
+    format!(
+        r#"<a href="/app/center" class="rm-mod-level-badge {class}">{text}</a>"#,
+        class = class,
+        text = text,
+    )
 }
 
 fn admin_ops_styles() -> &'static str {

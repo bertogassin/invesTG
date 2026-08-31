@@ -1,8 +1,8 @@
 use super::common::{
     back_hero, back_link, bottom_nav, bottom_nav_with_badge, empty_state_card, empty_state_action,
     empty_state_card_with_actions, escape_html, guest_locked_section, guest_mode_panel, icon,
-    navigation_card, page_document, page_shell, premium_badge_html, profile_resource_card,
-    section_head, simple_hero, topbar, verified_badge_html,
+    moderator_level_badge, navigation_card, page_document, page_shell, premium_badge_html,
+    profile_resource_card, section_head, simple_hero, topbar, verified_badge_html,
 };
 
 pub struct RenderMeParams<'a> {
@@ -67,9 +67,9 @@ fn render_user_sessions_panel(sessions: &[crate::web::view_models::UserSessionRo
                 String::new()
             } else {
                 format!(
-                    r#"<form method="post" action="/app/sessions/revoke" style="margin:0;">
+                    r#"<form method="post" action="/app/sessions/revoke" class="rm-session-form">
     <input type="hidden" name="session_public_id" value="{session_id}">
-    <button type="submit" class="ui-button" style="min-height:34px;padding:0 12px;font-size:11px;">
+    <button type="submit" class="ui-button rm-session-revoke-btn">
         Завершить
     </button>
 </form>"#,
@@ -81,7 +81,7 @@ fn render_user_sessions_panel(sessions: &[crate::web::view_models::UserSessionRo
                 r#"<div class="rm-session-row">
     <div>
         <strong>{device}</strong>
-        <div class="card-meta" style="margin-top:4px;">{ip}</div>
+        <div class="card-meta rm-session-ip">{ip}</div>
         {current}
     </div>
     {revoke_form}
@@ -97,15 +97,15 @@ fn render_user_sessions_panel(sessions: &[crate::web::view_models::UserSessionRo
 
     format!(
         r#"<section class="rm-sessions-panel">
-    <div class="card-title" style="font-size:16px;margin-bottom:8px;">
+    <div class="card-title rm-sessions-title">
         Активные сессии
     </div>
-    <div class="card-meta" style="margin-bottom:10px;line-height:1.5;">
+    <div class="card-meta rm-sessions-copy">
         Устройства, где вы вошли в ResursMap.
     </div>
     {rows}
-    <form method="post" action="/app/sessions/revoke-others" style="margin-top:14px;">
-        <button type="submit" class="ui-button" style="width:100%;min-height:42px;">
+    <form method="post" action="/app/sessions/revoke-others" class="rm-sessions-revoke-all">
+        <button type="submit" class="ui-button rm-sessions-revoke-all-btn">
             Выйти на других устройствах
         </button>
     </form>
@@ -172,70 +172,22 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
     };
 
     let moderator_badge = if moderator_level > 0 {
-        let (badge_text, badge_style) = match moderator_level {
-            1 => (
-                "Уровень 1 · Помощник группы",
-                "background:rgba(42,199,133,.10);border:1px solid rgba(42,199,133,.34);color:#69e6ae;",
-            ),
-            2 => (
-                "Уровень 2 · Администратор города",
-                "background:rgba(100,168,255,.10);border:1px solid rgba(100,168,255,.36);color:#8fc2ff;",
-            ),
-            3 => (
-                "Уровень 3 · Администратор страны",
-                "background:linear-gradient(90deg,rgba(100,168,255,.09),rgba(214,183,122,.08));border:1px solid rgba(214,183,122,.38);color:#e6d09f;",
-            ),
-            4 => (
-                "Уровень 4 · Администратор континента",
-                "background:linear-gradient(90deg,rgba(137,116,255,.12),rgba(214,183,122,.08));border:1px solid rgba(137,116,255,.42);color:#c2b7ff;",
-            ),
-            5 => (
-                "Уровень 5 · Владелец ResursMap",
-                "background:linear-gradient(90deg,rgba(214,183,122,.15),rgba(137,116,255,.10));border:1px solid rgba(214,183,122,.48);color:#f0d69c;box-shadow:0 0 24px rgba(214,183,122,.14);",
-            ),
-            _ => ("", ""),
-        };
-        format!(
-            r#"<a href="/app/center" style="display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:999px;font-size:11px;font-weight:800;letter-spacing:.04em;text-decoration:none;{badge_style}">
-                {badge_text}
-            </a>"#,
-            badge_style = badge_style,
-            badge_text = badge_text,
-        )
+        moderator_level_badge(moderator_level)
     } else {
         String::new()
     };
 
     let username_html = if !safe_username.is_empty() {
-        format!(
-            r#"<div style="
-                margin-top:5px;
-                color:var(--muted);
-                font-size:14px;
-            ">@{}</div>"#,
-            safe_username
-        )
+        format!(r#"<div class="rm-me-username">@{}</div>"#, safe_username)
     } else if authenticated {
-        r#"<div style="
-            margin-top:5px;
-            color:var(--muted);
-            font-size:13px;
-        ">Аккаунт</div>"#
-            .to_string()
+        r#"<div class="rm-me-username rm-me-username--guest">Аккаунт</div>"#.to_string()
     } else {
         String::new()
     };
 
     let telegram_id_html = if authenticated {
         format!(
-            r#"<div style="
-                margin-top:10px;
-                font-size:11px;
-                color:var(--muted);
-                letter-spacing:.04em;
-            ">
-                ID аккаунта · {}
-            </div>"#,
+            r#"<div class="rm-me-account-id">ID аккаунта · {}</div>"#,
             user_id
         )
     } else {
@@ -245,42 +197,17 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
     let account_header = if authenticated {
         format!(
             r#"
-<div class="card"
-     style="
-         display:block;
-         margin-bottom:20px;
-         padding:20px;
-         border:1px solid rgba(214,183,122,.22);
-     ">
+<div class="card rm-me-account-card">
 
-    <div style="
-        display:flex;
-        align-items:center;
-        gap:15px;
-    ">
+    <div class="rm-me-account-row">
 
-        <div style="
-            width:58px;
-            height:58px;
-            border-radius:18px;
-            display:flex;
-            align-items:center;
-            justify-content:center;
-            flex:0 0 auto;
-            background:rgba(214,183,122,.08);
-            border:1px solid rgba(214,183,122,.28);
-        ">
+        <div class="rm-me-avatar">
             {user_icon}
         </div>
 
-        <div style="min-width:0;">
+        <div class="rm-me-name-wrap">
 
-            <div style="
-                font-size:21px;
-                line-height:1.2;
-                font-weight:850;
-                overflow-wrap:anywhere;
-            ">
+            <div class="rm-me-name">
                 {display_name}
             </div>
 
@@ -319,10 +246,9 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
             r#"{account_header}
 <form method="post"
       action="/app/logout"
-      style="margin-top:12px;">
+      class="rm-me-logout-form">
     <button type="submit"
-            class="ui-button"
-            style="width:100%;min-height:44px;">
+            class="ui-button rm-me-logout-btn">
         Выйти из аккаунта
     </button>
 </form>
@@ -337,102 +263,59 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
     let statistics = if authenticated {
         format!(
             r#"
-<div style="
-    display:grid;
-    grid-template-columns:repeat(2,minmax(0,1fr));
-    gap:10px;
-    margin-bottom:24px;
-">
+<div class="rm-me-stats">
 
-    <div class="card"
-         style="display:block;padding:16px;">
-        <div style="
-            font-size:26px;
-            font-weight:900;
-            line-height:1;
-        ">
+    <div class="card rm-me-stat-card">
+        <div class="rm-me-stat-value">
             {resources_count}
         </div>
-        <div class="card-meta"
-             style="margin-top:7px;">
+        <div class="card-meta rm-me-stat-meta">
             Мои ресурсы
         </div>
     </div>
 
-    <div class="card"
-         style="display:block;padding:16px;">
-        <div style="
-            font-size:26px;
-            font-weight:900;
-            line-height:1;
-        ">
+    <div class="card rm-me-stat-card">
+        <div class="rm-me-stat-value">
             {favorites_count}
         </div>
-        <div class="card-meta"
-             style="margin-top:7px;">
+        <div class="card-meta rm-me-stat-meta">
             Избранное
         </div>
     </div>
 
-    <div class="card"
-         style="display:block;padding:16px;">
-        <div style="
-            font-size:24px;
-            font-weight:900;
-            line-height:1;
-            color:#16a34a;
-        ">
+    <div class="card rm-me-stat-card">
+        <div class="rm-me-stat-value rm-me-stat-value--md rm-me-stat-value--ok">
             {approved_count}
         </div>
-        <div class="card-meta"
-             style="margin-top:7px;">
+        <div class="card-meta rm-me-stat-meta">
             Одобрено
         </div>
     </div>
 
-    <div class="card"
-         style="display:block;padding:16px;">
-        <div style="
-            font-size:24px;
-            font-weight:900;
-            line-height:1;
-            color:#d97706;
-        ">
+    <div class="card rm-me-stat-card">
+        <div class="rm-me-stat-value rm-me-stat-value--md rm-me-stat-value--warn">
             {pending_count}
         </div>
-        <div class="card-meta"
-             style="margin-top:7px;">
+        <div class="card-meta rm-me-stat-meta">
             На проверке
         </div>
     </div>
 
 </div>
 
-<div class="card"
-     style="
-         display:flex;
-         margin-bottom:20px;
-         padding:14px 16px;
-         border:1px solid rgba(220,38,38,.14);
-     ">
+<div class="card rm-me-rejected-row">
 
     <div class="card-content">
-        <div class="card-title"
-             style="font-size:14px;">
+        <div class="card-title rm-me-rejected-title">
             Отклонено
         </div>
 
-        <div class="card-meta"
-             style="margin-top:3px;">
+        <div class="card-meta rm-me-rejected-copy">
             Ресурсы, которым требуется исправление
         </div>
     </div>
 
-    <div style="
-        font-size:22px;
-        font-weight:900;
-        color:#dc2626;
-    ">
+    <div class="rm-me-rejected-count">
         {rejected_count}
     </div>
 
@@ -968,79 +851,35 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
 {statistics}
 
 
-<section class="card"
-         style="
-             display:block;
-             padding:20px;
-             margin-bottom:24px;
-         ">
+<section class="card rm-profile-section">
 
-    <div style="
-        display:flex;
-        align-items:flex-start;
-        justify-content:space-between;
-        gap:14px;
-        margin-bottom:18px;
-    ">
+    <div class="rm-profile-section-head">
 
         <div>
-            <div class="card-title"
-                 style="font-size:18px;">
+            <div class="card-title rm-profile-section-title">
                 Мой статус
             </div>
 
-            <div class="card-meta"
-                 style="
-                     margin-top:5px;
-                     line-height:1.45;
-                 ">
+            <div class="card-meta rm-profile-section-copy">
                 Расскажите сообществу, что вы ищете
                 или что можете предложить.
             </div>
         </div>
 
-        <div style="
-            width:42px;
-            height:42px;
-            border-radius:13px;
-            display:flex;
-            align-items:center;
-            justify-content:center;
-            flex:0 0 auto;
-            background:rgba(214,183,122,.08);
-            border:1px solid rgba(214,183,122,.24);
-        ">
+        <div class="rm-profile-icon-box">
             {settings_icon}
         </div>
 
     </div>
 
 
-    <div style="
-        padding:12px 14px;
-        border-radius:13px;
-        background:rgba(0,0,0,.03);
-        border:1px solid rgba(0,0,0,.07);
-        margin-bottom:16px;
-    ">
+    <div class="rm-profile-intent-box">
 
-        <div style="
-            font-size:11px;
-            color:var(--muted);
-            text-transform:uppercase;
-            letter-spacing:.06em;
-            font-weight:800;
-            margin-bottom:5px;
-        ">
+        <div class="rm-profile-intent-kicker">
             Сейчас
         </div>
 
-        <div id="intent-current"
-             style="
-                 font-size:14px;
-                 line-height:1.5;
-                 overflow-wrap:anywhere;
-             ">
+        <div id="intent-current" class="rm-profile-intent-text">
             {intent_status_text}
         </div>
 
@@ -1050,55 +889,20 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
 
 
 
-    <div style="
-        margin-top:20px;
-        padding-top:18px;
-        border-top:1px solid var(--line);
-    ">
-        <div style="
-            font-size:11px;
-            font-weight:900;
-            letter-spacing:.08em;
-            text-transform:uppercase;
-            color:var(--muted);
-            margin-bottom:12px;
-        ">
+    <div class="rm-profile-settings-block">
+        <div class="rm-profile-settings-kicker">
             Настройки приложения
         </div>
 
-        <button class="theme-toggle-btn"
-                type="button"
-                style="
-                    width:100%;
-                    min-height:48px;
-                    display:flex;
-                    align-items:center;
-                    justify-content:center;
-                    gap:8px;
-                    padding:0 16px;
-                    border:1px solid rgba(214,183,122,.28);
-                    border-radius:14px;
-                    background:rgba(214,183,122,.06);
-                    color:var(--gold-light);
-                    font-size:14px;
-                    font-weight:700;
-                    cursor:pointer;
-                    transition:
-                        background .2s ease,
-                        border-color .2s ease;
-                ">
+        <button class="theme-toggle-btn rm-profile-theme-btn" type="button">
             ☀️ Светлая тема
         </button>
     </div>
 
 
-    <label style="display:block;">
+    <label class="rm-profile-field">
 
-        <div style="
-            margin-bottom:7px;
-            font-size:13px;
-            font-weight:800;
-        ">
+        <div class="rm-profile-field-label">
             Что вы ищете или предлагаете
         </div>
 
@@ -1107,33 +911,14 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
             maxlength="300"
             rows="4"
             placeholder="Например: ищу электрика в Ницце или предлагаю грузоперевозки..."
-            style="
-                width:100%;
-                box-sizing:border-box;
-                resize:vertical;
-                padding:14px;
-                border-radius:14px;
-                border:1px solid var(--line);
-                background:rgba(0,0,0,.035);
-                color:var(--text);
-                font:inherit;
-                line-height:1.5;
-            "
          class="ui-textarea">{safe_intent_text}</textarea>
 
     </label>
 
 
-    <label style="
-        display:block;
-        margin-top:15px;
-    ">
+    <label class="rm-profile-field rm-profile-field--spaced">
 
-        <div style="
-            margin-bottom:7px;
-            font-size:13px;
-            font-weight:800;
-        ">
+        <div class="rm-profile-field-label">
             Ваша профессия
         </div>
 
@@ -1145,16 +930,6 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
             value="{safe_category}"
             placeholder="Например: электрик, сантехник, дизайнер..."
             autocomplete="off"
-            style="
-                width:100%;
-                box-sizing:border-box;
-                padding:14px;
-                border-radius:14px;
-                border:1px solid var(--line);
-                background:rgba(0,0,0,.035);
-                color:var(--text);
-                font:inherit;
-            "
          class="ui-input">
 
         <datalist id="profile-profession-suggestions">
@@ -1175,33 +950,13 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
     </label>
 
 
-    <label style="
-        display:block;
-        margin-top:15px;
-    ">
+    <label class="rm-profile-field rm-profile-field--spaced">
 
-        <div style="
-            margin-bottom:7px;
-            font-size:13px;
-            font-weight:800;
-        ">
+        <div class="rm-profile-field-label">
             Срок актуальности
         </div>
 
-        <select
-            id="profile-duration"
-            style="
-                width:100%;
-                min-height:48px;
-                box-sizing:border-box;
-                padding:0 13px;
-                border-radius:14px;
-                border:1px solid var(--line);
-                background:rgba(0,0,0,.035);
-                color:var(--text);
-                font:inherit;
-            "
-         class="ui-select">
+        <select id="profile-duration" class="ui-select">
             <option value="0">
                 Без срока
             </option>
@@ -1229,35 +984,12 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
     <button
         id="profile-save"
         type="button"
-        style="
-            width:100%;
-            min-height:50px;
-            margin-top:17px;
-            border:0;
-            border-radius:15px;
-            cursor:pointer;
-            font-size:15px;
-            font-weight:900;
-            color:#111;
-            background:linear-gradient(
-                135deg,
-                var(--gold),
-                var(--gold-light)
-            );
-        "
-     class="ui-button">
+     class="ui-button rm-profile-save-btn">
         Сохранить статус
     </button>
 
 
-    <div id="profile-save-status"
-         style="
-             min-height:18px;
-             margin-top:9px;
-             font-size:12px;
-             color:var(--muted);
-             line-height:1.4;
-         " class="ui-status">
+    <div id="profile-save-status" class="ui-status rm-profile-save-status">
     </div>
 
 </section>
@@ -1266,10 +998,7 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
 {section_head_account}
 
 
-<div style="
-    display:grid;
-    gap:12px;
-">
+<div class="rm-profile-nav-grid">
 
 {contact_requests_card}
 
@@ -1290,26 +1019,8 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
                 title: "Архив запросов",
                 meta: "Ранее полученные запросы",
                 trailing_html: Some(&format!(
-                    r#"<div style="
-    display:flex;
-    align-items:center;
-    gap:10px;
-">
-    <span style="
-        min-width:28px;
-        height:28px;
-        padding:0 8px;
-        border-radius:999px;
-        display:flex;
-        align-items:center;
-        justify-content:center;
-        box-sizing:border-box;
-        font-size:12px;
-        font-weight:900;
-        background:rgba(214,183,122,.12);
-        border:1px solid rgba(214,183,122,.30);
-    ">{}</span>
-
+                    r#"<div class="rm-profile-trailing">
+    <span class="rm-profile-trailing-count">{}</span>
     <div class="card-arrow">{}</div>
 </div>"#,
                     pending_contact_requests_count,
@@ -1323,26 +1034,8 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
             title: "Уведомления",
             meta: "Модерация и изменения ваших ресурсов",
             trailing_html: Some(&format!(
-                r#"<div style="
-    display:flex;
-    align-items:center;
-    gap:10px;
-">
-    <span style="
-        min-width:28px;
-        height:28px;
-        padding:0 8px;
-        border-radius:999px;
-        display:flex;
-        align-items:center;
-        justify-content:center;
-        box-sizing:border-box;
-        font-size:12px;
-        font-weight:900;
-        background:rgba(214,183,122,.12);
-        border:1px solid rgba(214,183,122,.30);
-    ">{}</span>
-
+                r#"<div class="rm-profile-trailing">
+    <span class="rm-profile-trailing-count">{}</span>
     <div class="card-arrow">{}</div>
 </div>"#,
                 unread_notifications_count,
@@ -1654,47 +1347,17 @@ pub fn render_public_user_profile(params: RenderPublicUserProfileParams<'_>) -> 
     let internal_contact_html = if let Some(chat_user_id) = chat_user_id {
         format!(
             r#"
-<section class="card"
-         style="
-             display:block;
-             padding:20px;
-             margin-bottom:18px;
-         ">
+<section class="card rm-public-section">
 
-    <div style="
-        font-size:11px;
-        color:var(--muted);
-        text-transform:uppercase;
-        letter-spacing:.07em;
-        font-weight:800;
-        margin-bottom:8px;
-    ">
+    <div class="rm-public-kicker">
         Написать
     </div>
 
-    <div class="card-meta"
-         style="
-             line-height:1.5;
-             margin-bottom:14px;
-         ">
+    <div class="card-meta rm-public-copy">
         Открыть личный диалог.
     </div>
 
-    <a href="/app/chat/{chat_user_id}"
-       style="
-           width:100%;
-           min-height:48px;
-           box-sizing:border-box;
-           display:flex;
-           align-items:center;
-           justify-content:center;
-           border-radius:14px;
-           border:1px solid rgba(22,163,74,.38);
-           background:rgba(22,163,74,.10);
-           color:var(--text);
-           text-decoration:none;
-           font-weight:850;
-       ">
+    <a href="/app/chat/{chat_user_id}" class="rm-public-chat-link">
         Открыть чат
     </a>
 
@@ -1704,119 +1367,51 @@ pub fn render_public_user_profile(params: RenderPublicUserProfileParams<'_>) -> 
         )
     } else {
         r#"
-<section class="card"
-         style="
-             display:block;
-             padding:20px;
-             margin-bottom:18px;
-         ">
+<section class="card rm-public-section">
 
-    <div style="
-        font-size:11px;
-        color:var(--muted);
-        text-transform:uppercase;
-        letter-spacing:.07em;
-        font-weight:800;
-        margin-bottom:8px;
-    ">
+    <div class="rm-public-kicker">
         Написать
     </div>
 
-    <div class="card-meta"
-         style="
-             line-height:1.5;
-             margin-bottom:14px;
-         ">
+    <div class="card-meta rm-public-copy">
         Отправьте запрос.
     </div>
 
     <button
         id="contact-request-open"
         type="button"
-        style="
-            width:100%;
-            min-height:48px;
-            border-radius:14px;
-            border:1px solid rgba(214,183,122,.38);
-            background:rgba(214,183,122,.08);
-            color:var(--text);
-            font-weight:850;
-            cursor:pointer;
-        " class="ui-button">
+        class="ui-button rm-public-contact-btn">
         Написать
     </button>
 
-    <div id="contact-request-panel"
-         style="
-             display:none;
-             margin-top:14px;
-         ">
+    <div id="contact-request-panel" class="rm-public-contact-panel">
 
         <textarea
             id="contact-request-message"
             maxlength="500"
             rows="5"
             placeholder="Напишите короткое сообщение..."
-            style="
-                width:100%;
-                box-sizing:border-box;
-                resize:vertical;
-                padding:13px;
-                border-radius:14px;
-                border:1px solid var(--line);
-                background:rgba(0,0,0,.035);
-                color:var(--text);
-                font:inherit;
-                line-height:1.45;
-            " class="ui-textarea"></textarea>
+            class="ui-textarea"></textarea>
 
-        <div style="
-            display:grid;
-            grid-template-columns:1fr 1fr;
-            gap:10px;
-            margin-top:10px;
-        ">
+        <div class="rm-public-contact-actions">
 
             <button
                 id="contact-request-send"
                 type="button"
-                style="
-                    min-height:44px;
-                    border-radius:12px;
-                    border:1px solid rgba(22,163,74,.35);
-                    background:rgba(22,163,74,.10);
-                    color:var(--text);
-                    font-weight:800;
-                    cursor:pointer;
-                " class="ui-button">
+                class="ui-button rm-public-contact-send">
                 Отправить
             </button>
 
             <button
                 id="contact-request-cancel"
                 type="button"
-                style="
-                    min-height:44px;
-                    border-radius:12px;
-                    border:1px solid var(--line);
-                    background:rgba(0,0,0,.03);
-                    color:var(--text);
-                    font-weight:750;
-                    cursor:pointer;
-                " class="ui-button">
+                class="ui-button rm-public-contact-cancel">
                 Отмена
             </button>
 
         </div>
 
-        <div
-            id="contact-request-status"
-            style="
-                margin-top:9px;
-                font-size:12px;
-                color:var(--muted);
-                line-height:1.4;
-            " class="ui-status">
+        <div id="contact-request-status" class="ui-status rm-public-contact-status">
         </div>
 
     </div>
@@ -1831,31 +1426,13 @@ pub fn render_public_user_profile(params: RenderPublicUserProfileParams<'_>) -> 
     } else {
         format!(
             r#"
-<section class="card"
-         style="
-             display:block;
-             padding:20px;
-             margin-bottom:18px;
-             border:1px solid rgba(214,183,122,.24);
-         ">
+<section class="card rm-public-section rm-public-section--intent">
 
-    <div style="
-        font-size:11px;
-        color:var(--muted);
-        text-transform:uppercase;
-        letter-spacing:.07em;
-        font-weight:800;
-        margin-bottom:8px;
-    ">
+    <div class="rm-public-kicker">
         Актуальный статус
     </div>
 
-    <div style="
-        font-size:16px;
-        line-height:1.55;
-        overflow-wrap:anywhere;
-        white-space:pre-wrap;
-    ">{intent}</div>
+    <div class="rm-public-intent-body">{intent}</div>
 
 </section>
 "#,
@@ -1913,46 +1490,21 @@ pub fn render_public_user_profile(params: RenderPublicUserProfileParams<'_>) -> 
         section_head("Ресурсы участника", "Только активные и одобренные", None);
 
     let main_html = format!(
-        r####"<section class="card"
-         style="
-             display:block;
-             padding:20px;
-             margin-bottom:18px;
-         ">
+        r####"<section class="card rm-public-profile-card">
 
-    <div style="
-        display:flex;
-        align-items:center;
-        gap:15px;
-    ">
+    <div class="rm-public-profile-row">
 
-        <div style="
-            width:58px;
-            height:58px;
-            display:flex;
-            align-items:center;
-            justify-content:center;
-            flex:0 0 auto;
-            border-radius:18px;
-            background:rgba(214,183,122,.08);
-            border:1px solid rgba(214,183,122,.28);
-        ">
+        <div class="rm-me-avatar">
             {profile_icon}
         </div>
 
-        <div style="min-width:0;">
+        <div class="rm-me-name-wrap">
 
-            <div style="
-                font-size:20px;
-                line-height:1.25;
-                font-weight:900;
-                overflow-wrap:anywhere;
-            ">
+            <div class="rm-public-name">
                 {display_name}
             </div>
 
-            <div class="card-meta"
-                 style="margin-top:5px;">
+            <div class="card-meta rm-public-resource-meta">
                 {resource_count} ресурсов
             </div>
 

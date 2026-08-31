@@ -52,7 +52,7 @@ body {
 }
 </style>"####;
 
-    let main_html = r####"<div style="max-width:520px;margin:auto;">
+    let main_html = r####"<div class="rm-mod-login-wrap">
     <h1>ResursMap · Модерация</h1>
     <p id="status">Проверяем Telegram…</p>
 </div>"####;
@@ -259,40 +259,17 @@ pub async fn admin_reports(State(state): State<AppState>, headers: HeaderMap) ->
         let safe_category = templates::escape_html(&category);
         let safe_moderation_status = templates::escape_html(&moderation_status);
 
-        let report_badge = if report_status == "pending" {
-            r#"<span style="color:#d97706;font-weight:800;">● Ожидает</span>"#
-        } else {
-            r#"<span style="color:#16a34a;font-weight:800;">✓ Закрыта</span>"#
-        };
+        let report_badge = templates::report_queue_badge(&report_status);
 
-        let resource_status = if is_active == 1 {
-            format!(
-                r#"<span style="color:#16a34a;">● Активен · {}</span>"#,
-                safe_moderation_status
-            )
-        } else {
-            format!(
-                r#"<span style="color:#dc2626;">● Скрыт · {}</span>"#,
-                safe_moderation_status
-            )
-        };
+        let resource_status =
+            templates::resource_visibility_with_status(is_active, &safe_moderation_status);
 
         let close_button = if report_status == "pending" {
             format!(
                 r#"
 <form method="post"
       action="/app/admin/report/{report_id}/close{key_query}">
-    <button type="submit"
-            style="
-                width:100%;
-                min-height:44px;
-                border-radius:12px;
-                border:1px solid rgba(22,163,74,.35);
-                background:rgba(22,163,74,.10);
-                color:inherit;
-                font-weight:800;
-                cursor:pointer;
-            ">
+    <button type="submit" class="rm-mod-btn rm-mod-btn--ok">
         ✓ Закрыть жалобу
     </button>
 </form>
@@ -306,130 +283,60 @@ pub async fn admin_reports(State(state): State<AppState>, headers: HeaderMap) ->
 
         cards.push_str(&format!(
             r#"
-<article style="
-    border:1px solid rgba(214,183,122,.22);
-    border-radius:20px;
-    padding:18px;
-    margin-bottom:16px;
-    background:rgba(255,255,255,.035);
-">
+<article class="rm-mod-card">
 
-    <div style="
-        display:flex;
-        justify-content:space-between;
-        gap:12px;
-        flex-wrap:wrap;
-        align-items:flex-start;
-    ">
+    <div class="rm-mod-card-head">
         <div>
-            <div style="
-                font-size:11px;
-                color:#8f96a3;
-                margin-bottom:6px;
-            ">
+            <div class="rm-mod-card-kicker">
                 Жалоба #{report_id} · ресурс #{resource_id}
             </div>
 
-            <h2 style="margin:0 0 6px;font-size:20px;">
+            <h2 class="rm-mod-card-title">
                 {title}
             </h2>
 
-            <div style="
-                color:#9ca3af;
-                font-size:13px;
-            ">
+            <div class="rm-mod-card-category">
                 {category}
             </div>
         </div>
 
-        <div style="
-            display:flex;
-            gap:10px;
-            flex-wrap:wrap;
-            font-size:12px;
-        ">
+        <div class="rm-mod-badges">
             {report_badge}
             {resource_status}
         </div>
     </div>
 
-    <div style="
-        margin-top:16px;
-        padding:14px;
-        border-radius:14px;
-        background:rgba(217,119,6,.07);
-        border:1px solid rgba(217,119,6,.20);
-        line-height:1.5;
-    ">
+    <div class="rm-mod-reason">
         <strong>Причина:</strong><br>
         {reason}
     </div>
 
-    <div style="
-        margin-top:10px;
-        font-size:11px;
-        color:var(--muted);
-    ">
+    <div class="rm-mod-meta">
         Reporter Telegram ID: {reporter_user_id}
         · created_at: {created_at}
     </div>
 
-    <div style="
-        display:grid;
-        grid-template-columns:repeat(auto-fit,minmax(145px,1fr));
-        gap:9px;
-        margin-top:18px;
-    ">
+    <div class="rm-mod-actions">
 
         {close_button}
 
         <form method="post"
               action="/app/admin/report/{report_id}/hide-resource{key_query}">
-            <button type="submit"
-                    style="
-                        width:100%;
-                        min-height:44px;
-                        border-radius:12px;
-                        border:1px solid rgba(220,38,38,.30);
-                        background:rgba(220,38,38,.07);
-                        color:inherit;
-                        font-weight:800;
-                        cursor:pointer;
-                    ">
+            <button type="submit" class="rm-mod-btn rm-mod-btn--danger">
                 Скрыть ресурс
             </button>
         </form>
 
         <form method="post"
               action="/app/admin/report/{report_id}/reject-resource{key_query}">
-            <button type="submit"
-                    style="
-                        width:100%;
-                        min-height:44px;
-                        border-radius:12px;
-                        border:1px solid rgba(220,38,38,.40);
-                        background:rgba(220,38,38,.12);
-                        color:inherit;
-                        font-weight:800;
-                        cursor:pointer;
-                    ">
+            <button type="submit" class="rm-mod-btn rm-mod-btn--danger-strong">
                 ✕ Отклонить ресурс
             </button>
         </form>
 
         <a href="/app/resource/{resource_id}"
            target="_blank"
-           style="
-               min-height:42px;
-               border-radius:12px;
-               border:1px solid rgba(255,255,255,.12);
-               display:flex;
-               align-items:center;
-               justify-content:center;
-               text-decoration:none;
-               color:inherit;
-               font-weight:800;
-           ">
+           class="rm-mod-link">
             Открыть ресурс
         </a>
 
@@ -453,7 +360,7 @@ pub async fn admin_reports(State(state): State<AppState>, headers: HeaderMap) ->
 
     if cards.is_empty() {
         cards = r#"
-<div class="card" style="display:block;">
+<div class="card rm-mod-empty">
     <div class="card-content">
         <div class="card-title">Жалоб пока нет</div>
         <div class="card-meta">Очередь модерации пуста.</div>
@@ -490,46 +397,19 @@ pub async fn admin_reports(State(state): State<AppState>, headers: HeaderMap) ->
 
 </section>
 
-<div style="
-    display:flex;
-    gap:8px;
-    flex-wrap:wrap;
-    margin-bottom:20px;
-">
+<div class="rm-mod-nav">
 
-    <a href="/app/admin/resources{key_query}"
-       style="
-           padding:9px 12px;
-           border-radius:999px;
-           text-decoration:none;
-           border:1px solid rgba(255,255,255,.14);
-           color:inherit;
-           font-weight:700;
-       ">
+    <a href="/app/admin/resources{key_query}" class="rm-mod-chip">
         Ресурсы
     </a>
 
-    <a href="/app/admin/reports{key_query}"
-       style="
-           padding:9px 12px;
-           border-radius:999px;
-           text-decoration:none;
-           border:1px solid rgba(217,119,6,.38);
-           background:rgba(217,119,6,.08);
-           color:inherit;
-           font-weight:800;
-       ">
+    <a href="/app/admin/reports{key_query}" class="rm-mod-chip rm-mod-chip--reports">
         Жалобы
     </a>
 
 </div>
 
-<div style="
-    display:grid;
-    grid-template-columns:repeat(2,minmax(0,1fr));
-    gap:10px;
-    margin-bottom:24px;
-">
+<div class="rm-mod-metrics rm-mod-metrics--2">
 
     <div class="card">
         <div class="card-content">
@@ -932,25 +812,12 @@ pub async fn admin_resources(
         let safe_description = templates::escape_html(&description);
         let safe_rejection_reason = templates::escape_html(&rejection_reason);
 
-        let moderation_badge = match moderation_status.as_str() {
-            "approved" => r#"<span style="color:#16a34a;font-weight:800;">✓ Одобрен</span>"#,
-            "rejected" => r#"<span style="color:#dc2626;font-weight:800;">✕ Отклонён</span>"#,
-            _ => r#"<span style="color:#d97706;font-weight:800;">● Ожидает проверки</span>"#,
-        };
+        let moderation_badge = templates::moderation_queue_badge(&moderation_status);
 
         let rejection_html =
             if moderation_status == "rejected" && !rejection_reason.trim().is_empty() {
                 format!(
-                    r#"<div style="
-                        margin-top:12px;
-                        padding:11px 13px;
-                        border-radius:12px;
-                        border:1px solid rgba(220,38,38,.22);
-                        background:rgba(220,38,38,.07);
-                        color:#dc2626;
-                        font-size:13px;
-                        line-height:1.45;
-                    "><strong>Причина отказа:</strong> {}</div>"#,
+                    r#"<div class="rm-mod-rejection"><strong>Причина отказа:</strong> {}</div>"#,
                     safe_rejection_reason
                 )
             } else {
@@ -963,11 +830,7 @@ pub async fn admin_resources(
             ""
         };
 
-        let active_badge = if active == 1 {
-            r#"<span style="color:#16a34a;">● Активен</span>"#
-        } else {
-            r#"<span style="color:#dc2626;">● Скрыт</span>"#
-        };
+        let active_badge = templates::resource_visibility_badge(active);
 
         let premium_label = if premium == 1 {
             "Снять премиум"
@@ -983,48 +846,29 @@ pub async fn admin_resources(
 
         cards.push_str(&format!(
             r#"
-<article style="
-    border:1px solid rgba(214,183,122,.22);
-    border-radius:20px;
-    padding:18px;
-    margin:0 0 16px;
-    background:rgba(255,255,255,.035);
-    box-shadow:0 10px 30px rgba(0,0,0,.12);
-">
+<article class="rm-mod-card rm-mod-card--resource">
 
-    <div style="
-        display:flex;
-        justify-content:space-between;
-        gap:14px;
-        align-items:flex-start;
-        flex-wrap:wrap;
-    ">
+    <div class="rm-mod-card-head rm-mod-card-head--resource">
         <div>
-            <div style="font-size:11px;color:#8f96a3;margin-bottom:6px;">
+            <div class="rm-mod-card-kicker">
                 #{id} · {category}
             </div>
 
-            <h2 style="margin:0 0 8px;font-size:20px;">
+            <h2 class="rm-mod-card-title rm-mod-card-title--resource">
                 {title}
             </h2>
 
-            <div style="color:#9ca3af;line-height:1.5;max-width:620px;">
+            <div class="rm-mod-card-desc">
                 {description}
             </div>
         </div>
 
-        <div style="font-weight:800;white-space:nowrap;">
+        <div class="rm-mod-rating">
             ⭐ {rating:.1} · {votes}
         </div>
     </div>
 
-    <div style="
-        display:flex;
-        gap:12px;
-        flex-wrap:wrap;
-        margin-top:14px;
-        font-size:12px;
-    ">
+    <div class="rm-mod-badges rm-mod-badges--resource">
         {moderation_badge}
         {premium_badge}
         {active_badge}
@@ -1032,38 +876,18 @@ pub async fn admin_resources(
 
     {rejection_html}
 
-    <div style="
-        display:grid;
-        grid-template-columns:repeat(auto-fit,minmax(145px,1fr));
-        gap:9px;
-        margin-top:18px;
-    ">
+    <div class="rm-mod-actions">
 
         <form method="post"
               action="/app/admin/resource/{id}/approve{key_query}">
-            <button type="submit"
-                    style="
-                        width:100%;
-                        min-height:44px;
-                        border-radius:12px;
-                        border:1px solid rgba(22,163,74,.35);
-                        background:rgba(22,163,74,.10);
-                        color:inherit;
-                        font-weight:800;
-                        cursor:pointer;
-                    ">
+            <button type="submit" class="rm-mod-btn rm-mod-btn--ok">
                 ✓ Одобрить
             </button>
         </form>
 
         <form method="post"
               action="/app/admin/resource/{id}/reject{key_query}"
-              style="
-                  grid-column:1/-1;
-                  display:grid;
-                  grid-template-columns:minmax(0,1fr) auto;
-                  gap:9px;
-              ">
+              class="rm-mod-reject-form">
 
             <input
                 type="text"
@@ -1071,80 +895,30 @@ pub async fn admin_resources(
                 required
                 maxlength="500"
                 placeholder="Причина отклонения"
-                style="
-                    min-width:0;
-                    min-height:44px;
-                    box-sizing:border-box;
-                    padding:0 13px;
-                    border-radius:12px;
-                    border:1px solid rgba(220,38,38,.30);
-                    background:rgba(255,255,255,.04);
-                    color:inherit;
-                    font-size:14px;
-                ">
+                class="rm-mod-reject-input">
 
-            <button type="submit"
-                    style="
-                        min-height:44px;
-                        padding:0 16px;
-                        border-radius:12px;
-                        border:1px solid rgba(220,38,38,.38);
-                        background:rgba(220,38,38,.10);
-                        color:inherit;
-                        font-weight:800;
-                        cursor:pointer;
-                    ">
+            <button type="submit" class="rm-mod-reject-btn">
                 ✕ Отклонить
             </button>
         </form>
 
         <form method="post"
               action="/app/admin/resource/{id}/toggle-premium{key_query}">
-            <button type="submit"
-                    style="
-                        width:100%;
-                        min-height:44px;
-                        border-radius:12px;
-                        border:1px solid rgba(214,183,122,.42);
-                        background:rgba(214,183,122,.10);
-                        color:inherit;
-                        font-weight:800;
-                        cursor:pointer;
-                    ">
+            <button type="submit" class="rm-mod-btn rm-mod-btn--gold">
                 {premium_label}
             </button>
         </form>
 
         <form method="post"
               action="/app/admin/resource/{id}/toggle-active{key_query}">
-            <button type="submit"
-                    style="
-                        width:100%;
-                        min-height:44px;
-                        border-radius:12px;
-                        border:1px solid rgba(220,38,38,.28);
-                        background:rgba(220,38,38,.07);
-                        color:inherit;
-                        font-weight:800;
-                        cursor:pointer;
-                    ">
+            <button type="submit" class="rm-mod-btn rm-mod-btn--neutral">
                 {active_label}
             </button>
         </form>
 
         <a href="/app/resource/{id}"
            target="_blank"
-           style="
-               min-height:42px;
-               border-radius:12px;
-               border:1px solid rgba(255,255,255,.12);
-               display:flex;
-               align-items:center;
-               justify-content:center;
-               text-decoration:none;
-               color:inherit;
-               font-weight:800;
-           ">
+           class="rm-mod-link">
             Открыть ресурс
         </a>
 
@@ -1169,7 +943,7 @@ pub async fn admin_resources(
 
     if cards.is_empty() {
         cards = r#"
-<div class="card" style="display:block;">
+<div class="card rm-mod-empty">
     <div class="card-content">
         <div class="card-title">Ресурсы не найдены</div>
         <div class="card-meta">По текущему фильтру и поиску ничего не найдено.</div>
@@ -1210,7 +984,7 @@ pub async fn admin_resources(
 
 <form method="get"
       action="/app/admin/resources"
-      style="display:flex;gap:8px;margin-bottom:16px;">
+      class="rm-mod-search">
 
     <input type="hidden" name="filter" value="{filter}">
 
@@ -1219,97 +993,48 @@ pub async fn admin_resources(
         name="q"
         value="{q}"
         placeholder="Поиск по названию, категории, описанию..."
-        style="
-            flex:1;
-            min-width:0;
-            padding:13px 14px;
-            border-radius:14px;
-            border:1px solid rgba(255,255,255,.14);
-            background:rgba(255,255,255,.04);
-            color:inherit;
-            font-size:15px;
-        "
+        class="rm-mod-search-input"
     >
 
-    <button type="submit"
-            style="
-                min-width:92px;
-                border-radius:14px;
-                border:1px solid rgba(214,183,122,.35);
-                background:rgba(214,183,122,.10);
-                color:inherit;
-                font-weight:800;
-                cursor:pointer;
-            ">
+    <button type="submit" class="rm-mod-search-btn">
         Найти
     </button>
 
 </form>
 
-<div style="
-    display:flex;
-    gap:8px;
-    flex-wrap:wrap;
-    margin-bottom:20px;
-">
+<div class="rm-mod-nav">
 
-    <a href="/app/admin/reports{key_query}"
-       style="
-           padding:9px 12px;
-           border-radius:999px;
-           text-decoration:none;
-           border:1px solid rgba(220,38,38,.38);
-           background:rgba(220,38,38,.08);
-           color:inherit;
-           font-weight:800;
-       ">
+    <a href="/app/admin/reports{key_query}" class="rm-mod-chip rm-mod-chip--reports-alert">
         🚩 Жалобы ({pending_reports_count})
     </a>
 
-    <a href="/app/admin/resources{key_query}{key_join}filter=all"
-       style="padding:9px 12px;border-radius:999px;text-decoration:none;
-              border:1px solid rgba(255,255,255,.14);color:inherit;font-weight:700;">
+    <a href="/app/admin/resources{key_query}{key_join}filter=all" class="rm-mod-chip">
         Все
     </a>
 
-    <a href="/app/admin/resources{key_query}{key_join}filter=pending"
-       style="padding:9px 12px;border-radius:999px;text-decoration:none;
-              border:1px solid rgba(217,119,6,.35);color:inherit;font-weight:700;">
+    <a href="/app/admin/resources{key_query}{key_join}filter=pending" class="rm-mod-chip rm-mod-chip--pending">
         Ожидают
     </a>
 
-    <a href="/app/admin/resources{key_query}{key_join}filter=verified"
-       style="padding:9px 12px;border-radius:999px;text-decoration:none;
-              border:1px solid rgba(22,163,74,.35);color:inherit;font-weight:700;">
+    <a href="/app/admin/resources{key_query}{key_join}filter=verified" class="rm-mod-chip rm-mod-chip--verified">
         Проверены
     </a>
 
-    <a href="/app/admin/resources{key_query}{key_join}filter=rejected"
-       style="padding:9px 12px;border-radius:999px;text-decoration:none;
-              border:1px solid rgba(220,38,38,.35);color:inherit;font-weight:700;">
+    <a href="/app/admin/resources{key_query}{key_join}filter=rejected" class="rm-mod-chip rm-mod-chip--rejected">
         Отклонённые
     </a>
 
-    <a href="/app/admin/resources{key_query}{key_join}filter=premium"
-       style="padding:9px 12px;border-radius:999px;text-decoration:none;
-              border:1px solid rgba(214,183,122,.45);color:inherit;font-weight:700;">
+    <a href="/app/admin/resources{key_query}{key_join}filter=premium" class="rm-mod-chip rm-mod-chip--premium">
         Премиум
     </a>
 
-    <a href="/app/admin/resources{key_query}{key_join}filter=hidden"
-       style="padding:9px 12px;border-radius:999px;text-decoration:none;
-              border:1px solid rgba(220,38,38,.32);color:inherit;font-weight:700;">
+    <a href="/app/admin/resources{key_query}{key_join}filter=hidden" class="rm-mod-chip rm-mod-chip--hidden">
         Скрытые
     </a>
 
 </div>
 
-<div style="
-    display:grid;
-    grid-template-columns:repeat(auto-fit,minmax(140px,1fr));
-    gap:10px;
-    margin-bottom:24px;
-">
+<div class="rm-mod-metrics">
 
     <div class="card">
         <div class="card-content">
@@ -1341,68 +1066,41 @@ pub async fn admin_resources(
 
 </div>
 
-<section style="margin-bottom:20px;">
+<section>
 
-    <div style="
-        display:flex;
-        align-items:center;
-        justify-content:space-between;
-        gap:12px;
-        flex-wrap:wrap;
-        margin-bottom:12px;
-    ">
+    <div class="rm-mod-bulk-head">
         <strong>Найдено: {result_count}</strong>
-        <span style="font-size:12px;color:var(--muted);">
+        <span class="rm-mod-bulk-note">
             Массовые действия применяются к текущей выборке
         </span>
     </div>
 
-    <div style="
-        display:grid;
-        grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
-        gap:8px;
-    ">
+    <div class="rm-mod-actions rm-mod-actions--bulk">
 
         <form method="post"
               action="/app/admin/resources/bulk{key_query}{key_join}filter={filter}&q={q}&action=verify">
-            <button type="submit"
-                    style="width:100%;min-height:44px;border-radius:12px;
-                           border:1px solid rgba(22,163,74,.35);
-                           background:rgba(22,163,74,.10);
-                           color:inherit;font-weight:800;cursor:pointer;">
+            <button type="submit" class="rm-mod-btn rm-mod-btn--ok">
                 ✓ Одобрить найденные
             </button>
         </form>
 
         <form method="post"
               action="/app/admin/resources/bulk{key_query}{key_join}filter={filter}&q={q}&action=unverify">
-            <button type="submit"
-                    style="width:100%;min-height:44px;border-radius:12px;
-                           border:1px solid rgba(217,119,6,.35);
-                           background:rgba(217,119,6,.08);
-                           color:inherit;font-weight:800;cursor:pointer;">
+            <button type="submit" class="rm-mod-btn rm-mod-btn--warn">
                 Снять проверку
             </button>
         </form>
 
         <form method="post"
               action="/app/admin/resources/bulk{key_query}{key_join}filter={filter}&q={q}&action=premium">
-            <button type="submit"
-                    style="width:100%;min-height:44px;border-radius:12px;
-                           border:1px solid rgba(214,183,122,.42);
-                           background:rgba(214,183,122,.10);
-                           color:inherit;font-weight:800;cursor:pointer;">
+            <button type="submit" class="rm-mod-btn rm-mod-btn--gold">
                 ★ Включить премиум
             </button>
         </form>
 
         <form method="post"
               action="/app/admin/resources/bulk{key_query}{key_join}filter={filter}&q={q}&action=hide">
-            <button type="submit"
-                    style="width:100%;min-height:44px;border-radius:12px;
-                           border:1px solid rgba(220,38,38,.30);
-                           background:rgba(220,38,38,.07);
-                           color:inherit;font-weight:800;cursor:pointer;">
+            <button type="submit" class="rm-mod-btn rm-mod-btn--danger">
                 Скрыть найденные
             </button>
         </form>
@@ -1545,12 +1243,12 @@ content="1;url=/app/admin/resources?filter={filter_url}&amp;q={q_url}">"#,
     );
 
     let main_html = format!(
-        r#"<section class="card" style="display:block;padding:20px;">
+        r#"<section class="card rm-mod-result">
     <div class="card-title">
         Изменено ресурсов: {changed}
     </div>
 
-    <div class="card-meta" style="margin-top:8px;">
+    <div class="card-meta rm-mod-result-meta">
         Возвращаемся в модерацию…
     </div>
 </section>"#,
@@ -1920,40 +1618,14 @@ pub async fn moderator_panel(State(state): State<AppState>, headers: HeaderMap) 
             let safe_description = templates::escape_html(description);
 
             format!(
-                r#"<article style="
-    border:1px solid rgba(214,183,122,.22);
-    border-radius:18px;
-    padding:16px;
-    margin-bottom:12px;
-    background:rgba(214,183,122,.05);
-    box-shadow:0 8px 24px rgba(0,0,0,.15);
-">
-    <div style="font-size:11px;color:#8f96a3;margin-bottom:4px;">#{id} · {category}</div>
-    <div style="font-size:16px;font-weight:800;color:#f0d69c;margin-bottom:6px;">{title}</div>
-    <div style="font-size:13px;color:#9ca3af;line-height:1.5;">{description}</div>
+                r#"<article class="rm-mod-quick-card">
+    <div class="rm-mod-card-kicker">#{id} · {category}</div>
+    <div class="rm-mod-quick-title">{title}</div>
+    <div class="rm-mod-card-desc">{description}</div>
 
-    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
-        <button onclick="moderateResource({id}, 'approved')" style="
-            padding:8px 16px;
-            border:none;
-            border-radius:10px;
-            background:#16a34a;
-            color:#fff;
-            font-size:12px;
-            font-weight:800;
-            cursor:pointer;
-        ">✓ Одобрить</button>
-
-        <button onclick="moderateResource({id}, 'rejected')" style="
-            padding:8px 16px;
-            border:none;
-            border-radius:10px;
-            background:#dc2626;
-            color:#fff;
-            font-size:12px;
-            font-weight:800;
-            cursor:pointer;
-        ">✕ Отклонить</button>
+    <div class="rm-mod-quick-actions">
+        <button type="button" onclick="moderateResource({id}, 'approved')" class="rm-mod-quick-btn rm-mod-quick-btn--approve">✓ Одобрить</button>
+        <button type="button" onclick="moderateResource({id}, 'rejected')" class="rm-mod-quick-btn rm-mod-quick-btn--reject">✕ Отклонить</button>
     </div>
 </article>"#,
                 id = id,
@@ -1966,64 +1638,49 @@ pub async fn moderator_panel(State(state): State<AppState>, headers: HeaderMap) 
         .join("");
 
     let empty_html = if pending_resources.is_empty() {
-        r#"<div style="padding:30px;text-align:center;color:#8f96a3;border:1px dashed rgba(214,183,122,.25);border-radius:18px;">Нет ресурсов на проверке</div>"#
+        r#"<div class="rm-mod-empty-dashed">Нет ресурсов на проверке</div>"#
     } else {
         ""
     };
 
-    let html = format!(
-        r#"<!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Панель модератора · ResursMap</title>
-<style>
-* {{ box-sizing:border-box; }}
-body {{
-    margin:0;
-    padding:20px;
-    background:linear-gradient(160deg,#080a0d,#0e1116);
-    color:#f3f0e9;
-    font-family:Inter,-apple-system,sans-serif;
-    min-height:100vh;
-}}
-.page {{ max-width:700px; margin:0 auto; }}
-h1 {{ color:#d6b77a; font-size:26px; margin:0 0 6px; }}
-.subtitle {{ color:#8f96a3; font-size:13px; margin-bottom:24px; }}
-h2 {{ color:#f0d69c; font-size:18px; margin:24px 0 12px; }}
-</style>
-</head>
-<body>
-<div class="page">
-<h1>{level_title}</h1>
-<p class="subtitle">Ресурсы, ожидающие модерации</p>
+    let main_html = format!(
+        r#"
+<section class="hero">
+    <h1>{level_title}</h1>
+    <p>Ресурсы, ожидающие модерации</p>
+</section>
 
 <h2>На проверке ({count})</h2>
 {empty}
 {resources}
-</div>
-
-<script>
-function moderateResource(id, status) {{
-    fetch('/api/moderator/moderate-resource', {{
-        method: 'POST',
-        headers: {{'Content-Type': 'application/json'}},
-        body: JSON.stringify({{ id: id, status: status }})
-    }}).then(r => r.json()).then(d => {{
-        if (d.ok) {{ location.reload(); }}
-    }});
-}}
-</script>
-</body>
-</html>"#,
+"#,
         level_title = level_title,
         count = pending_resources.len(),
         empty = empty_html,
         resources = resources_html,
     );
 
-    Html(html).into_response()
+    let body_after = r#"<script>
+function moderateResource(id, status) {
+    fetch('/api/moderator/moderate-resource', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ id: id, status: status })
+    }).then(r => r.json()).then(d => {
+        if (d.ok) { location.reload(); }
+    });
+}
+</script>"#;
+
+    Html(templates::page_document(
+        "Панель модератора · ResursMap",
+        "",
+        "",
+        &main_html,
+        "",
+        body_after,
+    ))
+    .into_response()
 }
 
 pub async fn moderate_resource(
