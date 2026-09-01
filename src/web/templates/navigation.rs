@@ -7,16 +7,6 @@ use super::common::{
 use crate::geography::world;
 use std::collections::BTreeMap;
 
-const MAP_UNIFORM_BACKGROUND_STYLE: &str = r#"<style>
-body {
-    background: var(--bg-soft);
-}
-
-body::before {
-    display: none;
-}
-</style>"#;
-
 fn is_intent_category(key: &str) -> bool {
     matches!(
         key.trim().to_ascii_lowercase().as_str(),
@@ -206,8 +196,6 @@ pub fn render_geo_root(
         head = section_head("Континенты", "Все регионы мира без приоритетов", None),
     );
     let styles = r#"<style>
-body{background:var(--bg-soft)}
-body::before{display:none}
 .rm-map-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:20px}
 .rm-map-stats div{padding:12px 6px;border:1px solid rgba(232,204,150,.22);border-radius:15px;text-align:center;background:rgba(255,255,255,.025)}
 .rm-map-stats strong,.rm-map-stats span{display:block}.rm-map-stats strong{color:var(--gold-light);font-size:21px}.rm-map-stats span{margin-top:4px;color:var(--muted);font-size:9px;text-transform:uppercase}
@@ -241,8 +229,7 @@ pub fn render_geo_continent(
         .collect::<Vec<_>>()
         .join("");
     let content = format!(
-        r#"{map_style}{back}{head}<div class="grid">{cards}</div>"#,
-        map_style = MAP_UNIFORM_BACKGROUND_STYLE,
+        r#"{back}{head}<div class="grid">{cards}</div>"#,
         back = navigation_card("/app", "chevron", "Все континенты", "Назад к карте"),
         head = section_head(
             "Страны",
@@ -286,8 +273,7 @@ pub fn render_geo_country(
         String::new()
     };
     let content = format!(
-        r#"{map_style}{back}{head}<div class="grid" id="rm-map-city-grid">{cards}</div>{more}<script src="{script}" defer></script>"#,
-        map_style = MAP_UNIFORM_BACKGROUND_STYLE,
+        r#"{back}{head}<div class="grid" id="rm-map-city-grid">{cards}</div>{more}<script src="{script}" defer></script>"#,
         back = navigation_card(
             &format!("/app/map/continent/{continent_id}"),
             "chevron",
@@ -347,8 +333,7 @@ pub fn render_geo_city(
         .collect::<Vec<_>>()
         .join("");
     let content = format!(
-        r#"{map_style}{back}{section_head}<div class="grid">{work}{services}{business}{housing}{transport}{education}{help}{other}</div>{profession_head}<div class="grid">{sector_cards}</div>"#,
-        map_style = MAP_UNIFORM_BACKGROUND_STYLE,
+        r#"{back}{section_head}<div class="grid">{work}{services}{business}{housing}{transport}{education}{help}{other}</div>{profession_head}<div class="grid">{sector_cards}</div>"#,
         back = navigation_card(
             &format!("/app/map/country/{country_id}"),
             "chevron",
@@ -437,8 +422,7 @@ pub fn render_geo_professions(
         .collect::<Vec<_>>()
         .join("");
     let content = format!(
-        r#"{map_style}{back}{head}<div class="grid">{cards}</div>"#,
-        map_style = MAP_UNIFORM_BACKGROUND_STYLE,
+        r#"{back}{head}<div class="grid">{cards}</div>"#,
         back = navigation_card(
             &format!("/app/map/city/{city_id}"),
             "chevron",

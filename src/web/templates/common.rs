@@ -7,7 +7,7 @@ pub fn escape_html(value: &str) -> String {
         .replace('\'', "&#39;")
 }
 
-pub const STATIC_ASSET_VERSION: &str = "4.9.47";
+pub const STATIC_ASSET_VERSION: &str = "4.9.48";
 
 pub fn profession_label(raw: &str) -> String {
     match raw.trim().to_lowercase().as_str() {
@@ -278,46 +278,10 @@ body {
 
     color: var(--text);
 
-    background:
-        radial-gradient(
-            circle at 12% 0%,
-            rgba(126, 212, 228, .20),
-            transparent 40%
-        ),
-        radial-gradient(
-            circle at 88% 8%,
-            rgba(232, 204, 150, .18),
-            transparent 36%
-        ),
-        radial-gradient(
-            circle at 50% 100%,
-            rgba(111, 232, 184, .07),
-            transparent 42%
-        ),
-        linear-gradient(
-            145deg,
-            var(--bg) 0%,
-            var(--bg-soft) 45%,
-            var(--bg) 100%
-        );
+    background: var(--bg-soft);
 }
 
-body::before {
-    content: "";
-    position: fixed;
-    inset: 0;
-    pointer-events: none;
-
-    background:
-        linear-gradient(
-            120deg,
-            transparent 0%,
-            rgba(0,0,0,.018) 50%,
-            transparent 100%
-        );
-
-    opacity: .5;
-}
+body::before { display: none; }
 
 .page {
     width: min(100% - 32px, 900px);
