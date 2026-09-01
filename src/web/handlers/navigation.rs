@@ -163,14 +163,16 @@ pub async fn app_search(
 
         let world_data = crate::geography::world();
 
-        for (ci, (_, countries)) in world_data.iter().enumerate() {
+        for (ci, (continent, countries)) in world_data.iter().enumerate() {
+            let continent_match = continent.to_lowercase().contains(&query_lower);
+
             for (si, (country, cities)) in countries.iter().enumerate() {
                 let country_match = country.to_lowercase().contains(&query_lower);
 
                 for (zi, city) in cities.iter().enumerate() {
                     let city_match = city.to_lowercase().contains(&query_lower);
 
-                    if city_match || country_match {
+                    if city_match || country_match || continent_match {
                         location_matches.push((ci, si, zi));
                     }
                 }

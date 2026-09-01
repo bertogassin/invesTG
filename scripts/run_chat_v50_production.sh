@@ -22,5 +22,5 @@ git status --short --branch
 systemctl is-active resursmap
 curl -fsS http://127.0.0.1:3000/health
 sqlite3 data/votes.db 'PRAGMA integrity_check;'
-echo "CACHE_VERSION=4.9.36"
+echo "CACHE_VERSION=4.9.37"
 echo "DEPLOY=COMPLETE"

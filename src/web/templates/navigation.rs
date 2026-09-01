@@ -1,9 +1,125 @@
 use super::common::{
     bottom_nav, empty_state_card, escape_html, guest_mode_hint, icon, navigation_card,
     page_document, page_shell, people_result_card, premium_badge_html, profession_label,
-    resource_result_card, search_form_hero, section_head, simple_hero, topbar, verified_badge_html,
+    resource_result_card, search_form_hero, section_head, simple_hero, static_asset, topbar,
+    verified_badge_html,
 };
 use crate::geography::world;
+use std::collections::BTreeMap;
+
+fn json_string_literal(value: &str) -> String {
+    let mut out = String::from('"');
+
+    for ch in value.chars() {
+        match ch {
+            '\\' => out.push_str("\\\\"),
+            '"' => out.push_str("\\\""),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if c.is_control() => {}
+            c => out.push(c),
+        }
+    }
+
+    out.push('"');
+    out
+}
+
+fn push_explore_entry(parts: &mut Vec<String>, kind: &str, label: &str, subtitle: &str, href: &str) {
+    parts.push(format!(
+        "{{\"k\":{},\"l\":{},\"s\":{},\"h\":{},\"q\":{}}}",
+        json_string_literal(kind),
+        json_string_literal(label),
+        json_string_literal(subtitle),
+        json_string_literal(href),
+        json_string_literal(label),
+    ));
+}
+
+fn build_home_explore_index(
+    resource_categories: &[(String, i64)],
+    people_categories: &[(String, i64)],
+) -> String {
+    let mut parts = Vec::new();
+    let world_data = world();
+
+    for (ci, (continent, countries)) in world_data.iter().enumerate() {
+        push_explore_entry(
+            &mut parts,
+            "continent",
+            continent,
+            "Континент",
+            &format!("/app/{ci}"),
+        );
+
+        for (si, (country, cities)) in countries.iter().enumerate() {
+            push_explore_entry(
+                &mut parts,
+                "country",
+                country,
+                &format!("{continent} · страна"),
+                &format!("/app/{ci}/{si}"),
+            );
+
+            for (zi, city) in cities.iter().enumerate() {
+                push_explore_entry(
+                    &mut parts,
+                    "city",
+                    city,
+                    &format!("{country} · город"),
+                    &format!("/app/{ci}/{si}/{zi}"),
+                );
+            }
+        }
+    }
+
+    let mut professions: BTreeMap<String, i64> = BTreeMap::new();
+
+    for (category, count) in resource_categories {
+        let key = category.trim().to_string();
+
+        if key.is_empty() {
+            continue;
+        }
+
+        *professions.entry(key).or_insert(0) += count;
+    }
+
+    for (category, count) in people_categories {
+        let key = category.trim().to_string();
+
+        if key.is_empty() {
+            continue;
+        }
+
+        *professions.entry(key).or_insert(0) += count;
+    }
+
+    for (category, count) in professions {
+        let label = profession_label(&category);
+        let subtitle = if count > 0 {
+            format!("Профессия · {count}")
+        } else {
+            "Профессия".to_string()
+        };
+        let href = format!(
+            "/app/search?q={}",
+            urlencoding::encode(category.trim())
+        );
+
+        parts.push(format!(
+            "{{\"k\":{},\"l\":{},\"s\":{},\"h\":{},\"q\":{}}}",
+            json_string_literal("profession"),
+            json_string_literal(&label),
+            json_string_literal(&subtitle),
+            json_string_literal(&href),
+            json_string_literal(&format!("{} {}", category, label)),
+        ));
+    }
+
+    format!("[{}]", parts.join(","))
+}
 
 // ============================================================
 // LUCIDE SVG
@@ -175,6 +291,165 @@ pub fn render_continents(
         font-weight:850;
     }
 
+    .rm-home-explorer {
+        margin-top:20px;
+        padding:16px 16px 14px;
+        border:1px solid rgba(232,204,150,.28);
+        background:
+            radial-gradient(circle at 100% 0%, rgba(126,212,228,.10), transparent 42%),
+            radial-gradient(circle at 0% 100%, rgba(232,204,150,.08), transparent 40%),
+            rgba(255,255,255,.02);
+        box-shadow:
+            0 18px 44px rgba(0,0,0,.24),
+            inset 0 1px 0 rgba(255,255,255,.06);
+    }
+
+    .rm-home-explorer-head {
+        margin-bottom:12px;
+    }
+
+    .rm-home-explorer-title {
+        font-size:16px;
+        line-height:1.25;
+    }
+
+    .rm-home-explorer-copy {
+        margin-top:4px;
+        color:var(--muted);
+        font-size:12px;
+        line-height:1.45;
+    }
+
+    .rm-home-explorer-field {
+        display:grid;
+        grid-template-columns:auto 1fr auto;
+        align-items:center;
+        gap:10px;
+        padding:4px 4px 4px 14px;
+        border-radius:16px;
+        border:1px solid rgba(232,204,150,.32);
+        background:rgba(0,0,0,.18);
+        transition:
+            border-color .18s ease,
+            box-shadow .18s ease;
+    }
+
+    .rm-home-explorer-field:focus-within {
+        border-color:rgba(232,204,150,.55);
+        box-shadow:0 0 0 4px rgba(232,204,150,.10);
+    }
+
+    .rm-home-explorer-icon {
+        color:var(--gold-light);
+        font-size:16px;
+        line-height:1;
+    }
+
+    .rm-home-explorer-input {
+        width:100%;
+        min-height:44px;
+        border:0;
+        outline:none;
+        background:transparent;
+        color:var(--text);
+        font:inherit;
+        font-size:15px;
+    }
+
+    .rm-home-explorer-input::placeholder {
+        color:var(--muted);
+    }
+
+    .rm-home-explorer-clear {
+        width:36px;
+        height:36px;
+        border:0;
+        border-radius:12px;
+        background:rgba(255,255,255,.06);
+        color:var(--muted);
+        font-size:18px;
+        cursor:pointer;
+    }
+
+    .rm-home-explorer-results {
+        display:grid;
+        gap:8px;
+        margin-top:10px;
+        max-height:min(52vh, 420px);
+        overflow:auto;
+    }
+
+    .rm-explore-hit {
+        display:grid;
+        grid-template-columns:auto 1fr;
+        gap:12px;
+        align-items:center;
+        padding:11px 12px;
+        border-radius:14px;
+        border:1px solid rgba(255,255,255,.06);
+        background:rgba(255,255,255,.03);
+        text-decoration:none;
+        color:inherit;
+        transition:
+            transform .16s ease,
+            border-color .16s ease,
+            background .16s ease;
+    }
+
+    .rm-explore-hit:hover,
+    .rm-explore-hit.is-active {
+        transform:translateY(-1px);
+        border-color:rgba(232,204,150,.34);
+        background:rgba(232,204,150,.08);
+    }
+
+    .rm-explore-hit-icon {
+        width:34px;
+        height:34px;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        border-radius:11px;
+        background:rgba(232,204,150,.10);
+        font-size:16px;
+    }
+
+    .rm-explore-hit-body strong {
+        display:block;
+        font-size:14px;
+        line-height:1.25;
+    }
+
+    .rm-explore-hit-body small {
+        display:block;
+        margin-top:2px;
+        color:var(--muted);
+        font-size:11px;
+        line-height:1.35;
+    }
+
+    .rm-explore-empty {
+        padding:12px;
+        border-radius:12px;
+        color:var(--muted);
+        font-size:13px;
+        text-align:center;
+    }
+
+    .rm-home-explorer-actions {
+        display:flex;
+        gap:10px;
+        margin-top:12px;
+    }
+
+    .rm-home-explorer-all {
+        flex:1;
+        min-height:42px;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+    }
+
     .rm-flow {
         display:grid;
         gap:10px;
@@ -248,6 +523,8 @@ pub fn render_continents(
 
     let guest_hint = if guest_mode { guest_mode_hint() } else { "" };
 
+    let explore_index = build_home_explore_index(&_categories, &people_by_category);
+
     let hero = format!(
         r#"<section class="hero">
     <div class="eyebrow">
@@ -260,6 +537,47 @@ pub fn render_continents(
     <p>Люди, города, услуги и возможности — всё необходимое рядом с вами.</p>
 
     {guest_hint}
+
+    <section class="rm-home-explorer card" id="rm-home-explorer">
+        <div class="rm-home-explorer-head">
+            <div class="card-title rm-home-explorer-title">
+                Быстрый поиск
+            </div>
+            <div class="card-meta rm-home-explorer-copy">
+                Континенты, страны, города, профессии и услуги
+            </div>
+        </div>
+
+        <div class="rm-home-explorer-field">
+            <span class="rm-home-explorer-icon" aria-hidden="true">⌕</span>
+            <input id="rm-home-explorer-input"
+                   class="rm-home-explorer-input"
+                   type="search"
+                   inputmode="search"
+                   autocomplete="off"
+                   autocapitalize="off"
+                   spellcheck="false"
+                   placeholder="Например: Ницца, электрик, Франция…"
+                   aria-label="Поиск по карте ResursMap">
+            <button id="rm-home-explorer-clear"
+                    class="rm-home-explorer-clear"
+                    type="button"
+                    hidden
+                    aria-label="Очистить">×</button>
+        </div>
+
+        <div id="rm-home-explorer-results"
+             class="rm-home-explorer-results"
+             hidden></div>
+
+        <div class="rm-home-explorer-actions">
+            <a id="rm-home-explorer-all"
+               class="ui-button rm-home-explorer-all"
+               href="/app/search">
+                Полный поиск
+            </a>
+        </div>
+    </section>
 
     <div class="rm-stats-row">
         <div class="rm-stat">
@@ -417,13 +735,20 @@ pub fn render_continents(
         cards = cards,
     );
 
+    let body_after = format!(
+        r#"<script type="application/json" id="rm-home-explore-data">{explore_index}</script>
+<script src="{home_explorer_js}" defer></script>"#,
+        explore_index = explore_index,
+        home_explorer_js = static_asset("home-explorer.js"),
+    );
+
     page_document(
         "ResursMap",
         head_extra,
         body_before_main,
         &main_html,
         &bottom_nav("map"),
-        "",
+        &body_after,
     )
 }
 
@@ -629,6 +954,17 @@ pub fn render_search(
 
     if !query_lower.is_empty() {
         for (ci, (continent, countries)) in world_data.iter().enumerate() {
+            if continent.to_lowercase().contains(&query_lower) {
+                location_count += 1;
+
+                location_results.push_str(&navigation_card(
+                    &format!("/app/{ci}"),
+                    "globe",
+                    continent,
+                    "Континент",
+                ));
+            }
+
             for (si, (country, cities)) in countries.iter().enumerate() {
                 let country_match = country.to_lowercase().contains(&query_lower);
 

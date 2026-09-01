@@ -31,6 +31,7 @@ if command -v node >/dev/null 2>&1; then
   node --check static/chat-sounds.js
   node --check static/menu-settings.js
   node --check static/nav-badge.js
+  node --check static/home-explorer.js
 else
   echo "NODE_CHECK=SKIPPED"
 fi
@@ -59,6 +60,6 @@ fi
 echo "SERVICE=$(systemctl is-active resursmap)"
 echo "HEALTH=ok"
 echo "SQLITE=ok"
-echo "CACHE_VERSION=4.9.36"
+echo "CACHE_VERSION=4.9.37"
 git status --short --branch
 echo "DEPLOY=COMPLETE"
