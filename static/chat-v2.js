@@ -1172,6 +1172,45 @@
             flushPendingQueue();
         }
 
+        // Core text messaging must be available before optional media,
+        // sound, haptics and recording features are initialized. A browser
+        // incompatibility in an enhancement must never disable Send.
+        form.addEventListener("submit", function (event) {
+            event.preventDefault();
+            sendMessage();
+        });
+
+        input.addEventListener("input", function () {
+            updateComposer();
+
+            if (input.value.trim()) {
+                scheduleTypingSignals();
+            } else if (typingStopTimer) {
+                window.clearTimeout(typingStopTimer);
+                typingStopTimer = null;
+                emitTypingSignal("typing.stop");
+            }
+        });
+
+        input.addEventListener("keydown", function (event) {
+            if (
+                event.key === "Enter" &&
+                !event.shiftKey &&
+                !event.isComposing
+            ) {
+                event.preventDefault();
+                sendMessage();
+            }
+        });
+
+        clear.addEventListener("click", function () {
+            input.value = "";
+            updateComposer();
+            input.focus();
+        });
+
+        form.dataset.chatCoreReady = "1";
+
         var imageInput = document.getElementById("chat-image-input");
         var imageBtn = document.getElementById("chat-image-btn");
 
@@ -1537,46 +1576,6 @@
                 syncHapticToggle();
             });
         }
-
-        form.addEventListener(
-            "submit",
-            function (event) {
-                event.preventDefault();
-                sendMessage();
-            }
-        );
-
-        input.addEventListener("input", function () {
-            updateComposer();
-
-            if (input.value.trim()) {
-                scheduleTypingSignals();
-            } else if (typingStopTimer) {
-                window.clearTimeout(typingStopTimer);
-                typingStopTimer = null;
-                emitTypingSignal("typing.stop");
-            }
-        });
-
-        input.addEventListener(
-            "keydown",
-            function (event) {
-                if (
-                    event.key === "Enter" &&
-                    !event.shiftKey &&
-                    !event.isComposing
-                ) {
-                    event.preventDefault();
-                    sendMessage();
-                }
-            }
-        );
-
-        clear.addEventListener("click", function () {
-            input.value = "";
-            updateComposer();
-            input.focus();
-        });
 
         loadOlder.addEventListener(
             "click",

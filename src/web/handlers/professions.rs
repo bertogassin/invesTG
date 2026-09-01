@@ -36,11 +36,37 @@ pub async fn profession_suggestions(
          ORDER BY CASE WHEN p.normalized_ru LIKE ?3 OR p.normalized_en LIKE ?3 OR p.normalized_fr LIKE ?3 THEN 0 ELSE 1 END,s.position,p.name_ru LIMIT ?4",
     ) {
         if let Ok(mapped) = stmt.query_map(rusqlite::params![q, pattern, prefix, limit as i64], |row| {
-            Ok(json!({"key": row.get::<_,String>(0)?, "name": row.get::<_,String>(1)?, "name_en": row.get::<_,String>(2)?, "name_fr": row.get::<_,String>(3)?, "sector": row.get::<_,String>(4)?}))
+            Ok(json!({"kind":"profession", "key": row.get::<_,String>(0)?, "name": row.get::<_,String>(1)?, "name_en": row.get::<_,String>(2)?, "name_fr": row.get::<_,String>(3)?, "sector": row.get::<_,String>(4)?}))
         }) {
             rows = mapped.filter_map(Result::ok).collect();
         }
     }
+    if rows.len() < limit {
+        if let Ok(mut stmt) = db.prepare(
+            "SELECT DISTINCT service.stable_key,service.name_ru,service.name_en,service.name_fr,category.name_ru
+             FROM services service JOIN service_categories category ON category.stable_key=service.category_key
+             LEFT JOIN service_aliases alias ON alias.service_id=service.id
+             WHERE (?1='' OR service.normalized_ru LIKE ?2 OR service.normalized_en LIKE ?2 OR service.normalized_fr LIKE ?2 OR category.normalized_ru LIKE ?2 OR category.normalized_en LIKE ?2 OR category.normalized_fr LIKE ?2 OR alias.normalized_alias LIKE ?2)
+             ORDER BY CASE WHEN service.normalized_ru LIKE ?3 OR service.normalized_en LIKE ?3 OR service.normalized_fr LIKE ?3 THEN 0 ELSE 1 END,category.position,service.name_ru LIMIT ?4",
+        ) {
+            let remaining = (limit - rows.len()) as i64;
+            if let Ok(mapped) = stmt.query_map(
+                rusqlite::params![q, pattern, prefix, remaining],
+                |row| {
+                    Ok(json!({"kind":"service", "key":row.get::<_,String>(0)?, "name":row.get::<_,String>(1)?, "name_en":row.get::<_,String>(2)?, "name_fr":row.get::<_,String>(3)?, "sector":row.get::<_,String>(4)?}))
+                },
+            ) {
+                rows.extend(mapped.filter_map(Result::ok));
+            }
+        }
+    }
+    rows.sort_by(|left, right| {
+        left["name"]
+            .as_str()
+            .unwrap_or_default()
+            .to_lowercase()
+            .cmp(&right["name"].as_str().unwrap_or_default().to_lowercase())
+    });
     Json(json!({"ok": true, "items": rows}))
 }
 

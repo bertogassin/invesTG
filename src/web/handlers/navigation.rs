@@ -126,7 +126,7 @@ pub async fn app_geo_continent(
         .prepare(
             "SELECT country.id,country.name_ru,COUNT(city.id)
              FROM geo_countries country
-             LEFT JOIN geo_cities city ON city.country_id=country.id AND city.is_active=1
+             LEFT JOIN geo_cities city ON city.country_id=country.id AND city.place_kind='city'
              WHERE country.continent_id=?1 AND country.is_active=1
              GROUP BY country.id,country.name_ru
              ORDER BY country.name_ru COLLATE NOCASE",
@@ -169,7 +169,7 @@ pub async fn app_geo_country(
     let cities = load_country_cities(&db, country_id, "", 0, 80);
     let total = db
         .query_row(
-            "SELECT COUNT(*) FROM geo_cities WHERE country_id=?1",
+            "SELECT COUNT(*) FROM geo_cities WHERE country_id=?1 AND place_kind='city'",
             [country_id],
             |row| row.get::<_, i64>(0),
         )
@@ -195,7 +195,7 @@ fn load_country_cities(
     let normalized = query.trim().to_lowercase();
     db.prepare(
         "SELECT id,name_ru,name_native,name_ascii FROM geo_cities
-         WHERE country_id=?1
+         WHERE country_id=?1 AND place_kind='city'
          ORDER BY name_ru COLLATE NOCASE,id",
     )
     .and_then(|mut stmt| {
@@ -275,7 +275,7 @@ pub async fn app_geo_city(State(state): State<AppState>, Path(city_id): Path<i64
              FROM geo_cities city
              JOIN geo_countries country ON country.id=city.country_id
              JOIN geo_continents continent ON continent.id=country.continent_id
-             WHERE city.id=?1 AND city.is_active=1",
+             WHERE city.id=?1 AND city.place_kind='city'",
             [city_id],
             |row| {
                 Ok((
@@ -325,7 +325,7 @@ pub async fn app_geo_professions(
         Err(_) => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
     };
     let city = db.query_row(
-        "SELECT city.name_ru,country.name_ru FROM geo_cities city JOIN geo_countries country ON country.id=city.country_id WHERE city.id=?1 AND city.is_active=1",
+        "SELECT city.name_ru,country.name_ru FROM geo_cities city JOIN geo_countries country ON country.id=city.country_id WHERE city.id=?1 AND city.place_kind='city'",
         [city_id],
         |row| Ok((row.get::<_,String>(0)?,row.get::<_,String>(1)?)),
     ).ok();
