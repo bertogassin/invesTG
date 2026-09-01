@@ -1751,19 +1751,19 @@
 
         pollTimer = window.setInterval(
             pollMessages,
-            30000
+            5000
         );
 
         var safetyPollTimer = window.setInterval(
             function () {
                 pollMessages(true);
             },
-            120000
+            15000
         );
 
         presenceTimer = window.setInterval(
             refreshPeerPresence,
-            45000
+            20000
         );
 
         window.addEventListener(
@@ -3428,7 +3428,7 @@
 
         refreshFallbackTimer = window.setInterval(
             refreshRecent,
-            300000
+            30000
         );
 
         window.addEventListener(

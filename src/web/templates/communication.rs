@@ -714,7 +714,7 @@ pub fn render_chat(
         let message_cards = if messages.is_empty() {
             r#"
 <div class="chat-empty-thread">
-    <div class="chat-empty-thread-icon" aria-hidden="true">💬</div>
+    <div class="chat-empty-thread-icon" aria-hidden="true"></div>
     <strong>Диалог открыт</strong>
     <p>Напишите первое сообщение — Enter для отправки.</p>
 </div>
@@ -768,7 +768,7 @@ pub fn render_chat(
                     aria-label="Звуки чата"
                     aria-pressed="true"
                     title="Звуки чата">
-                🔊
+                Звук
             </button>
 
             <button id="chat-haptic-toggle"
@@ -777,7 +777,7 @@ pub fn render_chat(
                     aria-label="Вибрация чата"
                     aria-pressed="true"
                     title="Вибрация чата">
-                📳
+                Вибро
             </button>
 
             <button id="chat-block-toggle"
@@ -876,21 +876,21 @@ pub fn render_chat(
             class="chat-voice-btn"
             aria-label="Голосовое сообщение"
             title="Удерживайте для записи">
-        🎤
+        Голос
     </button>
 
     <button id="chat-image-btn"
             type="button"
             class="chat-image-btn"
             aria-label="Отправить фото">
-        📷
+        Фото
     </button>
 
     <button id="chat-send"
             type="submit"
             class="ui-button chat-send-button"
             aria-label="Отправить сообщение">
-        ➤
+        Отправить
     </button>
 
     <div class="chat-composer-footer">

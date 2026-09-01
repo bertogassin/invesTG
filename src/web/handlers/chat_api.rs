@@ -671,7 +671,7 @@ pub async fn api_chat_messages(
 
     let latest_visible_id = messages.iter().map(|message| message.id).max().unwrap_or(0);
 
-    if query.after_id.is_some() && latest_visible_id > 0 {
+    if latest_visible_id > 0 {
         let now = crate::web::handlers::common::unix_now();
 
         let _ = connection.execute(
@@ -1332,6 +1332,7 @@ pub async fn api_chat_conversations(State(state): State<AppState>, headers: Head
         }
     };
 
+    super::chat::mark_user_messages_delivered(&db, user_id);
     let conversations = load_user_conversations(&db, user_id);
     let total_unread: i64 = conversations.iter().map(|row| row.unread_count).sum();
 

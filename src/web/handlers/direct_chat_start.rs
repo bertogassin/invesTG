@@ -42,6 +42,10 @@ fn normalized_pair(sender_user_id: i64, receiver_user_id: i64) -> Option<(i64, i
     }
 }
 
+fn contact_request_is_required(conversation_exists: bool, receiver_open_contact: i64) -> bool {
+    !conversation_exists && receiver_open_contact != 1
+}
+
 fn json_error(status: StatusCode, error: &str) -> Response {
     (
         status,
@@ -102,9 +106,11 @@ pub async fn api_start_direct_chat(
         }
     };
 
-    let receiver: Option<i64> = connection
+    let receiver: Option<(i64, i64)> = connection
         .query_row(
-            "SELECT profile.user_id
+            "SELECT
+                profile.user_id,
+                profile.open_contact
              FROM profiles AS profile
              JOIN users AS user
                ON user.id = profile.user_id
@@ -112,12 +118,12 @@ pub async fn api_start_direct_chat(
              WHERE profile.public_id = ?1
              LIMIT 1",
             rusqlite::params![public_id],
-            |row| row.get(0),
+            |row| Ok((row.get(0)?, row.get(1)?)),
         )
         .optional()
         .unwrap_or(None);
 
-    let Some(receiver_user_id) = receiver else {
+    let Some((receiver_user_id, receiver_open_contact)) = receiver else {
         return json_error(StatusCode::NOT_FOUND, "user_not_found");
     };
 
@@ -141,6 +147,85 @@ pub async fn api_start_direct_chat(
         )
         .optional()
         .unwrap_or(None);
+
+    if contact_request_is_required(existing_conversation.is_some(), receiver_open_contact) {
+        let existing_status: Option<String> = connection
+            .query_row(
+                "SELECT status
+                 FROM contact_requests
+                 WHERE sender_user_id = ?1
+                   AND receiver_user_id = ?2
+                 LIMIT 1",
+                rusqlite::params![sender_user_id, receiver_user_id],
+                |row| row.get(0),
+            )
+            .optional()
+            .unwrap_or(None);
+
+        match existing_status.as_deref() {
+            Some("pending") => {
+                return json_error(StatusCode::CONFLICT, "request_already_pending");
+            }
+            Some("accepted") => {
+                return json_error(StatusCode::CONFLICT, "already_connected");
+            }
+            _ => {}
+        }
+
+        let now = crate::web::handlers::common::unix_now();
+
+        if connection
+            .execute(
+                "INSERT INTO contact_requests (
+                    sender_user_id,
+                    receiver_user_id,
+                    message,
+                    status,
+                    created_at,
+                    updated_at
+                 )
+                 VALUES (?1, ?2, ?3, 'pending', ?4, ?4)
+                 ON CONFLICT(sender_user_id, receiver_user_id)
+                 DO UPDATE SET
+                    message = excluded.message,
+                    status = 'pending',
+                    updated_at = excluded.updated_at",
+                rusqlite::params![sender_user_id, receiver_user_id, message, now],
+            )
+            .is_err()
+        {
+            return json_error(StatusCode::INTERNAL_SERVER_ERROR, "request_store_failed");
+        }
+
+        let _ = connection.execute(
+            "INSERT INTO user_notifications (
+                user_id,
+                resource_id,
+                kind,
+                title,
+                message,
+                is_read,
+                created_at
+             )
+             VALUES (
+                ?1, ?2,
+                'contact_request',
+                'Новый запрос на связь',
+                'Участник хочет связаться через ResursMap.',
+                0, ?3
+             )",
+            rusqlite::params![receiver_user_id, sender_user_id, now],
+        );
+
+        return (
+            StatusCode::OK,
+            Json(json!({
+                "ok": true,
+                "status": "pending"
+            })),
+        )
+            .into_response();
+    }
 
     let now = crate::web::handlers::common::unix_now();
 
@@ -320,5 +405,13 @@ mod tests {
         assert!(!public_id_is_valid("../owner"));
         assert!(first_message_is_valid("Здравствуйте"));
         assert!(!first_message_is_valid(""));
+    }
+
+    #[test]
+    fn closed_profile_requires_contact_acceptance() {
+        assert!(contact_request_is_required(false, 0));
+        assert!(contact_request_is_required(false, -1));
+        assert!(!contact_request_is_required(false, 1));
+        assert!(!contact_request_is_required(true, 0));
     }
 }

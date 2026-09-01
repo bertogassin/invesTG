@@ -1929,3 +1929,56 @@ body.chat-lightbox-open {
         gap: 6px;
     }
 }
+/* Chat V2 stability pass: restrained UI and low-cost rendering. */
+.chat-shell,
+.chat-composer,
+.chat-header-premium {
+    background-image: none !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+
+.chat-shell *,
+.chat-composer *,
+.chat-header-premium * {
+    animation: none !important;
+    transition-duration: 0.12s !important;
+}
+
+.chat-empty-thread-icon {
+    width: 32px;
+    height: 24px;
+    margin-inline: auto;
+    border: 2px solid currentColor;
+    border-radius: 8px;
+    opacity: 0.55;
+}
+
+.chat-sound-toggle,
+.chat-haptic-toggle,
+.chat-voice-btn,
+.chat-image-btn {
+    width: auto !important;
+    min-width: 44px;
+    padding-inline: 10px !important;
+    font-size: 12px !important;
+    font-weight: 700;
+}
+
+.chat-send-button {
+    width: auto !important;
+    min-width: 88px;
+    padding-inline: 14px !important;
+    font-size: 13px !important;
+    font-weight: 800;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .chat-shell *,
+    .chat-composer *,
+    .chat-header-premium * {
+        scroll-behavior: auto !important;
+        transition: none !important;
+    }
+}

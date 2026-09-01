@@ -7,6 +7,26 @@ use axum::{
     response::Html,
 };
 
+pub(super) fn mark_user_messages_delivered(db: &rusqlite::Connection, user_id: i64) -> usize {
+    if user_id <= 0 {
+        return 0;
+    }
+
+    db.execute(
+        "UPDATE messages
+         SET delivered_at = strftime('%s','now')
+         WHERE delivered_at = 0
+           AND sender_user_id <> ?1
+           AND conversation_id IN (
+               SELECT id
+               FROM conversations
+               WHERE user1_id = ?1 OR user2_id = ?1
+           )",
+        rusqlite::params![user_id],
+    )
+    .unwrap_or(0)
+}
+
 pub(super) fn load_user_conversations(
     db: &rusqlite::Connection,
     user_id: i64,
@@ -101,6 +121,7 @@ pub async fn messages_page(State(state): State<AppState>, headers: HeaderMap) ->
         }
     };
 
+    mark_user_messages_delivered(&db, user_id);
     let conversations = load_user_conversations(&db, user_id);
 
     drop(db);
@@ -290,6 +311,38 @@ pub async fn chat_page(
         }
     }
 
+    let read_through_id = messages
+        .iter()
+        .filter(|message| message.sender_user_id == other_user_id)
+        .map(|message| message.id)
+        .max()
+        .unwrap_or(0);
+
+    let read_changed = if read_through_id > 0 {
+        let now = crate::web::handlers::common::unix_now();
+
+        db.execute(
+            "UPDATE messages
+             SET is_read = 1,
+                 delivered_at = CASE
+                     WHEN delivered_at = 0 THEN ?4
+                     ELSE delivered_at
+                 END,
+                 read_at = CASE
+                     WHEN read_at = 0 THEN ?4
+                     ELSE read_at
+                 END
+             WHERE conversation_id = ?1
+               AND sender_user_id = ?2
+               AND id <= ?3
+               AND read_at = 0",
+            rusqlite::params![conversation_id, other_user_id, read_through_id, now],
+        )
+        .unwrap_or(0)
+    } else {
+        0
+    };
+
     let _ = db.execute(
         "UPDATE user_notifications
          SET is_read = 1
@@ -302,6 +355,16 @@ pub async fn chat_page(
 
     drop(db);
 
+    if read_changed > 0 {
+        state.publish_chat_event(
+            "message.read",
+            conversation_id,
+            read_through_id,
+            user_id,
+            other_user_id,
+        );
+    }
+
     Html(templates::render_chat(
         true,
         user_id,
@@ -311,4 +374,46 @@ pub async fn chat_page(
         &other_last_name,
         messages,
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn inbox_marks_only_incoming_messages_delivered() {
+        let db = rusqlite::Connection::open_in_memory().expect("database");
+        db.execute_batch(
+            "CREATE TABLE conversations (
+                id INTEGER PRIMARY KEY,
+                user1_id INTEGER NOT NULL,
+                user2_id INTEGER NOT NULL
+             );
+             CREATE TABLE messages (
+                id INTEGER PRIMARY KEY,
+                conversation_id INTEGER NOT NULL,
+                sender_user_id INTEGER NOT NULL,
+                delivered_at INTEGER NOT NULL DEFAULT 0
+             );
+             INSERT INTO conversations (id, user1_id, user2_id)
+             VALUES (1, 10, 20), (2, 20, 30);
+             INSERT INTO messages (id, conversation_id, sender_user_id)
+             VALUES (1, 1, 10), (2, 1, 20), (3, 2, 30);",
+        )
+        .expect("schema");
+
+        assert_eq!(mark_user_messages_delivered(&db, 20), 2);
+
+        let delivered: Vec<(i64, i64)> = db
+            .prepare("SELECT id, delivered_at FROM messages ORDER BY id")
+            .expect("statement")
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+            .expect("rows")
+            .collect::<Result<_, _>>()
+            .expect("values");
+
+        assert!(delivered[0].1 > 0);
+        assert_eq!(delivered[1].1, 0);
+        assert!(delivered[2].1 > 0);
+    }
 }
