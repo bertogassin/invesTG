@@ -7,7 +7,7 @@ pub fn escape_html(value: &str) -> String {
         .replace('\'', "&#39;")
 }
 
-pub const STATIC_ASSET_VERSION: &str = "4.9.48";
+pub const STATIC_ASSET_VERSION: &str = "4.9.49";
 
 pub fn profession_label(raw: &str) -> String {
     match raw.trim().to_lowercase().as_str() {
@@ -502,6 +502,27 @@ body::before { display: none; }
 
 .search input::placeholder {
     color: var(--muted);
+}
+
+.rm-catalog-search {
+    margin: 0 0 18px;
+}
+
+.rm-catalog-search button {
+    flex: 0 0 auto;
+    border: 0;
+    padding: 6px 8px;
+    color: var(--muted);
+    background: transparent;
+    font: inherit;
+    cursor: pointer;
+}
+
+.rm-catalog-search-status {
+    min-height: 20px;
+    margin: -8px 4px 14px;
+    color: var(--muted);
+    font-size: 12px;
 }
 
 /* -----------------------------------------------------------
@@ -3680,7 +3701,7 @@ pub(crate) struct AuthPageParams<'a> {
 
 pub(crate) fn auth_support_scripts() -> String {
     format!(
-        r#"<script src="{auth_forms_js}" defer></script>"#,
+        r#"<script src="{auth_forms_js}"></script>"#,
         auth_forms_js = static_asset("auth-forms.js"),
     )
 }
@@ -3903,6 +3924,17 @@ pub(crate) fn navigation_card(href: &str, icon_name: &str, title: &str, meta: &s
         title,
         meta,
         trailing_html: None,
+    })
+}
+
+pub(crate) fn back_navigation_card(href: &str, title: &str, meta: &str) -> String {
+    extended_navigation_card(ExtendedNavigationCardParams {
+        id: None,
+        href,
+        icon_html: icon("chevron-left"),
+        title,
+        meta,
+        trailing_html: Some(""),
     })
 }
 

@@ -1,8 +1,8 @@
 use super::common::{
-    bottom_nav, empty_state_card, escape_html, guest_mode_hint, icon, intent_kind_chips,
-    navigation_card, page_document, page_shell, premium_badge_html, profession_label,
-    resource_listing_label, resource_result_card, search_form_hero, search_people_cards,
-    section_head, simple_hero, static_asset, topbar, verified_badge_html,
+    back_navigation_card, bottom_nav, empty_state_card, escape_html, guest_mode_hint, icon,
+    intent_kind_chips, navigation_card, page_document, page_shell, premium_badge_html,
+    profession_label, resource_listing_label, resource_result_card, search_form_hero,
+    search_people_cards, section_head, simple_hero, static_asset, topbar, verified_badge_html,
 };
 use crate::geography::world;
 use std::collections::BTreeMap;
@@ -230,7 +230,7 @@ pub fn render_geo_continent(
         .join("");
     let content = format!(
         r#"{back}{head}<div class="grid">{cards}</div>"#,
-        back = navigation_card("/app", "chevron", "Все континенты", "Назад к карте"),
+        back = back_navigation_card("/app", "Все континенты", "Назад к карте"),
         head = section_head(
             "Страны",
             &format!("{} · по алфавиту", countries.len()),
@@ -272,15 +272,19 @@ pub fn render_geo_country(
     } else {
         String::new()
     };
+    let city_search = format!(
+        r#"<div class="search rm-catalog-search"><span aria-hidden="true">{icon}</span><input id="rm-map-city-search" type="search" autocomplete="off" placeholder="Найти город в этой стране" data-country-id="{country_id}"><button id="rm-map-city-clear" type="button" aria-label="Очистить поиск">×</button></div>"#,
+        icon = icon("search"),
+    );
     let content = format!(
-        r#"{back}{head}<div class="grid" id="rm-map-city-grid">{cards}</div>{more}<script src="{script}" defer></script>"#,
-        back = navigation_card(
+        r#"{back}{head}{search}<div class="grid" id="rm-map-city-grid">{cards}</div>{more}<div class="rm-catalog-search-status" id="rm-map-city-status" aria-live="polite"></div><script src="{script}" defer></script>"#,
+        back = back_navigation_card(
             &format!("/app/map/continent/{continent_id}"),
-            "chevron",
             continent,
             "Назад к странам",
         ),
         head = section_head("Города", &format!("{total} · по алфавиту"), Some(22)),
+        search = city_search,
         script = static_asset("map-cities.js"),
     );
     page_shell(
@@ -332,14 +336,19 @@ pub fn render_geo_city(
         })
         .collect::<Vec<_>>()
         .join("");
+    let catalog_search = format!(
+        r#"<div class="search rm-catalog-search"><span aria-hidden="true">{icon}</span><input id="rm-city-catalog-search" type="search" autocomplete="off" placeholder="Что найти в этом городе?" data-city-id="{city_id}"><button id="rm-city-catalog-clear" type="button" aria-label="Очистить поиск">×</button></div>"#,
+        icon = icon("search"),
+    );
     let content = format!(
-        r#"{back}{section_head}<div class="grid">{work}{services}{business}{housing}{transport}{education}{help}{other}</div>{profession_head}<div class="grid">{sector_cards}</div>"#,
-        back = navigation_card(
+        r#"{back}{search}{search_status}{section_head}<div class="grid" id="rm-city-category-grid">{work}{services}{business}{housing}{transport}{education}{help}{other}</div>{profession_head}<div class="grid" id="rm-city-sector-grid">{sector_cards}</div><div class="grid" id="rm-city-profession-results"></div><script src="{catalog_script}" defer></script>"#,
+        back = back_navigation_card(
             &format!("/app/map/country/{country_id}"),
-            "chevron",
             country,
             "Назад к городам"
         ),
+        search = catalog_search,
+        search_status = r#"<div class="rm-catalog-search-status" id="rm-city-catalog-status" aria-live="polite"></div>"#,
         section_head = section_head(
             "Что вам нужно",
             "Ищу или предлагаю — всё внутри города",
@@ -384,6 +393,7 @@ pub fn render_geo_city(
             "menu"
         ),
         profession_head = section_head("Профессии", "Выберите профессиональную отрасль", Some(28)),
+        catalog_script = static_asset("map-catalog-search.js"),
     );
     page_shell(
         city,
@@ -423,9 +433,8 @@ pub fn render_geo_professions(
         .join("");
     let content = format!(
         r#"{back}{head}<div class="grid">{cards}</div>"#,
-        back = navigation_card(
+        back = back_navigation_card(
             &format!("/app/map/city/{city_id}"),
-            "chevron",
             city,
             "Назад к разделам"
         ),

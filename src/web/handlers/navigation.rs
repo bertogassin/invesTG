@@ -166,10 +166,10 @@ pub async fn app_geo_country(
     let Some((country, continent_id, continent)) = location else {
         return StatusCode::NOT_FOUND.into_response();
     };
-    let cities = load_country_cities(&db, country_id, 0, 80);
+    let cities = load_country_cities(&db, country_id, "", 0, 80);
     let total = db
         .query_row(
-            "SELECT COUNT(*) FROM geo_cities WHERE country_id=?1 AND is_active=1",
+            "SELECT COUNT(*) FROM geo_cities WHERE country_id=?1",
             [country_id],
             |row| row.get::<_, i64>(0),
         )
@@ -188,20 +188,39 @@ pub async fn app_geo_country(
 fn load_country_cities(
     db: &rusqlite::Connection,
     country_id: i64,
+    query: &str,
     offset: i64,
     limit: i64,
 ) -> Vec<(i64, String)> {
+    let normalized = query.trim().to_lowercase();
     db.prepare(
-        "SELECT id,name_ru FROM geo_cities
-         WHERE country_id=?1 AND is_active=1
-         ORDER BY name_ru COLLATE NOCASE,id
-         LIMIT ?2 OFFSET ?3",
+        "SELECT id,name_ru,name_native,name_ascii FROM geo_cities
+         WHERE country_id=?1
+         ORDER BY name_ru COLLATE NOCASE,id",
     )
     .and_then(|mut stmt| {
-        stmt.query_map(rusqlite::params![country_id, limit, offset], |row| {
-            Ok((row.get(0)?, row.get(1)?))
-        })?
-        .collect::<Result<Vec<_>, _>>()
+        let rows = stmt
+            .query_map([country_id], |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                ))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows
+            .into_iter()
+            .filter(|(_, name_ru, name_native, name_ascii)| {
+                normalized.is_empty()
+                    || name_ru.to_lowercase().contains(&normalized)
+                    || name_native.to_lowercase().contains(&normalized)
+                    || name_ascii.to_lowercase().contains(&normalized)
+            })
+            .skip(offset as usize)
+            .take(limit as usize)
+            .map(|(id, name_ru, _, _)| (id, name_ru))
+            .collect())
     })
     .unwrap_or_default()
 }
@@ -209,6 +228,7 @@ fn load_country_cities(
 #[derive(serde::Deserialize)]
 pub struct CityPageQuery {
     offset: Option<i64>,
+    q: Option<String>,
 }
 
 pub async fn api_map_country_cities(
@@ -217,6 +237,10 @@ pub async fn api_map_country_cities(
     Query(query): Query<CityPageQuery>,
 ) -> axum::Json<Value> {
     let offset = query.offset.unwrap_or(0).max(0);
+    let search = query.q.unwrap_or_default();
+    if search.chars().count() > 80 || search.chars().any(char::is_control) {
+        return axum::Json(json!({"ok":false,"error":"invalid_query"}));
+    }
     let db = match crate::db::pool::get_connection(&state.db_pool) {
         Ok(db) => db,
         Err(_) => return axum::Json(json!({"ok":false,"error":"database_unavailable"})),
@@ -231,7 +255,7 @@ pub async fn api_map_country_cities(
     if !exists {
         return axum::Json(json!({"ok":false,"error":"country_not_found"}));
     }
-    let items = load_country_cities(&db, country_id, offset, 80)
+    let items = load_country_cities(&db, country_id, &search, offset, 80)
         .into_iter()
         .map(|(id, name)| json!({"id":id,"name":name,"href":format!("/app/map/city/{id}")}))
         .collect::<Vec<_>>();

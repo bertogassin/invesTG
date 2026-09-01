@@ -17,7 +17,7 @@ pub async fn profession_suggestions(
     Query(query): Query<ProfessionSuggestQuery>,
 ) -> Json<Value> {
     let q = crate::db::professions::normalize(query.q.as_deref().unwrap_or(""));
-    let limit = query.limit.unwrap_or(12).clamp(1, 30);
+    let limit = query.limit.unwrap_or(12).clamp(1, 200);
     if q.chars().count() > 80 || q.chars().any(char::is_control) {
         return Json(json!({"ok": false, "error": "invalid_query"}));
     }
@@ -32,7 +32,7 @@ pub async fn profession_suggestions(
         "SELECT DISTINCT p.stable_key,p.name_ru,p.name_en,p.name_fr,s.name_ru
          FROM professions p JOIN profession_sectors s ON s.stable_key=p.sector_key
          LEFT JOIN profession_aliases a ON a.profession_id=p.id
-         WHERE p.is_active=1 AND (?1='' OR p.normalized_ru LIKE ?2 OR p.normalized_en LIKE ?2 OR p.normalized_fr LIKE ?2 OR a.normalized_alias LIKE ?2)
+         WHERE (?1='' OR p.normalized_ru LIKE ?2 OR p.normalized_en LIKE ?2 OR p.normalized_fr LIKE ?2 OR a.normalized_alias LIKE ?2)
          ORDER BY CASE WHEN p.normalized_ru LIKE ?3 OR p.normalized_en LIKE ?3 OR p.normalized_fr LIKE ?3 THEN 0 ELSE 1 END,s.position,p.name_ru LIMIT ?4",
     ) {
         if let Ok(mapped) = stmt.query_map(rusqlite::params![q, pattern, prefix, limit as i64], |row| {
