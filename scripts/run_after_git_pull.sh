@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+resursmap_sqlite_path() {
+  local url="${DATABASE_URL:-sqlite:data/votes.db}"
+  printf '%s\n' "${url#sqlite:}"
+}
+
 cd /root/resursmap
 
 echo "=== DEPLOY AFTER GIT PULL ==="
@@ -38,8 +43,8 @@ fi
 
 bash scripts/check_asset_version.sh
 
-sqlite3 data/votes.db 'PRAGMA integrity_check;'
-sqlite3 data/votes.db 'PRAGMA foreign_key_check;'
+sqlite3 "$(resursmap_sqlite_path)" 'PRAGMA integrity_check;'
+sqlite3 "$(resursmap_sqlite_path)" 'PRAGMA foreign_key_check;'
 
 systemctl restart resursmap
 
@@ -60,6 +65,6 @@ fi
 echo "SERVICE=$(systemctl is-active resursmap)"
 echo "HEALTH=ok"
 echo "SQLITE=ok"
-echo "CACHE_VERSION=4.9.38"
+echo "CACHE_VERSION=4.9.44"
 git status --short --branch
 echo "DEPLOY=COMPLETE"

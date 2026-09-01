@@ -1051,13 +1051,21 @@ pub async fn admin_approve_promotion(
     };
 
     let now = unix_now();
+    let scope_filter = moderation_scope_filter(&state, &headers).replace("resources.", "r.");
     let updated = connection.execute(
-        "UPDATE resource_promotion_requests
+        &format!(
+            "UPDATE resource_promotion_requests
          SET status = 'approved',
              updated_at = ?2
          WHERE id = ?1
            AND payment_status = 'paid'
-           AND status IN ('pending', 'failed')",
+           AND status IN ('pending', 'failed')
+           AND EXISTS (
+               SELECT 1 FROM resources AS r
+               WHERE r.id = resource_promotion_requests.resource_id
+                 {scope_filter}
+           )"
+        ),
         rusqlite::params![request_id, now],
     );
     drop(connection);
@@ -1093,9 +1101,11 @@ pub async fn admin_reject_promotion(
         Err(_) => return (StatusCode::SERVICE_UNAVAILABLE, "DB error").into_response(),
     };
 
+    let scope_filter = moderation_scope_filter(&state, &headers).replace("resources.", "r.");
     let row: Option<(i64, i64, String, String, String)> = connection
         .query_row(
-            "SELECT pr.requester_user_id,
+            &format!(
+                "SELECT pr.requester_user_id,
                     pr.resource_id,
                     r.title,
                     pr.payment_status,
@@ -1104,7 +1114,9 @@ pub async fn admin_reject_promotion(
              JOIN resources r ON r.id = pr.resource_id
              WHERE pr.id = ?1
                AND pr.status IN ('pending', 'failed')
-             LIMIT 1",
+               {scope_filter}
+             LIMIT 1"
+            ),
             rusqlite::params![request_id],
             |row| {
                 Ok((

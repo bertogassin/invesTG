@@ -1207,6 +1207,11 @@
                 setConnection("Фото больше 8 МБ", "is-error");
                 return;
             }
+            if (navigator.onLine === false) {
+                setConnection("Нет сети — фото нельзя отправить офлайн", "is-error");
+                sendState.textContent = "Нет сети";
+                return;
+            }
             var clientMessageId = createClientMessageId();
             var formData = new FormData();
             formData.append("image", file);
@@ -1302,6 +1307,11 @@
 
         function sendVoiceBlob(blob, mimeType) {
             if (!blob || !blob.size) {
+                return;
+            }
+            if (navigator.onLine === false) {
+                setConnection("Нет сети — голосовое нельзя отправить офлайн", "is-error");
+                sendState.textContent = "Нет сети";
                 return;
             }
             var clientMessageId = createClientMessageId();
@@ -2235,6 +2245,11 @@
             var payload = window.ResursMapChatForward;
 
             if (!payload) {
+                return;
+            }
+
+            if (navigator.onLine === false) {
+                setSendState("Нет сети — пересылка недоступна");
                 return;
             }
 

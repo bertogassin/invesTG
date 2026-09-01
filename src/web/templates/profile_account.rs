@@ -23,7 +23,58 @@ pub struct RenderMeParams<'a> {
     pub intent_text: &'a str,
     pub intent_until: i64,
     pub category: &'a str,
+    pub home_continent_index: i64,
+    pub home_country_index: i64,
+    pub home_city_index: i64,
     pub user_sessions: Vec<crate::web::view_models::UserSessionRow>,
+}
+
+fn home_city_select_html(continent: i64, country: i64, city: i64) -> String {
+    let world_data = crate::geography::world();
+    let mut options = String::from(r#"<option value="">Город не указан</option>"#);
+
+    for (ci, (continent_name, countries)) in world_data.iter().enumerate() {
+        let ci = ci as i64;
+        options.push_str(&format!(
+            r#"<optgroup label="{}">"#,
+            escape_html(continent_name)
+        ));
+
+        for (si, (country_name, cities)) in countries.iter().enumerate() {
+            let si = si as i64;
+            for (zi, city_name) in cities.iter().enumerate() {
+                let zi = zi as i64;
+                let selected = if continent == ci && country == si && city == zi {
+                    " selected"
+                } else {
+                    ""
+                };
+                options.push_str(&format!(
+                    r#"<option value="{ci}:{si}:{zi}"{selected}>{} · {}</option>"#,
+                    escape_html(city_name),
+                    escape_html(country_name),
+                ));
+            }
+        }
+
+        options.push_str("</optgroup>");
+    }
+
+    format!(
+        r#"
+    <label class="rm-profile-field rm-profile-field--spaced">
+        <div class="rm-profile-field-label">
+            Ваш город
+        </div>
+        <select id="profile-home-city" class="ui-select">
+            {options}
+        </select>
+        <div class="card-meta">
+            Нужен, чтобы вас находили в разделе «Работники» этого города.
+        </div>
+    </label>
+"#
+    )
 }
 
 fn session_device_label(user_agent: &str) -> &'static str {
@@ -141,6 +192,9 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
         intent_text,
         intent_until,
         category,
+        home_continent_index,
+        home_country_index,
+        home_city_index,
         user_sessions,
     } = params;
     let safe_username = escape_html(username);
@@ -948,6 +1002,7 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
 
     </label>
 
+    {home_city_select}
 
     <label class="rm-profile-field rm-profile-field--spaced">
 
@@ -998,6 +1053,8 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
         intent_status_text = intent_status_text,
         safe_intent_text = safe_intent_text,
         safe_category = safe_category,
+        home_city_select =
+            home_city_select_html(home_continent_index, home_country_index, home_city_index,),
     );
 
     let body_after_html = r####"
@@ -1016,6 +1073,11 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
     const categoryInput =
         document.getElementById(
             "profile-category"
+        );
+
+    const homeCity =
+        document.getElementById(
+            "profile-home-city"
         );
 
     const duration =
@@ -1066,7 +1128,11 @@ intent_text:
                             duration_days:
                                 Number(duration.value),
                             category:
-                                categoryInput.value.trim()
+                                categoryInput.value.trim(),
+                            home_city:
+                                homeCity
+                                    ? homeCity.value.trim()
+                                    : ""
                         })
                     }
                 );
@@ -1694,7 +1760,7 @@ pub fn render_public_user_profile(params: RenderPublicUserProfileParams<'_>) -> 
 
     page_document(
         &format!("{} · ResursMap", display_name),
-        "",
+        r#"<meta name="robots" content="noindex, nofollow">"#,
         "",
         &format!(
             "{topbar}\n\n{hero}\n\n{content}",
@@ -1837,6 +1903,9 @@ mod personal_center_tests {
             intent_text: "Ищу партнёров",
             intent_until: 0,
             category: "Бизнес",
+            home_continent_index: -1,
+            home_country_index: -1,
+            home_city_index: -1,
             user_sessions: vec![],
         }
     }

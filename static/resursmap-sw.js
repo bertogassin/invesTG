@@ -1,6 +1,6 @@
 "use strict";
 
-const CACHE_VERSION = "resursmap-shell-v4.9.38";
+const CACHE_VERSION = "resursmap-shell-v4.9.44";
 
 const STATIC_ASSETS = [
     "/static/manifest.webmanifest",

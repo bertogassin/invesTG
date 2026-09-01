@@ -1,9 +1,9 @@
 use super::common::{
-    back_hero, back_link, bottom_nav, empty_state_action, empty_state_card,
-    empty_state_card_with_actions, escape_html, guest_locked_section, icon,
-    my_resource_moderation_badge, navigation_card, page_document, page_shell, premium_badge_html,
-    resource_card_link_class, resource_detail_section_class, section_head, topbar,
-    verified_badge_html,
+    back_hero, back_link, bottom_nav, empty_state_action, empty_state_card_with_actions,
+    escape_html, guest_locked_section, icon, kind_chip, my_resource_moderation_badge,
+    page_document, page_shell, premium_badge_html, resource_card_link_class,
+    resource_detail_section_class, resource_listing_label, search_people_cards, section_head,
+    topbar, verified_badge_html,
 };
 
 pub fn render_category(
@@ -13,37 +13,54 @@ pub fn render_category(
     category: &str,
     listing_type: Option<&str>,
     resources: Vec<crate::web::view_models::CategoryResourceRow>,
+    people: Vec<crate::web::view_models::SearchPersonRow>,
 ) -> String {
     let city_url = format!("/app/{}/{}/{}", ci, si, zi);
     let category_url = urlencoding::encode(category);
 
+    let add_url = format!("/app/{ci}/{si}/{zi}/cat/{category_url}/add");
     let cards = if resources.is_empty() {
-        format!(
-            r#"{empty}
-            <a class="feature rm-feature-add"
-               href="/app/{ci}/{si}/{zi}/cat/{category_url}/add">
-                <div class="card-icon">+</div>
-                <strong>Добавить ресурс</strong>
-                <span>Будьте первым в этой категории.</span>
-            </a>"#,
-            ci = ci,
-            si = si,
-            zi = zi,
-            category_url = category_url,
-            empty = empty_state_card(
-                "Пока ресурсов нет",
-                "Будьте первым — добавьте ресурс в эту категорию.",
-            ),
-        )
+        if people.is_empty() {
+            empty_state_card_with_actions(
+                "Пока пусто",
+                if listing_type == Some("seeker") {
+                    "Добавьте объявление или укажите профессию в профиле."
+                } else {
+                    "Добавьте первое объявление в этом разделе."
+                },
+                &empty_state_action(&add_url, "Добавить"),
+            )
+        } else {
+            String::new()
+        }
     } else {
         resources
             .iter()
             .map(
-                |(id, title, description, contact, address, rating, votes, verified, premium)| {
+                |(
+                    id,
+                    title,
+                    description,
+                    contact,
+                    address,
+                    rating,
+                    votes,
+                    verified,
+                    premium,
+                    row_listing_type,
+                )| {
                     let safe_title = escape_html(title);
                     let safe_description = escape_html(description);
                     let safe_contact = escape_html(contact);
                     let safe_address = escape_html(address);
+                    let listing_label = if listing_type.is_some() {
+                        String::new()
+                    } else {
+                        format!(
+                            r#"<div class="card-meta">{}</div>"#,
+                            resource_listing_label(row_listing_type)
+                        )
+                    };
 
                     let verified_badge = if *verified != 0 {
                         verified_badge_html(false)
@@ -79,6 +96,8 @@ pub fn render_category(
                                 {premium_badge}
                             </div>
 
+                            {listing_label}
+
                             <div class="card-meta">
                                 {description}
                             </div>
@@ -110,6 +129,7 @@ pub fn render_category(
                         map_icon = icon("map-pin"),
                         title = safe_title,
                         premium_badge = premium_badge,
+                        listing_label = listing_label,
                         description = safe_description,
                         rating = rating,
                         votes = votes,
@@ -124,30 +144,62 @@ pub fn render_category(
     };
 
     let count = resources.len();
+    let people_count = people.len();
+    let people_section = if people.is_empty() {
+        String::new()
+    } else {
+        format!(
+            r#"{head}
+<div>{cards}</div>"#,
+            head = section_head(
+                "По профессии",
+                &format!("Найдено: {people_count}"),
+                None,
+            ),
+            cards = search_people_cards(&people),
+        )
+    };
 
-    let section_head_resources = section_head("Ресурсы", &format!("Найдено: {}", count), None);
-    let section_head_city = section_head("Ваш город", "Все направления и категории", Some(34));
-    let city_navigation_card = navigation_card(
-        &city_url,
-        "map",
-        "Открыть карту города",
-        "Вернуться ко всем категориям",
-    );
+    let work_chips = if category.eq_ignore_ascii_case("work") {
+        format!(
+            r#"<nav class="rm-kind-chips" aria-label="Что искать">
+    {work}{workers}
+</nav>"#,
+            work = kind_chip(
+                listing_type == Some("offer"),
+                &format!("/app/{ci}/{si}/{zi}/cat/{category_url}?type=offer"),
+                "Работа",
+            ),
+            workers = kind_chip(
+                listing_type == Some("seeker"),
+                &format!("/app/{ci}/{si}/{zi}/cat/{category_url}?type=seeker"),
+                "Работники",
+            ),
+        )
+    } else {
+        String::new()
+    };
+
+    let section_head_resources = if resources.is_empty() {
+        String::new()
+    } else {
+        section_head("Объявления", &format!("Найдено: {}", count), None)
+    };
 
     let content = format!(
-        r####"{section_head_resources}
+        r####"{work_chips}
+
+{section_head_resources}
 
 <div>
     {cards}
 </div>
 
-{section_head_city}
-
-{city_navigation_card}"####,
+{people_section}"####,
+        work_chips = work_chips,
         section_head_resources = section_head_resources,
-        section_head_city = section_head_city,
-        city_navigation_card = city_navigation_card,
         cards = cards,
+        people_section = people_section,
     );
 
     let heading = match (category.to_ascii_lowercase().as_str(), listing_type) {
@@ -160,7 +212,7 @@ pub fn render_category(
     };
     let heading_copy = match listing_type {
         Some("offer") => "Вакансии и предложения работы в городе.",
-        Some("seeker") => "Люди, которые ищут работу в городе.",
+        Some("seeker") => "Объявления и специалисты по профессии в городе.",
         _ => "Объявления города в этом разделе.",
     };
 
@@ -198,6 +250,10 @@ pub struct RenderResourceProfileParams<'a> {
     pub premium: i64,
     pub verified: i64,
     pub category: &'a str,
+    pub listing_type: &'a str,
+    pub continent_index: i64,
+    pub country_index: i64,
+    pub city_index: i64,
     pub _created_at: i64,
     pub owner_public_id: &'a str,
 }
@@ -214,6 +270,10 @@ pub fn render_resource_profile(params: RenderResourceProfileParams<'_>) -> Strin
         premium,
         verified,
         category,
+        listing_type,
+        continent_index,
+        country_index,
+        city_index,
         _created_at,
         owner_public_id,
     } = params;
@@ -233,17 +293,31 @@ pub fn render_resource_profile(params: RenderResourceProfileParams<'_>) -> Strin
         ""
     };
 
+    let listing_label = resource_listing_label(listing_type);
+    let category_url = urlencoding::encode(category);
+    let type_query = match listing_type.trim() {
+        "seeker" => "?type=seeker",
+        "offer" => "?type=offer",
+        _ => "",
+    };
+    let back_url = format!(
+        "/app/{continent_index}/{country_index}/{city_index}/cat/{category_url}{type_query}"
+    );
+
     let hero_description = format!(
         r#"<span class="rm-resource-hero-badges">
             {premium_badge}
             {verified_badge}
         </span>
 
+        <span class="rm-resource-listing-label">{listing_label}</span>
+
         <span id="rating-summary" class="rm-resource-rating-summary">
             ⭐ <strong>{rating:.1}</strong> · {votes} голосов
         </span>"#,
         premium_badge = premium_badge,
         verified_badge = verified_badge,
+        listing_label = listing_label,
         rating = rating,
         votes = votes,
     );
@@ -731,7 +805,7 @@ pub fn render_resource_profile(params: RenderResourceProfileParams<'_>) -> Strin
             "{topbar}\n\n{hero}\n\n{content}",
             topbar = topbar("Ресурс", "map"),
             hero = back_hero(
-                &back_link("/app", "Вернуться к карте", "arrow-left"),
+                &back_link(&back_url, "Вернуться к разделу", "arrow-left"),
                 "map-pin",
                 category,
                 title,
@@ -1202,12 +1276,18 @@ pub fn render_my_resources(
                 premium,
                 moderation_status,
                 rejection_reason,
-                is_active
+                is_active,
+                listing_type
             )| {
                 let safe_title = escape_html(title);
                 let safe_category = escape_html(category);
                 let safe_description = escape_html(description);
                 let safe_rejection_reason = escape_html(rejection_reason);
+                let category_line = format!(
+                    "{} · {}",
+                    resource_listing_label(listing_type),
+                    safe_category
+                );
 
                 let premium_badge = if *premium != 0 {
                     premium_badge_html("compact")
@@ -1315,7 +1395,7 @@ pub fn render_my_resources(
                     id = id,
                     icon = icon("map-pin"),
                     title = safe_title,
-                    category = safe_category,
+                    category = category_line,
                     description = safe_description,
                     rating = rating,
                     votes = votes,
@@ -1359,15 +1439,44 @@ pub fn render_edit_resource(
     contact: &str,
     address: &str,
     category: &str,
+    listing_type: &str,
 ) -> String {
     let safe_title = escape_html(title);
     let safe_description = escape_html(description);
     let safe_contact = escape_html(contact);
     let safe_address = escape_html(address);
+    let listing_type_field = if category.eq_ignore_ascii_case("work") {
+        let offer_selected = if listing_type != "seeker" {
+            " selected"
+        } else {
+            ""
+        };
+        let seeker_selected = if listing_type == "seeker" {
+            " selected"
+        } else {
+            ""
+        };
+
+        format!(
+            r#"
+    <label class="ui-field">
+        <span class="ui-field-label">Тип объявления</span>
+        <select name="listing_type" class="ui-input">
+            <option value="offer"{offer_selected}>Предложение работы / услуги</option>
+            <option value="seeker"{seeker_selected}>Ищу работу</option>
+        </select>
+    </label>
+"#
+        )
+    } else {
+        String::new()
+    };
     let content = format!(
         r####"<form method="post"
       action="/app/resource/{id}/edit"
       class="ui-form ui-form-stack">
+
+    {listing_type_field}
 
     <label class="ui-field">
         <span class="ui-field-label">Название</span>
@@ -1417,6 +1526,7 @@ pub fn render_edit_resource(
 
 </form>"####,
         id = id,
+        listing_type_field = listing_type_field,
         title = safe_title,
         description = safe_description,
         contact = safe_contact,

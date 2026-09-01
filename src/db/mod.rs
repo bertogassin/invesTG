@@ -8,4 +8,5 @@ pub mod path;
 pub mod pool;
 pub mod promotions;
 pub mod queries;
+pub mod search_fts;
 pub mod security;

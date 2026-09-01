@@ -54,7 +54,6 @@
         var input = document.getElementById("rm-home-explorer-input");
         var results = document.getElementById("rm-home-explorer-results");
         var clearBtn = document.getElementById("rm-home-explorer-clear");
-        var allLink = document.getElementById("rm-home-explorer-all");
         var dataNode = document.getElementById("rm-home-explore-data");
 
         if (!root || !input || !results || !dataNode) {
@@ -69,15 +68,9 @@
             index = [];
         }
 
-        var defaultHits = index.filter(function (hit) {
-            return (
-                hit.k === "work" ||
-                hit.k === "workers" ||
-                hit.k === "business"
-            );
-        });
         var activeIndex = -1;
         var visibleHits = [];
+        var searchTimer = 0;
 
         function setClearVisible() {
             if (!clearBtn) {
@@ -87,20 +80,11 @@
             clearBtn.hidden = input.value.trim().length === 0;
         }
 
-        function updateAllLink(query) {
-            if (!allLink) {
-                return;
-            }
-
-            var trimmed = query.trim();
-
-            if (!trimmed) {
-                allLink.href = "/app/search";
-                return;
-            }
-
-            allLink.href =
-                "/app/search?q=" + encodeURIComponent(trimmed);
+        function hideHits() {
+            visibleHits = [];
+            activeIndex = -1;
+            results.innerHTML = "";
+            results.hidden = true;
         }
 
         function renderHits(hits) {
@@ -110,7 +94,7 @@
             if (hits.length === 0) {
                 if (input.value.trim().length >= 2) {
                     results.innerHTML =
-                        '<div class="rm-explore-empty">Ничего не найдено. Попробуйте полный поиск.</div>';
+                        '<div class="rm-explore-empty">Ничего не найдено</div>';
                     results.hidden = false;
                 } else {
                     results.innerHTML = "";
@@ -184,11 +168,10 @@
         function search(queryRaw) {
             var query = normalize(queryRaw);
 
-            updateAllLink(queryRaw);
             setClearVisible();
 
-            if (query.length < 1) {
-                renderHits(defaultHits);
+            if (query.length < 2) {
+                hideHits();
                 return;
             }
 
@@ -237,7 +220,11 @@
         }
 
         input.addEventListener("input", function () {
-            search(input.value);
+            setClearVisible();
+            window.clearTimeout(searchTimer);
+            searchTimer = window.setTimeout(function () {
+                search(input.value);
+            }, 120);
         });
 
         input.addEventListener("keydown", function (event) {
@@ -294,7 +281,6 @@
         });
 
         setClearVisible();
-        updateAllLink("");
-        renderHits(defaultHits);
+        hideHits();
     });
 })();

@@ -33,35 +33,44 @@ pub async fn app_cat(
         _ => None,
     };
 
-    let sql = if listing_type.is_some() {
-        "SELECT id, title, description, contact, address, rating, votes, is_verified, is_premium
-             FROM resources
-             WHERE continent_index = ?1
-               AND country_index = ?2
-               AND city_index = ?3
-               AND category = ?4
-               AND listing_type = ?5
-               AND is_active = 1
-               AND moderation_status = 'approved'
-             ORDER BY is_verified DESC, rating DESC, votes DESC, id DESC"
-    } else {
-        "SELECT id, title, description, contact, address, rating, votes, is_verified, is_premium
-             FROM resources
-             WHERE continent_index = ?1
-               AND country_index = ?2
-               AND city_index = ?3
-               AND category = ?4
-               AND is_active = 1
-               AND moderation_status = 'approved'
-             ORDER BY is_verified DESC, rating DESC, votes DESC, id DESC"
-    };
+    let city_id: Option<i64> = db
+        .query_row(
+            "SELECT city.id
+             FROM geo_cities AS city
+             WHERE city.legacy_continent_index = ?1
+               AND city.legacy_country_index = ?2
+               AND city.legacy_city_index = ?3
+               AND city.is_active = 1
+             LIMIT 1",
+            rusqlite::params![ci as i64, si as i64, zi as i64],
+            |row| row.get(0),
+        )
+        .optional()
+        .ok()
+        .flatten();
 
-    let resources: Vec<crate::web::view_models::CategoryResourceRow> = if let Some(listing_type) =
-        listing_type
-    {
-        db.prepare(sql)
-            .and_then(|mut stmt| {
-                stmt.query_map(rusqlite::params![ci, si, zi, k, listing_type], |row| {
+    let resources: Vec<crate::web::view_models::CategoryResourceRow> = db
+        .prepare(
+            "SELECT id, title, description, contact, address, rating, votes, is_verified, is_premium,
+                    COALESCE(listing_type, 'general')
+             FROM resources
+             WHERE (
+                    (continent_index = ?1 AND country_index = ?2 AND city_index = ?3)
+                    OR (?6 IS NOT NULL AND city_id = ?6)
+                  )
+               AND (
+                    (LOWER(?4) = 'business' AND category IN ('business', 'services'))
+                    OR category = ?4
+               )
+               AND (?5 IS NULL OR listing_type = ?5)
+               AND is_active = 1
+               AND moderation_status = 'approved'
+             ORDER BY is_verified DESC, rating DESC, votes DESC, id DESC",
+        )
+        .and_then(|mut stmt| {
+            stmt.query_map(
+                rusqlite::params![ci, si, zi, k, listing_type, city_id],
+                |row| {
                     Ok((
                         row.get(0)?,
                         row.get(1)?,
@@ -72,35 +81,84 @@ pub async fn app_cat(
                         row.get(6)?,
                         row.get(7)?,
                         row.get(8)?,
+                        row.get(9)?,
                     ))
-                })?
-                .collect::<Result<Vec<_>, _>>()
-            })
-            .unwrap_or_default()
+                },
+            )?
+            .collect::<Result<Vec<_>, _>>()
+        })
+        .unwrap_or_default();
+
+    let people: Vec<crate::web::view_models::SearchPersonRow> = if listing_type == Some("seeker") {
+        db.prepare(
+            "SELECT
+                    p.public_id,
+                    p.username,
+                    p.first_name,
+                    p.last_name,
+                    p.category,
+                    p.open_contact,
+                    p.intent_text,
+                    p.intent_until,
+                    p.last_seen_at
+                 FROM profiles p
+                 JOIN users u
+                   ON u.id = p.user_id
+                  AND u.is_active = 1
+                 WHERE p.public_id <> ''
+                   AND p.home_continent_index = ?1
+                   AND p.home_country_index = ?2
+                   AND p.home_city_index = ?3
+                   AND (
+                        trim(p.category) <> ''
+                        OR (
+                            trim(p.intent_text) <> ''
+                            AND (
+                                p.intent_until = 0
+                                OR p.intent_until >= strftime('%s','now')
+                            )
+                        )
+                   )
+                 ORDER BY
+                    CASE
+                        WHEN p.intent_text <> ''
+                         AND (
+                              p.intent_until = 0
+                              OR p.intent_until >= strftime('%s','now')
+                         )
+                        THEN 0
+                        ELSE 1
+                    END,
+                    CASE
+                        WHEN trim(p.category) <> '' THEN 0
+                        ELSE 1
+                    END,
+                    p.updated_at DESC
+                 LIMIT 50",
+        )
+        .and_then(|mut stmt| {
+            stmt.query_map(rusqlite::params![ci as i64, si as i64, zi as i64], |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                    row.get(6)?,
+                    row.get(7)?,
+                    row.get(8)?,
+                ))
+            })?
+            .collect::<Result<Vec<_>, _>>()
+        })
+        .unwrap_or_default()
     } else {
-        db.prepare(sql)
-            .and_then(|mut stmt| {
-                stmt.query_map(rusqlite::params![ci, si, zi, k], |row| {
-                    Ok((
-                        row.get(0)?,
-                        row.get(1)?,
-                        row.get(2)?,
-                        row.get(3)?,
-                        row.get(4)?,
-                        row.get(5)?,
-                        row.get(6)?,
-                        row.get(7)?,
-                        row.get(8)?,
-                    ))
-                })?
-                .collect::<Result<Vec<_>, _>>()
-            })
-            .unwrap_or_default()
+        Vec::new()
     };
 
     drop(db);
 
-    // Premium → проверенные → рейтинг → голоса
     let mut resources = resources;
     resources.sort_by(|a, b| {
         b.8.cmp(&a.8)
@@ -116,6 +174,7 @@ pub async fn app_cat(
         &k,
         listing_type,
         resources,
+        people,
     ))
 }
 
@@ -140,7 +199,11 @@ pub async fn resource_profile(State(state): State<AppState>, Path(id): Path<i64>
                 r.is_verified,
                 r.category,
                 r.created_at,
-                COALESCE(p.public_id, '')
+                COALESCE(p.public_id, ''),
+                COALESCE(r.listing_type, 'general'),
+                r.continent_index,
+                r.country_index,
+                r.city_index
          FROM resources r
          LEFT JOIN profiles p
            ON p.client_id = r.client_id
@@ -161,6 +224,10 @@ pub async fn resource_profile(State(state): State<AppState>, Path(id): Path<i64>
                     row.get::<_, String>(8)?,
                     row.get::<_, i64>(9)?,
                     row.get::<_, String>(10)?,
+                    row.get::<_, String>(11)?,
+                    row.get::<_, i64>(12)?,
+                    row.get::<_, i64>(13)?,
+                    row.get::<_, i64>(14)?,
                 ))
             },
         )
@@ -181,6 +248,10 @@ pub async fn resource_profile(State(state): State<AppState>, Path(id): Path<i64>
             category,
             created_at,
             owner_public_id,
+            listing_type,
+            continent_index,
+            country_index,
+            city_index,
         )) => Html(templates::render_resource_profile(
             templates::RenderResourceProfileParams {
                 id,
@@ -193,6 +264,10 @@ pub async fn resource_profile(State(state): State<AppState>, Path(id): Path<i64>
                 premium,
                 verified,
                 category: &category,
+                listing_type: &listing_type,
+                continent_index,
+                country_index,
+                city_index,
                 _created_at: created_at,
                 owner_public_id: &owner_public_id,
             },
@@ -449,7 +524,8 @@ pub async fn my_resources(State(state): State<AppState>, headers: HeaderMap) -> 
                 is_premium,
                 moderation_status,
                 rejection_reason,
-                is_active
+                is_active,
+                COALESCE(listing_type, 'general')
              FROM resources
              WHERE client_id = ?1
              ORDER BY is_active DESC,
@@ -471,6 +547,7 @@ pub async fn my_resources(State(state): State<AppState>, headers: HeaderMap) -> 
                     row.get(8)?,
                     row.get(9)?,
                     row.get(10)?,
+                    row.get(11)?,
                 ))
             })?
             .collect::<Result<Vec<_>, _>>()
@@ -501,7 +578,8 @@ pub async fn edit_resource_page(
 
     let resource = db
         .query_row(
-            "SELECT title, description, contact, address, category, client_id
+            "SELECT title, description, contact, address, category, client_id,
+                    COALESCE(listing_type, 'general')
          FROM resources
          WHERE id = ?1",
             rusqlite::params![id],
@@ -513,6 +591,7 @@ pub async fn edit_resource_page(
                     row.get::<_, String>(3)?,
                     row.get::<_, String>(4)?,
                     row.get::<_, String>(5)?,
+                    row.get::<_, String>(6)?,
                 ))
             },
         )
@@ -521,7 +600,7 @@ pub async fn edit_resource_page(
     drop(db);
 
     match resource {
-        Some((title, description, contact, address, category, owner))
+        Some((title, description, contact, address, category, owner, listing_type))
             if !client_id.is_empty() && owner == client_id =>
         {
             Html(templates::render_edit_resource(
@@ -531,6 +610,7 @@ pub async fn edit_resource_page(
                 &contact,
                 &address,
                 &category,
+                &listing_type,
             ))
         }
 
@@ -625,23 +705,68 @@ pub async fn edit_resource(
         }
     };
 
-    let changed = db
-        .execute(
+    let category: String = db
+        .query_row(
+            "SELECT category
+             FROM resources
+             WHERE id = ?1
+               AND client_id = ?2",
+            rusqlite::params![id, &owner_client_id],
+            |row| row.get(0),
+        )
+        .unwrap_or_default();
+
+    let listing_type = if category.eq_ignore_ascii_case("work") {
+        match form.listing_type.as_deref().map(str::trim) {
+            Some("seeker") => "seeker",
+            Some("offer") => "offer",
+            _ => "offer",
+        }
+    } else if category.is_empty() {
+        ""
+    } else {
+        "general"
+    };
+
+    let changed = if listing_type.is_empty() {
+        0
+    } else {
+        db.execute(
             "UPDATE resources
          SET title = ?1,
              description = ?2,
              contact = ?3,
              address = ?4,
+             listing_type = ?7,
              is_verified = 0,
              is_active = 1,
              moderation_status = 'pending',
              rejection_reason = '',
+             city_id = COALESCE(
+                (SELECT city.id
+                 FROM geo_cities AS city
+                 WHERE city.legacy_continent_index = resources.continent_index
+                   AND city.legacy_country_index = resources.country_index
+                   AND city.legacy_city_index = resources.city_index
+                   AND city.is_active = 1
+                 LIMIT 1),
+                city_id
+             ),
              updated_at = strftime('%s','now')
          WHERE id = ?5
            AND client_id = ?6",
-            rusqlite::params![title, description, contact, address, id, &owner_client_id,],
+            rusqlite::params![
+                title,
+                description,
+                contact,
+                address,
+                id,
+                &owner_client_id,
+                listing_type,
+            ],
         )
-        .unwrap_or(0);
+        .unwrap_or(0)
+    };
 
     drop(db);
 

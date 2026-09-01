@@ -1,11 +1,18 @@
 use super::common::{
-    bottom_nav, empty_state_card, escape_html, guest_mode_hint, icon, navigation_card,
-    page_document, page_shell, people_result_card, premium_badge_html, profession_label,
-    resource_result_card, search_form_hero, section_head, simple_hero, static_asset, topbar,
-    verified_badge_html,
+    bottom_nav, empty_state_card, escape_html, guest_mode_hint, icon, intent_kind_chips,
+    navigation_card, page_document, page_shell, premium_badge_html, profession_label,
+    resource_listing_label, resource_result_card, search_form_hero, search_people_cards,
+    section_head, simple_hero, static_asset, topbar, verified_badge_html,
 };
 use crate::geography::world;
 use std::collections::BTreeMap;
+
+fn is_intent_category(key: &str) -> bool {
+    matches!(
+        key.trim().to_ascii_lowercase().as_str(),
+        "work" | "job" | "jobs" | "business" | "services" | "service" | "community"
+    )
+}
 
 fn json_string_literal(value: &str) -> String {
     let mut out = String::from('"');
@@ -26,7 +33,13 @@ fn json_string_literal(value: &str) -> String {
     out
 }
 
-fn push_explore_entry(parts: &mut Vec<String>, kind: &str, label: &str, subtitle: &str, href: &str) {
+fn push_explore_entry(
+    parts: &mut Vec<String>,
+    kind: &str,
+    label: &str,
+    subtitle: &str,
+    href: &str,
+) {
     parts.push(format!(
         "{{\"k\":{},\"l\":{},\"s\":{},\"h\":{},\"q\":{}}}",
         json_string_literal(kind),
@@ -79,7 +92,7 @@ fn build_home_explore_index(
     for (category, count) in resource_categories {
         let key = category.trim().to_string();
 
-        if key.is_empty() {
+        if key.is_empty() || is_intent_category(&key) {
             continue;
         }
 
@@ -89,7 +102,7 @@ fn build_home_explore_index(
     for (category, count) in people_categories {
         let key = category.trim().to_string();
 
-        if key.is_empty() {
+        if key.is_empty() || is_intent_category(&key) {
             continue;
         }
 
@@ -107,7 +120,7 @@ fn build_home_explore_index(
         &mut parts,
         "workers",
         "Работники",
-        "Люди, которые ищут работу",
+        "Профессии и объявления тех, кто ищет работу",
         "/app/search?kind=workers",
     );
     push_explore_entry(
@@ -125,10 +138,7 @@ fn build_home_explore_index(
         } else {
             "Профессия".to_string()
         };
-        let href = format!(
-            "/app/search?q={}",
-            urlencoding::encode(category.trim())
-        );
+        let href = format!("/app/search?q={}", urlencoding::encode(category.trim()));
 
         parts.push(format!(
             "{{\"k\":{},\"l\":{},\"s\":{},\"h\":{},\"q\":{}}}",
@@ -188,44 +198,6 @@ pub fn render_continents(
         box-shadow:0 0 24px rgba(224,196,138,.06);
     }
 
-    .rm-home-label {
-        margin-bottom:10px;
-        font-size:11px;
-        font-weight:900;
-        letter-spacing:.08em;
-        text-transform:uppercase;
-        color:var(--muted);
-    }
-
-    .rm-quick-grid {
-        display:grid;
-        grid-template-columns:repeat(2,minmax(0,1fr));
-        gap:10px;
-    }
-
-    .rm-quick-card {
-        display:block;
-        padding:15px;
-        text-decoration:none;
-        min-width:0;
-    }
-
-    .rm-quick-icon {
-        display:flex;
-        align-items:center;
-        justify-content:center;
-        width:38px;
-        height:38px;
-        margin-bottom:10px;
-        border-radius:12px;
-        color:var(--gold-light);
-        background:
-            radial-gradient(circle at 30% 20%, rgba(255,228,184,.16), transparent 55%),
-            linear-gradient(145deg, rgba(232,204,150,.14), rgba(126,212,228,.08));
-        border:1px solid rgba(232,204,150,.24);
-        box-shadow:0 6px 18px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.06);
-    }
-
     .rm-stats-row {
         display:grid;
         grid-template-columns:repeat(3,minmax(0,1fr));
@@ -270,47 +242,6 @@ pub fn render_continents(
         font-weight:700;
         letter-spacing:.04em;
         text-transform:uppercase;
-    }
-
-    .rm-categories {
-        display:flex;
-        flex-wrap:wrap;
-        gap:8px;
-        margin-top:12px;
-        position:relative;
-        z-index:2;
-    }
-
-    .rm-category {
-        display:inline-flex;
-        align-items:center;
-        gap:6px;
-        padding:8px 13px;
-        border-radius:999px;
-        border:1px solid rgba(232,204,150,.24);
-        background:rgba(232,204,150,.07);
-        color:var(--text);
-        text-decoration:none;
-        font-size:12px;
-        font-weight:650;
-        transition:
-            transform .18s ease,
-            border-color .18s ease,
-            background .18s ease,
-            box-shadow .18s ease;
-    }
-
-    .rm-category:hover {
-        transform:translateY(-2px);
-        border-color:rgba(232,204,150,.42);
-        background:rgba(232,204,150,.13);
-        box-shadow:0 8px 24px rgba(0,0,0,.18), 0 0 24px rgba(232,204,150,.08);
-    }
-
-    .rm-category span {
-        color:var(--gold-light);
-        font-size:11px;
-        font-weight:850;
     }
 
     .rm-home-explorer {
@@ -458,161 +389,28 @@ pub fn render_continents(
         text-align:center;
     }
 
-    .rm-home-explorer-actions {
-        display:flex;
-        gap:10px;
-        margin-top:12px;
-    }
-
-    .rm-home-explorer-all {
-        flex:1;
-        min-height:42px;
-        display:flex;
-        align-items:center;
-        justify-content:center;
-    }
-
-    .rm-intent-grid {
-        display:grid;
-        grid-template-columns:repeat(3,minmax(0,1fr));
-        gap:10px;
-        margin-top:16px;
-    }
-
-    .rm-intent-card {
-        display:flex;
-        flex-direction:column;
-        gap:6px;
-        min-height:92px;
-        padding:14px 12px;
-        border-radius:16px;
-        border:1px solid rgba(232,204,150,.24);
-        background:
-            linear-gradient(160deg, rgba(232,204,150,.10), rgba(126,212,228,.05));
-        text-decoration:none;
-        color:inherit;
-        box-shadow:0 10px 24px rgba(0,0,0,.16);
-        transition:
-            transform .16s ease,
-            border-color .16s ease;
-    }
-
-    .rm-intent-card:hover {
-        transform:translateY(-2px);
-        border-color:rgba(232,204,150,.42);
-    }
-
-    .rm-intent-card strong {
-        font-size:15px;
-        line-height:1.2;
-    }
-
-    .rm-intent-card span {
-        color:var(--muted);
-        font-size:12px;
-        line-height:1.35;
-    }
-
-    .rm-kind-chips {
-        display:flex;
-        flex-wrap:wrap;
-        gap:8px;
-        margin:0 0 16px;
-    }
-
-    .rm-kind-chip {
-        display:inline-flex;
-        align-items:center;
-        min-height:36px;
-        padding:0 13px;
-        border-radius:999px;
-        border:1px solid rgba(232,204,150,.24);
-        background:rgba(232,204,150,.07);
-        color:var(--text);
-        text-decoration:none;
-        font-size:13px;
-        font-weight:700;
-    }
-
-    .rm-kind-chip.is-active {
-        border-color:rgba(232,204,150,.48);
-        background:rgba(232,204,150,.16);
-        color:var(--gold-light);
-    }
-
-    .rm-flow {
-        display:grid;
-        gap:10px;
-    }
-
-    .rm-flow-item {
-        padding:16px;
-    }
-
-    .rm-flow-number {
-        color:var(--gold);
-        font-size:11px;
-        font-weight:900;
-        letter-spacing:.08em;
+    .rm-home-explorer .rm-kind-chips {
+        margin:12px 0 0;
     }
 
     @media (min-width: 860px) {
         main.page {
             max-width:1180px;
         }
-
-        .rm-desktop-two {
-            display:grid;
-            grid-template-columns:minmax(0,1.45fr) minmax(300px,.75fr);
-            gap:14px;
-            align-items:start;
-        }
-
-        .rm-guest-hint {
-            margin-top:12px;
-            padding:10px 12px;
-            border-radius:14px;
-            border:1px solid rgba(214,183,122,.18);
-            background:rgba(214,183,122,.06);
-            color:var(--muted);
-            font-size:13px;
-            line-height:1.5;
-        }
-
-        .rm-quick-grid {
-            grid-template-columns:repeat(3,minmax(0,1fr));
-        }
-
-        .rm-intent-grid {
-            grid-template-columns:repeat(3,minmax(0,1fr));
-        }
-
-        .rm-flow {
-            grid-template-columns:repeat(3,minmax(0,1fr));
-        }
     }
 
     @media (max-width: 620px) {
         .rm-stats-row {
-            grid-template-columns:repeat(2,minmax(0,1fr));
-        }
-
-        .rm-quick-grid {
-            grid-template-columns:1fr;
+            grid-template-columns:repeat(3,minmax(0,1fr));
             gap:8px;
         }
 
-        .rm-quick-card {
-            padding:14px;
+        .rm-stat {
+            padding:12px 6px;
         }
 
-        .rm-intent-grid {
-            grid-template-columns:1fr;
-        }
-
-        .rm-home-label {
-            font-size:10px;
-            letter-spacing:.06em;
+        .rm-stat span {
+            font-size:9px;
         }
     }
 </style>"####;
@@ -667,22 +465,9 @@ pub fn render_continents(
         <div id="rm-home-explorer-results"
              class="rm-home-explorer-results"
              hidden></div>
-    </section>
 
-    <div class="rm-intent-grid">
-        <a class="rm-intent-card" href="/app/search?kind=work">
-            <strong>Работа</strong>
-            <span>Вакансии и предложения</span>
-        </a>
-        <a class="rm-intent-card" href="/app/search?kind=workers">
-            <strong>Работники</strong>
-            <span>Кто ищет работу</span>
-        </a>
-        <a class="rm-intent-card" href="/app/search?kind=business">
-            <strong>Бизнес</strong>
-            <span>Компании и услуги</span>
-        </a>
-    </div>
+        {kind_chips}
+    </section>
 
     <div class="rm-stats-row">
         <div class="rm-stat">
@@ -701,6 +486,14 @@ pub fn render_continents(
 </section>"#,
         globe_icon = icon("globe"),
         guest_hint = guest_hint,
+        kind_chips = intent_kind_chips(
+            "",
+            false,
+            "/app/search",
+            "/app/search?kind=work",
+            "/app/search?kind=workers",
+            "/app/search?kind=business",
+        ),
         users_count = users_count,
         online_count = online_count,
         resources_count = resources_count,
@@ -864,11 +657,9 @@ pub fn render_city(ci: usize, si: usize, zi: usize) -> String {
 
     {work_card}
 
+    {workers_card}
+
     {business_card}
-
-    {services_card}
-
-    {community_card}
 
 </div>
 "#,
@@ -879,23 +670,17 @@ pub fn render_city(ci: usize, si: usize, zi: usize) -> String {
                         "Работа",
                         "Вакансии рядом",
                     ),
+                    workers_card = navigation_card(
+                        &format!("/app/{}/{}/{}/cat/work?type=seeker", ci, si, zi),
+                        "user",
+                        "Работники",
+                        "Профессии и кто ищет работу",
+                    ),
                     business_card = navigation_card(
                         &format!("/app/{}/{}/{}/cat/business", ci, si, zi),
                         "building",
                         "Бизнес",
                         "Компании и услуги",
-                    ),
-                    services_card = navigation_card(
-                        &format!("/app/{}/{}/{}/cat/work?type=seeker", ci, si, zi),
-                        "user",
-                        "Работники",
-                        "Кто ищет работу",
-                    ),
-                    community_card = navigation_card(
-                        &format!("/app/{}/{}/{}/cat/services", ci, si, zi),
-                        "map",
-                        "Услуги",
-                        "Специалисты рядом",
                     ),
                 );
 
@@ -986,15 +771,15 @@ pub fn render_search(
     } else {
         format!("q={}", urlencoding::encode(q.trim()))
     };
-    let chip_href = |value: &str| -> String {
+    let search_href = |kind_value: &str| -> String {
         let mut href = String::from("/app/search?");
         if !q.trim().is_empty() {
             href.push_str(&q_query);
             href.push('&');
         }
-        if !value.is_empty() {
+        if !kind_value.is_empty() {
             href.push_str("kind=");
-            href.push_str(&urlencoding::encode(value));
+            href.push_str(&urlencoding::encode(kind_value));
         } else if href.ends_with('&') {
             href.pop();
         }
@@ -1003,124 +788,19 @@ pub fn render_search(
         }
         href
     };
-    let chip = |value: &str, label: &str| -> String {
-        let class = if kind == value {
-            "rm-kind-chip is-active"
-        } else {
-            "rm-kind-chip"
-        };
-        format!(
-            r#"<a class="{class}" href="{href}">{label}</a>"#,
-            class = class,
-            href = chip_href(value),
-            label = label,
-        )
-    };
-    let kind_chips = format!(
-        r#"<nav class="rm-kind-chips" aria-label="Что искать">
-    {all}{work}{workers}{business}
-</nav>"#,
-        all = chip("", "Все"),
-        work = chip("work", "Работа"),
-        workers = chip("workers", "Работники"),
-        business = chip("business", "Бизнес"),
+    let kind_chips = intent_kind_chips(
+        kind,
+        true,
+        &search_href(""),
+        &search_href("work"),
+        &search_href("workers"),
+        &search_href("business"),
     );
 
     let people_count = people.len();
-
     let people_section = if people.is_empty() {
         String::new()
     } else {
-        let people_cards = people
-            .iter()
-            .map(
-                |(
-                    public_id,
-                    username,
-                    first_name,
-                    last_name,
-                    open_contact,
-                    intent_text,
-                    intent_until,
-                    last_seen_at,
-                )| {
-                    let escape_html = |value: &str| -> String {
-                        value
-                            .replace('&', "&amp;")
-                            .replace('<', "&lt;")
-                            .replace('>', "&gt;")
-                            .replace('"', "&quot;")
-                            .replace('\'', "&#39;")
-                    };
-
-                    let safe_username = escape_html(username);
-                    let safe_first_name = escape_html(first_name);
-                    let safe_last_name = escape_html(last_name);
-                    let safe_intent = escape_html(intent_text);
-
-                    let full_name = format!("{} {}", safe_first_name, safe_last_name)
-                        .trim()
-                        .to_string();
-
-                    let display_name = if !full_name.is_empty() {
-                        full_name
-                    } else if !safe_username.is_empty() {
-                        format!("@{}", safe_username)
-                    } else {
-                        "Участник".to_string()
-                    };
-
-                    let username_html = if !safe_username.is_empty()
-                        && display_name != format!("@{}", safe_username)
-                    {
-                        format!(
-                            r#"<div class="card-meta rm-search-person-username">@{username}</div>"#,
-                            username = safe_username
-                        )
-                    } else {
-                        String::new()
-                    };
-
-                    let now = std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .map(|d| d.as_secs() as i64)
-                        .unwrap_or(0);
-
-                    let is_online = *last_seen_at > 0 && (now - *last_seen_at) < 300;
-
-                    let intent_is_active = !safe_intent.trim().is_empty()
-                        && (*intent_until == 0 || *intent_until >= now);
-
-                    let intent_html = if intent_is_active {
-                        format!(
-                            r#"<div class="rm-search-intent-box">{intent}</div>"#,
-                            intent = safe_intent
-                        )
-                    } else {
-                        String::new()
-                    };
-
-                    let contact_html = if is_online {
-                        r#"<span class="rm-presence-badge rm-presence-badge--online">🟢 Онлайн</span>"#
-                    } else if *open_contact != 0 {
-                        r#"<span class="rm-presence-badge rm-presence-badge--open">● Контакт открыт</span>"#
-                    } else {
-                        r#"<span class="rm-presence-badge rm-presence-badge--closed">Контакт закрыт</span>"#
-                    };
-
-                    people_result_card(
-                        &format!("/app/user/{}", public_id),
-                        &display_name,
-                        &username_html,
-                        &intent_html,
-                        contact_html,
-                        is_online || *open_contact > 0,
-                    )
-                },
-            )
-            .collect::<Vec<_>>()
-            .join("");
-
         format!(
             r#"
 {people_head}
@@ -1129,19 +809,19 @@ pub fn render_search(
     {people_cards}
 </section>
 "#,
-            people_head =
-                section_head("Работники", &format!("Найдено: {}", people_count), Some(24),),
-            people_cards = people_cards,
+            people_head = section_head(
+                "По профессии",
+                &format!("Найдено: {}", people_count),
+                Some(24),
+            ),
+            people_cards = search_people_cards(&people),
         )
     };
 
     let result_count = resources.len();
 
     let results = if q.trim().is_empty() && kind.is_empty() {
-        empty_state_card(
-            "Начните поиск",
-            "Выберите работу, работников или бизнес — либо введите город и профессию.",
-        )
+        String::new()
     } else if resources.is_empty() && people.is_empty() && location_results.is_empty() {
         empty_state_card(
             "Ничего не найдено",
@@ -1160,17 +840,7 @@ pub fn render_search(
             ),
         )
     } else if resources.is_empty() {
-        if people.is_empty() && location_results.is_empty() {
-            String::new()
-        } else {
-            empty_state_card(
-                "Ресурсы не найдены",
-                &format!(
-                    "По запросу «{}» ресурсы не найдены. Ниже — другие совпадения.",
-                    escape_html(q),
-                ),
-            )
-        }
+        String::new()
     } else {
         resources
             .iter()
@@ -1188,6 +858,7 @@ pub fn render_search(
                     ci,
                     si,
                     zi,
+                    listing_type,
                 )| {
                     let location = world_data
                         .iter()
@@ -1200,6 +871,27 @@ pub fn render_search(
                             })
                         })
                         .unwrap_or_else(|| "Местоположение не указано".to_string());
+
+                    let category_line = {
+                        let label = profession_label(category);
+                        match listing_type.as_str() {
+                            "seeker" | "offer" => {
+                                format!("{} · {}", label, resource_listing_label(listing_type))
+                            }
+                            _ => label,
+                        }
+                    };
+
+                    let description_preview = {
+                        let trimmed = description.trim();
+                        let mut chars = trimmed.chars();
+                        let preview: String = chars.by_ref().take(140).collect();
+                        if chars.next().is_some() {
+                            format!("{preview}…")
+                        } else {
+                            preview
+                        }
+                    };
 
                     let premium_badge = if *premium != 0 {
                         premium_badge_html("default")
@@ -1215,13 +907,13 @@ pub fn render_search(
 
                     resource_result_card(crate::web::templates::common::ResourceResultCardParams {
                         href: &format!("/app/resource/{}", id),
-                        title_html: title,
-                        category_html: category,
-                        description_html: description,
+                        title_html: &escape_html(title),
+                        category_html: &escape_html(&category_line),
+                        description_html: &escape_html(&description_preview),
                         rating: *rating,
                         votes: *votes,
-                        location_html: &location,
-                        address_html: address,
+                        location_html: &escape_html(&location),
+                        address_html: &escape_html(address),
                         premium_badge_html: premium_badge,
                         verified_badge_html: verified_badge,
                     })
@@ -1231,7 +923,8 @@ pub fn render_search(
             .join("")
     };
 
-    let location_section = if q.trim().is_empty() || location_results.is_empty() || !kind.is_empty() {
+    let location_section = if q.trim().is_empty() || location_results.is_empty() || !kind.is_empty()
+    {
         String::new()
     } else {
         format!(
@@ -1248,50 +941,51 @@ pub fn render_search(
         )
     };
 
-    let result_header = if q.trim().is_empty() && kind.is_empty() {
+    let result_header = if resources.is_empty() {
         String::new()
-    } else if resources.is_empty() {
-        if people.is_empty() && location_results.is_empty() {
-            String::new()
-        } else {
-            section_head("Ресурсы", "Не найдено", Some(24))
-        }
     } else {
         section_head(
             match kind {
                 "work" => "Вакансии",
-                "workers" => "Работники",
+                "workers" => "Объявления",
                 "business" => "Бизнес",
-                _ => "Результаты",
+                _ => "Объявления",
             },
             &format!("Найдено: {}", result_count),
             Some(24),
         )
     };
 
-    let content = format!(
-        r#"
-{guest_hint}
-
-{kind_chips}
-
-{location_section}
-
-{people_section}
-
+    let listings_block = if result_header.is_empty() && results.is_empty() {
+        String::new()
+    } else {
+        format!(
+            r#"
 {result_header}
 
 <section>
     {results}
 </section>
 "#,
-        guest_hint = guest_hint,
-        kind_chips = kind_chips,
+            result_header = result_header,
+            results = results,
+        )
+    };
+
+    let content = format!(
+        r#"
+{location_section}
+
+{listings_block}
+
+{people_section}
+"#,
         location_section = location_section,
+        listings_block = listings_block,
         people_section = people_section,
-        result_header = result_header,
-        results = results,
     );
+
+    let hero_extra = format!("{guest_hint}{kind_chips}");
 
     page_shell(
         "Поиск · ResursMap",
@@ -1308,6 +1002,7 @@ pub fn render_search(
             q,
             "Например: электрик, Ницца, вакансия...",
             kind,
+            &hero_extra,
         ),
         &content,
         &bottom_nav("search"),

@@ -41,6 +41,27 @@ pub(crate) fn moderation_scope_filter(state: &AppState, headers: &HeaderMap) -> 
         .unwrap_or_default()
 }
 
+fn resource_id_in_moderation_scope(
+    state: &AppState,
+    headers: &HeaderMap,
+    resource_id: i64,
+) -> bool {
+    if resource_id <= 0 {
+        return false;
+    }
+
+    let scope = moderation_scope_filter(state, headers);
+    let Ok(connection) = crate::db::pool::get_connection(&state.db_pool) else {
+        return false;
+    };
+
+    let sql = format!("SELECT 1 FROM resources WHERE id = ?1 {scope} LIMIT 1");
+
+    connection
+        .query_row(&sql, rusqlite::params![resource_id], |_| Ok(()))
+        .is_ok()
+}
+
 pub async fn admin_login_page() -> Redirect {
     Redirect::temporary("/login?next=%2Fapp%2Fadmin%2Fresources")
 }
@@ -210,8 +231,8 @@ pub async fn admin_reports(State(state): State<AppState>, headers: HeaderMap) ->
     </div>
 
     <div class="rm-mod-meta">
-        Reporter Telegram ID: {reporter_user_id}
-        · created_at: {created_at}
+        ID заявителя: {reporter_user_id}
+        · создано: {created_at}
     </div>
 
     <div class="rm-mod-actions">
@@ -423,6 +444,11 @@ pub async fn admin_hide_reported_resource(
         .ok();
 
     if let Some(resource_id) = resource_id {
+        if !resource_id_in_moderation_scope(&state, &headers, resource_id) {
+            drop(db);
+            return (StatusCode::FORBIDDEN, "Ресурс вне вашей территории").into_response();
+        }
+
         let transaction_result = (|| -> rusqlite::Result<()> {
             let tx = db.unchecked_transaction()?;
 
@@ -499,6 +525,11 @@ pub async fn admin_reject_reported_resource(
         .ok();
 
     if let Some((resource_id, reason)) = report {
+        if !resource_id_in_moderation_scope(&state, &headers, resource_id) {
+            drop(db);
+            return (StatusCode::FORBIDDEN, "Ресурс вне вашей территории").into_response();
+        }
+
         let rejection_reason = format!("Жалоба пользователя: {}", reason);
 
         let transaction_result = (|| -> rusqlite::Result<()> {
@@ -1107,13 +1138,16 @@ pub async fn admin_bulk_resources(
           OR LOWER(description) LIKE LOWER(?1))"
     };
 
+    let scope_filter = moderation_scope_filter(&state, &headers);
+
     let sql = format!(
         "UPDATE resources
          SET {},
              updated_at = strftime('%s','now')
          WHERE {}
-           AND {}",
-        action_sql, filter_clause, search_clause
+           AND {}
+           {}",
+        action_sql, filter_clause, search_clause, scope_filter
     );
 
     let db = match crate::db::pool::get_connection(&state.db_pool) {
@@ -1187,12 +1221,15 @@ async fn admin_toggle_field(
         return (StatusCode::BAD_REQUEST, Html("<h1>400</h1>".to_string())).into_response();
     }
 
+    let scope_filter = moderation_scope_filter(state, headers);
+
     let sql = format!(
         "UPDATE resources
          SET {0} = CASE WHEN {0}=1 THEN 0 ELSE 1 END,
              updated_at = strftime('%s','now')
-         WHERE id=?1",
-        field
+         WHERE id=?1
+           {1}",
+        field, scope_filter
     );
 
     let db = match crate::db::pool::get_connection(&state.db_pool) {
@@ -1284,18 +1321,25 @@ pub async fn admin_approve_resource(
         }
     };
 
+    let scope_filter = moderation_scope_filter(&state, &headers);
+
     let result = db.execute(
-        "UPDATE resources
+        &format!(
+            "UPDATE resources
          SET moderation_status = 'approved',
              rejection_reason = '',
              is_verified = 1,
              is_active = 1,
              updated_at = strftime('%s','now')
-         WHERE id = ?1",
+         WHERE id = ?1
+           {scope_filter}"
+        ),
         rusqlite::params![id],
     );
 
-    if result.is_ok() {
+    let changed = result.as_ref().copied().unwrap_or(0);
+
+    if changed == 1 {
         let owner: Option<(String, String)> = db
             .query_row(
                 "SELECT client_id, title
@@ -1343,12 +1387,12 @@ pub async fn admin_approve_resource(
     drop(db);
 
     match result {
+        Ok(0) => (StatusCode::FORBIDDEN, "Ресурс вне вашей территории").into_response(),
         Ok(_) => (
             StatusCode::SEE_OTHER,
             [(header::LOCATION, "/app/admin/resources?filter=pending")],
         )
             .into_response(),
-
         Err(err) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("Ошибка одобрения ресурса: {}", err),
@@ -1392,18 +1436,25 @@ pub async fn admin_reject_resource(
         }
     };
 
+    let scope_filter = moderation_scope_filter(&state, &headers);
+
     let result = db.execute(
-        "UPDATE resources
+        &format!(
+            "UPDATE resources
          SET moderation_status = 'rejected',
              rejection_reason = ?2,
              is_verified = 0,
              is_active = 0,
              updated_at = strftime('%s','now')
-         WHERE id = ?1",
+         WHERE id = ?1
+           {scope_filter}"
+        ),
         rusqlite::params![id, reason],
     );
 
-    if result.is_ok() {
+    let changed = result.as_ref().copied().unwrap_or(0);
+
+    if changed == 1 {
         let owner: Option<(String, String)> = db
             .query_row(
                 "SELECT client_id, title
@@ -1446,12 +1497,12 @@ pub async fn admin_reject_resource(
     drop(db);
 
     match result {
+        Ok(0) => (StatusCode::FORBIDDEN, "Ресурс вне вашей территории").into_response(),
         Ok(_) => (
             StatusCode::SEE_OTHER,
             [(header::LOCATION, "/app/admin/resources?filter=pending")],
         )
             .into_response(),
-
         Err(err) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("Ошибка отклонения ресурса: {}", err),
@@ -1508,32 +1559,17 @@ pub async fn moderate_resource(
     headers: HeaderMap,
     Json(payload): Json<serde_json::Value>,
 ) -> Response {
+    if request_is_cross_site(&headers) {
+        return csrf_rejected_response();
+    }
+
     let user = match verify_authenticated_user(&state, &headers) {
         Some(user) => user,
         None => return (StatusCode::UNAUTHORIZED, Json(json!({"ok": false}))).into_response(),
     };
 
     if !is_resource_moderation_session(&state, &headers) {
-        let mod_level: i64 = state
-            .db_pool
-            .get()
-            .ok()
-            .and_then(|conn| {
-                conn.query_row(
-                    "SELECT COALESCE(MAX(level), 0)
-                     FROM moderator_roles
-                     WHERE user_id = ?1
-                       AND is_active = 1",
-                    rusqlite::params![user.user_id],
-                    |row| row.get(0),
-                )
-                .ok()
-            })
-            .unwrap_or(0);
-
-        if mod_level == 0 || mod_level == 4 {
-            return (StatusCode::FORBIDDEN, Json(json!({"ok": false}))).into_response();
-        }
+        return (StatusCode::FORBIDDEN, Json(json!({"ok": false}))).into_response();
     }
 
     let resource_id = payload.get("id").and_then(|v| v.as_i64()).unwrap_or(0);
@@ -1543,12 +1579,17 @@ pub async fn moderate_resource(
         return (StatusCode::BAD_REQUEST, Json(json!({"ok": false}))).into_response();
     }
 
+    let scope_filter = moderation_scope_filter(&state, &headers);
+
     let updated = state.db_pool.get().ok().and_then(|conn| {
         conn.execute(
-            "UPDATE resources
+            &format!(
+                "UPDATE resources
              SET moderation_status = ?1,
                  updated_at = strftime('%s','now')
-             WHERE id = ?2",
+             WHERE id = ?2
+               {scope_filter}"
+            ),
             rusqlite::params![status, resource_id],
         )
         .ok()

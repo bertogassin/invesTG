@@ -7,13 +7,70 @@ use crate::state::app_state::AppState;
 use crate::web::templates;
 use axum::{
     extract::{Path, State},
-    http::{header, HeaderMap, StatusCode},
+    http::{header, HeaderMap, HeaderValue, StatusCode},
     response::{Html, IntoResponse, Response},
     Json,
 };
 use serde_json::json;
 
 type PublicProfileRow = (i64, String, String, String, String, i64, String, i64);
+type MeProfileRow = (
+    String,
+    String,
+    String,
+    i64,
+    String,
+    i64,
+    String,
+    i64,
+    i64,
+    i64,
+);
+
+fn noindex_html(html: String) -> Response {
+    (
+        [(
+            header::HeaderName::from_static("x-robots-tag"),
+            HeaderValue::from_static("noindex, nofollow"),
+        )],
+        Html(html),
+    )
+        .into_response()
+}
+
+fn parse_home_city_value(raw: &str) -> (Option<i64>, Option<i64>, Option<i64>) {
+    if raw.trim().is_empty() {
+        return (None, None, None);
+    }
+
+    let mut parts = raw.split(':');
+    let Some(ci) = parts.next().and_then(|value| value.parse::<i64>().ok()) else {
+        return (None, None, None);
+    };
+    let Some(si) = parts.next().and_then(|value| value.parse::<i64>().ok()) else {
+        return (None, None, None);
+    };
+    let Some(zi) = parts.next().and_then(|value| value.parse::<i64>().ok()) else {
+        return (None, None, None);
+    };
+
+    if parts.next().is_some() || ci < 0 || si < 0 || zi < 0 {
+        return (None, None, None);
+    }
+
+    let world_data = crate::geography::world();
+    let Some((_, countries)) = world_data.iter().nth(ci as usize) else {
+        return (None, None, None);
+    };
+    let Some((_, cities)) = countries.iter().nth(si as usize) else {
+        return (None, None, None);
+    };
+    if (zi as usize) >= cities.len() {
+        return (None, None, None);
+    }
+
+    (Some(ci), Some(si), Some(zi))
+}
 
 pub async fn app_me(State(state): State<AppState>, headers: HeaderMap) -> Html<String> {
     let user = match verify_authenticated_user(&state, &headers) {
@@ -38,6 +95,9 @@ pub async fn app_me(State(state): State<AppState>, headers: HeaderMap) -> Html<S
                 intent_text: "",
                 intent_until: 0,
                 category: "",
+                home_continent_index: -1,
+                home_country_index: -1,
+                home_city_index: -1,
                 user_sessions: vec![],
             }));
         }
@@ -53,7 +113,7 @@ pub async fn app_me(State(state): State<AppState>, headers: HeaderMap) -> Html<S
         }
     };
 
-    let profile: Option<(String, String, String, i64, String, i64, String)> = db
+    let profile: Option<MeProfileRow> = db
         .query_row(
             "SELECT
                 username,
@@ -62,7 +122,10 @@ pub async fn app_me(State(state): State<AppState>, headers: HeaderMap) -> Html<S
                 open_contact,
                 intent_text,
                 intent_until,
-                category
+                category,
+                COALESCE(home_continent_index, -1),
+                COALESCE(home_country_index, -1),
+                COALESCE(home_city_index, -1)
              FROM profiles
              WHERE client_id = ?1",
             rusqlite::params![&client_id],
@@ -75,23 +138,39 @@ pub async fn app_me(State(state): State<AppState>, headers: HeaderMap) -> Html<S
                     row.get(4)?,
                     row.get(5)?,
                     row.get(6)?,
+                    row.get(7)?,
+                    row.get(8)?,
+                    row.get(9)?,
                 ))
             },
         )
         .ok();
 
-    let (username, first_name, last_name, _open_contact, intent_text, intent_until, category) =
-        profile.unwrap_or_else(|| {
-            (
-                String::new(),
-                String::new(),
-                String::new(),
-                0,
-                String::new(),
-                0,
-                String::new(),
-            )
-        });
+    let (
+        username,
+        first_name,
+        last_name,
+        _open_contact,
+        intent_text,
+        intent_until,
+        category,
+        home_continent_index,
+        home_country_index,
+        home_city_index,
+    ) = profile.unwrap_or_else(|| {
+        (
+            String::new(),
+            String::new(),
+            String::new(),
+            0,
+            String::new(),
+            0,
+            String::new(),
+            -1,
+            -1,
+            -1,
+        )
+    });
 
     let resources_count: i64 = db
         .query_row(
@@ -221,6 +300,9 @@ pub async fn app_me(State(state): State<AppState>, headers: HeaderMap) -> Html<S
         intent_text: &intent_text,
         intent_until,
         category: &category,
+        home_continent_index,
+        home_country_index,
+        home_city_index,
         user_sessions,
     }))
 }
@@ -346,7 +428,7 @@ pub async fn public_user_profile(
     State(state): State<AppState>,
     Path(public_id): Path<String>,
     headers: HeaderMap,
-) -> Html<String> {
+) -> Response {
     let public_id = public_id.trim();
 
     if public_id.is_empty()
@@ -355,13 +437,13 @@ pub async fn public_user_profile(
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
     {
-        return Html(templates::render_public_user_not_found());
+        return noindex_html(templates::render_public_user_not_found());
     }
 
     let db = match crate::db::pool::get_connection(&state.db_pool) {
         Ok(db) => db,
         Err(_) => {
-            return Html("<h1>503</h1><p>База данных временно недоступна.</p>".to_string());
+            return noindex_html("<h1>503</h1><p>База данных временно недоступна.</p>".to_string());
         }
     };
 
@@ -413,7 +495,7 @@ pub async fn public_user_profile(
         None => {
             drop(db);
 
-            return Html(templates::render_public_user_not_found());
+            return noindex_html(templates::render_public_user_not_found());
         }
     };
 
@@ -497,7 +579,7 @@ pub async fn public_user_profile(
         intent_text
     };
 
-    Html(templates::render_public_user_profile(
+    noindex_html(templates::render_public_user_profile(
         templates::RenderPublicUserProfileParams {
             public_id,
             username: &username,
@@ -636,6 +718,15 @@ pub async fn api_profile_set(
         .unwrap_or("")
         .trim();
 
+    let home_city = payload
+        .get("home_city")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim();
+
+    let (home_continent_index, home_country_index, home_city_index) =
+        parse_home_city_value(home_city);
+
     if !input_text_is_valid(category, 0, 80) {
         return (
             StatusCode::BAD_REQUEST,
@@ -708,6 +799,24 @@ pub async fn api_profile_set(
         }
     };
 
+    let home_city_id: Option<i64> =
+        match (home_continent_index, home_country_index, home_city_index) {
+            (Some(ci), Some(si), Some(zi)) => db
+                .query_row(
+                    "SELECT city.id
+                 FROM geo_cities AS city
+                 WHERE city.legacy_continent_index = ?1
+                   AND city.legacy_country_index = ?2
+                   AND city.legacy_city_index = ?3
+                   AND city.is_active = 1
+                 LIMIT 1",
+                    rusqlite::params![ci, si, zi],
+                    |row| row.get(0),
+                )
+                .ok(),
+            _ => None,
+        };
+
     let result = db.execute(
         "INSERT INTO profiles (
             client_id,
@@ -716,6 +825,10 @@ pub async fn api_profile_set(
             intent_text,
             intent_until,
             category,
+            home_continent_index,
+            home_country_index,
+            home_city_index,
+            home_city_id,
             updated_at
          )
          VALUES (
@@ -725,6 +838,10 @@ pub async fn api_profile_set(
             ?4,
             ?5,
             ?6,
+            ?7,
+            ?8,
+            ?9,
+            ?10,
             strftime('%s','now')
          )
 
@@ -735,6 +852,10 @@ pub async fn api_profile_set(
             intent_text = excluded.intent_text,
             intent_until = excluded.intent_until,
             category = excluded.category,
+            home_continent_index = excluded.home_continent_index,
+            home_country_index = excluded.home_country_index,
+            home_city_index = excluded.home_city_index,
+            home_city_id = excluded.home_city_id,
             updated_at = strftime('%s','now')",
         rusqlite::params![
             &client_id,
@@ -743,6 +864,10 @@ pub async fn api_profile_set(
             intent_text,
             intent_until,
             category,
+            home_continent_index,
+            home_country_index,
+            home_city_index,
+            home_city_id,
         ],
     );
 

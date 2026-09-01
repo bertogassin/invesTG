@@ -7,7 +7,7 @@ pub fn escape_html(value: &str) -> String {
         .replace('\'', "&#39;")
 }
 
-pub const STATIC_ASSET_VERSION: &str = "4.9.38";
+pub const STATIC_ASSET_VERSION: &str = "4.9.44";
 
 pub fn profession_label(raw: &str) -> String {
     match raw.trim().to_lowercase().as_str() {
@@ -706,7 +706,7 @@ body::before {
 .card--result {
     text-decoration: none;
     color: inherit;
-    margin-bottom: 14px;
+    margin-bottom: 12px;
     align-items: flex-start;
 }
 
@@ -1138,8 +1138,6 @@ body::before {
     box-shadow:
         0 24px 70px rgba(0,0,0,.28),
         inset 0 1px 0 rgba(0,0,0,.05);
-
-    animation: fadeInUp .5s ease both;
 }
 
 .hero h1 {
@@ -1181,7 +1179,6 @@ body::before {
     background: rgba(126, 212, 228, .20);
     filter: blur(52px);
     pointer-events: none;
-    animation: pulseGlow 8s ease-in-out infinite;
 }
 
 .hero::after {
@@ -1195,7 +1192,6 @@ body::before {
     background: rgba(232, 204, 150, .18);
     filter: blur(52px);
     pointer-events: none;
-    animation: pulseGlow 10s ease-in-out infinite reverse;
 }
 
 .search {
@@ -1227,6 +1223,14 @@ body::before {
     margin: 0 0 16px;
 }
 
+.hero .rm-kind-chips {
+    margin: 16px 0 0;
+}
+
+.hero .rm-guest-hint {
+    margin: 0 0 16px;
+}
+
 .rm-kind-chip {
     display: inline-flex;
     align-items: center;
@@ -1251,8 +1255,6 @@ body::before {
     position: relative;
     overflow: hidden;
     border: 1px solid var(--line);
-
-    animation: fadeInUp .45s ease both;
     background:
         linear-gradient(
             145deg,
@@ -1262,12 +1264,11 @@ body::before {
     box-shadow:
         0 12px 35px rgba(0,0,0,.18),
         inset 0 1px 0 rgba(0,0,0,.045);
-    backdrop-filter: blur(14px);
     transition:
-        transform .25s ease,
-        border-color .25s ease,
-        box-shadow .25s ease,
-        background .25s ease;
+        transform .2s ease,
+        border-color .2s ease,
+        box-shadow .2s ease,
+        background .2s ease;
 }
 
 .card::before {
@@ -1338,7 +1339,6 @@ body::before {
     box-shadow:
         0 12px 35px rgba(0,0,0,.16),
         inset 0 1px 0 rgba(0,0,0,.04);
-    backdrop-filter: blur(12px);
     transition:
         transform .25s ease,
         border-color .25s ease,
@@ -1641,16 +1641,6 @@ a.feature.rm-feature-add {
     text-decoration: none;
     font-size: 14px;
     font-weight: 850;
-}
-
-.rm-empty-professions {
-    margin: 0;
-    padding: 16px 18px;
-    border: 1px dashed var(--line);
-    border-radius: 16px;
-    color: var(--muted);
-    font-size: 14px;
-    line-height: 1.55;
 }
 
 .rm-guest-hint {
@@ -2848,15 +2838,6 @@ a.feature.rm-feature-add {
     overflow-wrap: anywhere;
 }
 
-.rm-home-professions-kicker {
-    margin-top: 14px;
-    font-size: 11px;
-    font-weight: 900;
-    letter-spacing: .08em;
-    text-transform: uppercase;
-    color: var(--muted);
-}
-
 .rm-pwa-panel {
     display: block;
     padding: 17px;
@@ -3005,8 +2986,10 @@ a.feature.rm-feature-add {
     }
 }
 
-.rm-search-person-username {
+.rm-search-person-profession {
     margin-top: 4px;
+    color: var(--gold-light);
+    font-weight: 700;
 }
 
 .rm-search-intent-box {
@@ -3036,6 +3019,16 @@ a.feature.rm-feature-add {
 .rm-presence-badge--closed {
     color: var(--muted);
     font-weight: 750;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation: none !important;
+        transition: none !important;
+        scroll-behavior: auto !important;
+    }
 }
 
 .rm-resource-card {
@@ -3949,10 +3942,18 @@ pub(crate) fn navigation_card(href: &str, icon_name: &str, title: &str, meta: &s
     })
 }
 
+pub(crate) fn resource_listing_label(listing_type: &str) -> &'static str {
+    match listing_type.trim() {
+        "seeker" => "Ищу работу",
+        "offer" => "Предложение работы",
+        _ => "Объявление",
+    }
+}
+
 pub(crate) fn people_result_card(
     href: &str,
     display_name_html: &str,
-    username_html: &str,
+    profession_html: &str,
     intent_html: &str,
     contact_html: &str,
     is_ready: bool,
@@ -3972,7 +3973,7 @@ pub(crate) fn people_result_card(
             {display_name}
         </div>
 
-        {username_html}
+        {profession_html}
 
         {intent_html}
 
@@ -3996,10 +3997,131 @@ pub(crate) fn people_result_card(
             ""
         },
         display_name = display_name_html,
-        username_html = username_html,
+        profession_html = profession_html,
         intent_html = intent_html,
         contact_html = contact_html,
         arrow = icon("chevron"),
+    )
+}
+
+pub(crate) fn search_people_cards(people: &[crate::web::view_models::SearchPersonRow]) -> String {
+    people
+        .iter()
+        .map(
+            |(
+                public_id,
+                _username,
+                first_name,
+                last_name,
+                category,
+                open_contact,
+                intent_text,
+                intent_until,
+                last_seen_at,
+            )| {
+                let safe_first_name = escape_html(first_name);
+                let safe_last_name = escape_html(last_name);
+                let safe_category = escape_html(category.trim());
+                let safe_intent = escape_html(intent_text);
+
+                let full_name = format!("{} {}", safe_first_name, safe_last_name)
+                    .trim()
+                    .to_string();
+
+                let display_name = if !full_name.is_empty() {
+                    full_name
+                } else if !safe_category.is_empty() {
+                    safe_category.clone()
+                } else {
+                    "Специалист".to_string()
+                };
+
+                let profession_html = if !safe_category.is_empty() && display_name != safe_category
+                {
+                    format!(
+                        r#"<div class="card-meta rm-search-person-profession">{profession}</div>"#,
+                        profession = safe_category
+                    )
+                } else {
+                    String::new()
+                };
+
+                let now = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_secs() as i64)
+                    .unwrap_or(0);
+
+                let is_online = *last_seen_at > 0 && (now - *last_seen_at) < 300;
+                let intent_is_active =
+                    !safe_intent.trim().is_empty() && (*intent_until == 0 || *intent_until >= now);
+
+                let intent_html = if intent_is_active {
+                    format!(
+                        r#"<div class="rm-search-intent-box">{intent}</div>"#,
+                        intent = safe_intent
+                    )
+                } else {
+                    String::new()
+                };
+
+                let contact_html = if is_online {
+                    r#"<span class="rm-presence-badge rm-presence-badge--online">Онлайн</span>"#
+                } else if *open_contact != 0 {
+                    r#"<span class="rm-presence-badge rm-presence-badge--open">Контакт открыт</span>"#
+                } else {
+                    r#"<span class="rm-presence-badge rm-presence-badge--closed">Контакт закрыт</span>"#
+                };
+
+                people_result_card(
+                    &format!("/app/user/{public_id}"),
+                    &display_name,
+                    &profession_html,
+                    &intent_html,
+                    contact_html,
+                    is_online || *open_contact > 0 || intent_is_active,
+                )
+            },
+        )
+        .collect::<Vec<_>>()
+        .join("")
+}
+
+pub(crate) fn kind_chip(active: bool, href: &str, label: &str) -> String {
+    let class = if active {
+        "rm-kind-chip is-active"
+    } else {
+        "rm-kind-chip"
+    };
+
+    format!(
+        r#"<a class="{class}" href="{href}">{label}</a>"#,
+        class = class,
+        href = escape_html(href),
+        label = escape_html(label),
+    )
+}
+
+pub(crate) fn intent_kind_chips(
+    active: &str,
+    include_all: bool,
+    all_href: &str,
+    work_href: &str,
+    workers_href: &str,
+    business_href: &str,
+) -> String {
+    let mut chips = String::new();
+
+    if include_all {
+        chips.push_str(&kind_chip(active.is_empty(), all_href, "Все"));
+    }
+
+    chips.push_str(&kind_chip(active == "work", work_href, "Работа"));
+    chips.push_str(&kind_chip(active == "workers", workers_href, "Работники"));
+    chips.push_str(&kind_chip(active == "business", business_href, "Бизнес"));
+
+    format!(
+        r#"<nav class="rm-kind-chips" aria-label="Что искать">{chips}</nav>"#,
+        chips = chips
     )
 }
 
@@ -5277,6 +5399,7 @@ pub(crate) fn search_form_hero(
     query: &str,
     placeholder: &str,
     kind: &str,
+    extra_html: &str,
 ) -> String {
     let kind_field = if kind.trim().is_empty() {
         String::new()
@@ -5313,10 +5436,13 @@ pub(crate) fn search_form_hero(
         >
     </form>
 
+    {extra_html}
+
 </section>"#,
         search_icon = icon("search"),
         search_input_icon = icon("search"),
         kind_field = kind_field,
+        extra_html = extra_html,
         eyebrow = escape_html(eyebrow),
         title = escape_html(title),
         description = escape_html(description),

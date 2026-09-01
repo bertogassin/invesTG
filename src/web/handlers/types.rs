@@ -15,6 +15,7 @@ pub struct EditResourceForm {
     pub description: String,
     pub contact: String,
     pub address: String,
+    pub listing_type: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

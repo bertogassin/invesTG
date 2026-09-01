@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+resursmap_sqlite_path() {
+  local url="${DATABASE_URL:-sqlite:data/votes.db}"
+  printf '%s\n' "${url#sqlite:}"
+}
+
 cd /root/resursmap
 
 echo "=== RESURSMAP PRODUCTION DEPLOY ==="
@@ -21,6 +26,6 @@ git rev-parse --short HEAD
 git status --short --branch
 systemctl is-active resursmap
 curl -fsS http://127.0.0.1:3000/health
-sqlite3 data/votes.db 'PRAGMA integrity_check;'
-echo "CACHE_VERSION=4.9.38"
+sqlite3 "$(resursmap_sqlite_path)" 'PRAGMA integrity_check;'
+echo "CACHE_VERSION=4.9.44"
 echo "DEPLOY=COMPLETE"
