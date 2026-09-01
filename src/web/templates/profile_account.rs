@@ -985,20 +985,12 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
             autocomplete="off"
          class="ui-input">
 
-        <datalist id="profile-profession-suggestions">
-            <option value="Электрик"></option>
-            <option value="Сантехник"></option>
-            <option value="Программист"></option>
-            <option value="Дизайнер"></option>
-            <option value="Водитель"></option>
-            <option value="Строитель"></option>
-            <option value="Повар"></option>
-            <option value="Врач"></option>
-            <option value="Учитель"></option>
-            <option value="Юрист"></option>
-            <option value="Бизнес"></option>
-            <option value="Услуги"></option>
-        </datalist>
+        <datalist id="profile-profession-suggestions"></datalist>
+
+        <div class="card-meta rm-profile-profession-help">
+            Начните печатать — каталог понимает русские, английские и французские названия.
+            Если профессии ещё нет, её всё равно можно сохранить.
+        </div>
 
     </label>
 
@@ -1103,6 +1095,53 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
     ) {
         return;
     }
+
+    const professionList =
+        document.getElementById("profile-profession-suggestions");
+    let professionTimer = 0;
+    let professionRequest = 0;
+
+    async function loadProfessionSuggestions() {
+        const requestId = ++professionRequest;
+        const query = categoryInput.value.trim();
+
+        try {
+            const response = await fetch(
+                "/api/professions/suggest?q=" +
+                encodeURIComponent(query) +
+                "&limit=20",
+                { headers: { "Accept": "application/json" } }
+            );
+            const data = await response.json();
+
+            if (
+                requestId !== professionRequest ||
+                !professionList ||
+                !data.ok ||
+                !Array.isArray(data.items)
+            ) {
+                return;
+            }
+
+            professionList.replaceChildren();
+            data.items.forEach(function (item) {
+                const option = document.createElement("option");
+                option.value = item.name || "";
+                option.label = [item.sector, item.name_fr, item.name_en]
+                    .filter(Boolean)
+                    .join(" · ");
+                professionList.appendChild(option);
+            });
+        } catch (_) {
+            // Свободный ввод остаётся доступен без подсказок.
+        }
+    }
+
+    categoryInput.addEventListener("input", function () {
+        window.clearTimeout(professionTimer);
+        professionTimer = window.setTimeout(loadProfessionSuggestions, 180);
+    });
+    categoryInput.addEventListener("focus", loadProfessionSuggestions);
 
     saveButton.addEventListener(
         "click",

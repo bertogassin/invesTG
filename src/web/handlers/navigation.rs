@@ -364,7 +364,7 @@ pub async fn app_search(
             })
             .collect();
 
-        let fts_query = fts_terms.join(" ");
+        let fts_query = crate::db::professions::build_fts_query(&db, q);
         let like_pattern = format!("%{}%", q.to_lowercase());
         let kind_clause = search_kind_clause(kind);
         let fts_ready = search_fts_ready(&db);

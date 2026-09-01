@@ -712,7 +712,7 @@ pub async fn api_profile_set(
         .unwrap_or("")
         .trim();
 
-    let category = payload
+    let raw_category = payload
         .get("category")
         .and_then(|v| v.as_str())
         .unwrap_or("")
@@ -727,7 +727,7 @@ pub async fn api_profile_set(
     let (home_continent_index, home_country_index, home_city_index) =
         parse_home_city_value(home_city);
 
-    if !input_text_is_valid(category, 0, 80) {
+    if !input_text_is_valid(raw_category, 0, 80) {
         return (
             StatusCode::BAD_REQUEST,
             Json(json!({
@@ -816,6 +816,11 @@ pub async fn api_profile_set(
                 .ok(),
             _ => None,
         };
+
+    let category = match crate::db::professions::synchronize_profile(&db, user_id, raw_category) {
+        Ok(category) => category,
+        Err(_) => raw_category.to_string(),
+    };
 
     let result = db.execute(
         "INSERT INTO profiles (

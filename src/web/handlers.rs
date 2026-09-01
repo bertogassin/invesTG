@@ -23,6 +23,9 @@ pub use chat_realtime::api_chat_realtime;
 mod profiles;
 pub use profiles::*;
 
+mod professions;
+pub use professions::*;
+
 mod resources;
 pub use resources::*;
 

@@ -6,6 +6,7 @@ pub mod moderation_legacy;
 pub mod owner_bootstrap;
 pub mod path;
 pub mod pool;
+pub mod professions;
 pub mod promotions;
 pub mod queries;
 pub mod search_fts;
