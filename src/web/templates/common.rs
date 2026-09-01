@@ -7,7 +7,7 @@ pub fn escape_html(value: &str) -> String {
         .replace('\'', "&#39;")
 }
 
-pub const STATIC_ASSET_VERSION: &str = "4.9.37";
+pub const STATIC_ASSET_VERSION: &str = "4.9.38";
 
 pub fn profession_label(raw: &str) -> String {
     match raw.trim().to_lowercase().as_str() {
@@ -1218,6 +1218,33 @@ body::before {
     box-shadow:
         0 0 0 4px rgba(214,183,122,.06),
         0 16px 45px rgba(0,0,0,.25);
+}
+
+.rm-kind-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0 0 16px;
+}
+
+.rm-kind-chip {
+    display: inline-flex;
+    align-items: center;
+    min-height: 36px;
+    padding: 0 13px;
+    border-radius: 999px;
+    border: 1px solid rgba(232, 204, 150, .24);
+    background: rgba(232, 204, 150, .07);
+    color: var(--text);
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.rm-kind-chip.is-active {
+    border-color: rgba(232, 204, 150, .48);
+    background: rgba(232, 204, 150, .16);
+    color: var(--gold-light);
 }
 
 .card {
@@ -5249,7 +5276,17 @@ pub(crate) fn search_form_hero(
     description: &str,
     query: &str,
     placeholder: &str,
+    kind: &str,
 ) -> String {
+    let kind_field = if kind.trim().is_empty() {
+        String::new()
+    } else {
+        format!(
+            r#"<input type="hidden" name="kind" value="{}">"#,
+            escape_html(kind.trim()),
+        )
+    };
+
     format!(
         r#"<section class="hero">
 
@@ -5266,6 +5303,7 @@ pub(crate) fn search_form_hero(
           action="/app/search"
           class="search">
         {search_input_icon}
+        {kind_field}
 
         <input
             name="q"
@@ -5278,6 +5316,7 @@ pub(crate) fn search_form_hero(
 </section>"#,
         search_icon = icon("search"),
         search_input_icon = icon("search"),
+        kind_field = kind_field,
         eyebrow = escape_html(eyebrow),
         title = escape_html(title),
         description = escape_html(description),

@@ -134,12 +134,31 @@ pub async fn app_root(State(state): State<AppState>, headers: HeaderMap) -> Html
     ))
 }
 
+fn parsed_search_kind(raw: &str) -> Option<&'static str> {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "work" | "job" | "jobs" => Some("work"),
+        "workers" | "people" => Some("workers"),
+        "business" => Some("business"),
+        _ => None,
+    }
+}
+
+fn search_kind_clause(kind: Option<&str>) -> &'static str {
+    match kind {
+        Some("work") => " AND r.category = 'work' AND COALESCE(r.listing_type, 'offer') IN ('offer', 'general')",
+        Some("workers") => " AND r.category = 'work' AND r.listing_type = 'seeker'",
+        Some("business") => " AND r.category IN ('business', 'services')",
+        _ => "",
+    }
+}
+
 pub async fn app_search(
     State(state): State<AppState>,
     headers: HeaderMap,
     Query(params): Query<BTreeMap<String, String>>,
 ) -> Response {
     let q = params.get("q").map(|s| s.trim()).unwrap_or("");
+    let kind = parsed_search_kind(params.get("kind").map(|s| s.as_str()).unwrap_or(""));
 
     if q.chars().count() > 100 || q.chars().any(|c| c.is_control()) {
         return (
@@ -156,24 +175,26 @@ pub async fn app_search(
 
     let mut people: Vec<crate::web::view_models::SearchPersonRow> = Vec::new();
 
-    if !q.is_empty() {
+    if !q.is_empty() || kind.is_some() {
         let query_lower = q.to_lowercase();
 
         let mut location_matches: Vec<(usize, usize, usize)> = Vec::new();
 
         let world_data = crate::geography::world();
 
-        for (ci, (continent, countries)) in world_data.iter().enumerate() {
-            let continent_match = continent.to_lowercase().contains(&query_lower);
+        if !q.is_empty() {
+            for (ci, (continent, countries)) in world_data.iter().enumerate() {
+                let continent_match = continent.to_lowercase().contains(&query_lower);
 
-            for (si, (country, cities)) in countries.iter().enumerate() {
-                let country_match = country.to_lowercase().contains(&query_lower);
+                for (si, (country, cities)) in countries.iter().enumerate() {
+                    let country_match = country.to_lowercase().contains(&query_lower);
 
-                for (zi, city) in cities.iter().enumerate() {
-                    let city_match = city.to_lowercase().contains(&query_lower);
+                    for (zi, city) in cities.iter().enumerate() {
+                        let city_match = city.to_lowercase().contains(&query_lower);
 
-                    if city_match || country_match || continent_match {
-                        location_matches.push((ci, si, zi));
+                        if city_match || country_match || continent_match {
+                            location_matches.push((ci, si, zi));
+                        }
                     }
                 }
             }
@@ -190,12 +211,6 @@ pub async fn app_search(
             }
         };
 
-        // FTS5 query:
-        // каждое слово ищем как prefix, чтобы запрос
-        // "elect" находил "electrician".
-        //
-        // Спецсимволы FTS не передаём напрямую:
-        // оставляем только буквы/цифры и собираем безопасный MATCH.
         let fts_terms: Vec<String> = q
             .split_whitespace()
             .filter_map(|term| {
@@ -210,34 +225,61 @@ pub async fn app_search(
             .collect();
 
         let fts_query = fts_terms.join(" ");
+        let kind_clause = search_kind_clause(kind);
+        let use_fts = !fts_terms.is_empty();
 
-        let mut sql = String::from(
-            "SELECT
-                r.id,
-                r.title,
-                r.category,
-                r.description,
-                r.address,
-                r.rating,
-                r.votes,
-                r.is_verified,
-                r.is_premium,
-                r.continent_index,
-                r.country_index,
-                r.city_index
-             FROM resources_fts f
-             JOIN resources r
-               ON r.id = f.rowid
-             WHERE r.is_active = 1
-               AND r.moderation_status = 'approved'
-               AND resources_fts MATCH ?1",
-        );
+        let mut sql = if use_fts {
+            String::from(
+                "SELECT
+                    r.id,
+                    r.title,
+                    r.category,
+                    r.description,
+                    r.address,
+                    r.rating,
+                    r.votes,
+                    r.is_verified,
+                    r.is_premium,
+                    r.continent_index,
+                    r.country_index,
+                    r.city_index
+                 FROM resources_fts f
+                 JOIN resources r
+                   ON r.id = f.rowid
+                 WHERE r.is_active = 1
+                   AND r.moderation_status = 'approved'
+                   AND resources_fts MATCH ?1",
+            )
+        } else {
+            String::from(
+                "SELECT
+                    r.id,
+                    r.title,
+                    r.category,
+                    r.description,
+                    r.address,
+                    r.rating,
+                    r.votes,
+                    r.is_verified,
+                    r.is_premium,
+                    r.continent_index,
+                    r.country_index,
+                    r.city_index
+                 FROM resources r
+                 WHERE r.is_active = 1
+                   AND r.moderation_status = 'approved'",
+            )
+        };
+
+        sql.push_str(kind_clause);
 
         let mut values: Vec<rusqlite::types::Value> = Vec::new();
 
-        values.push(fts_query.clone().into());
+        if use_fts {
+            values.push(fts_query.clone().into());
+        }
 
-        if !location_matches.is_empty() {
+        if use_fts && !location_matches.is_empty() {
             sql.push_str(" AND (");
 
             for (index, _) in location_matches.iter().enumerate() {
@@ -245,7 +287,7 @@ pub async fn app_search(
                     sql.push_str(" OR ");
                 }
 
-                let base = 2 + index * 3;
+                let base = values.len() + 1;
 
                 sql.push_str(&format!(
                     "(
@@ -272,40 +314,42 @@ pub async fn app_search(
               LIMIT 100",
         );
 
-        for (ci, si, zi) in location_matches {
-            values.push((ci as i64).into());
-            values.push((si as i64).into());
-            values.push((zi as i64).into());
+        if use_fts {
+            for (ci, si, zi) in location_matches {
+                values.push((ci as i64).into());
+                values.push((si as i64).into());
+                values.push((zi as i64).into());
+            }
         }
 
-        if !fts_terms.is_empty() {
-            resources = db
-                .prepare(&sql)
-                .and_then(|mut stmt| {
-                    stmt.query_map(rusqlite::params_from_iter(values.iter()), |row| {
-                        Ok((
-                            row.get(0)?,
-                            row.get(1)?,
-                            row.get(2)?,
-                            row.get(3)?,
-                            row.get(4)?,
-                            row.get(5)?,
-                            row.get(6)?,
-                            row.get(7)?,
-                            row.get(8)?,
-                            row.get(9)?,
-                            row.get(10)?,
-                            row.get(11)?,
-                        ))
-                    })?
-                    .collect::<Result<Vec<_>, _>>()
-                })
-                .unwrap_or_default();
-        }
+        resources = db
+            .prepare(&sql)
+            .and_then(|mut stmt| {
+                stmt.query_map(rusqlite::params_from_iter(values.iter()), |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                        row.get(5)?,
+                        row.get(6)?,
+                        row.get(7)?,
+                        row.get(8)?,
+                        row.get(9)?,
+                        row.get(10)?,
+                        row.get(11)?,
+                    ))
+                })?
+                .collect::<Result<Vec<_>, _>>()
+            })
+            .unwrap_or_default();
 
-        if !fts_terms.is_empty() {
-            people = db
-                .prepare(
+        let include_people = kind.is_none() || kind == Some("workers");
+
+        if include_people && (use_fts || kind == Some("workers")) {
+            people = if use_fts {
+                db.prepare(
                     "SELECT
                         p.public_id,
                         p.username,
@@ -351,7 +395,57 @@ pub async fn app_search(
                     })?
                     .collect::<Result<Vec<_>, _>>()
                 })
-                .unwrap_or_default();
+                .unwrap_or_default()
+            } else {
+                db.prepare(
+                    "SELECT
+                        p.public_id,
+                        p.username,
+                        p.first_name,
+                        p.last_name,
+                        p.open_contact,
+                        p.intent_text,
+                        p.intent_until,
+                        p.last_seen_at
+                     FROM profiles p
+                     JOIN users u
+                       ON u.id = p.user_id
+                      AND u.is_active = 1
+                     WHERE p.public_id <> ''
+                       AND (
+                            trim(p.category) <> ''
+                            OR trim(p.intent_text) <> ''
+                       )
+                     ORDER BY
+                        CASE
+                            WHEN p.intent_text <> ''
+                             AND (
+                                  p.intent_until = 0
+                                  OR p.intent_until >= strftime('%s','now')
+                             )
+                            THEN 0
+                            ELSE 1
+                        END,
+                        p.updated_at DESC
+                     LIMIT 50",
+                )
+                .and_then(|mut stmt| {
+                    stmt.query_map([], |row| {
+                        Ok((
+                            row.get(0)?,
+                            row.get(1)?,
+                            row.get(2)?,
+                            row.get(3)?,
+                            row.get(4)?,
+                            row.get(5)?,
+                            row.get(6)?,
+                            row.get(7)?,
+                        ))
+                    })?
+                    .collect::<Result<Vec<_>, _>>()
+                })
+                .unwrap_or_default()
+            };
         }
 
         drop(db);
@@ -359,6 +453,7 @@ pub async fn app_search(
 
     Html(templates::render_search(
         q,
+        kind.unwrap_or(""),
         resources,
         people,
         verify_user_session(&state, &headers).is_none(),

@@ -37,6 +37,15 @@
         if (kind === "city") {
             return "📍";
         }
+        if (kind === "work") {
+            return "💼";
+        }
+        if (kind === "workers") {
+            return "👷";
+        }
+        if (kind === "business") {
+            return "🏢";
+        }
         return "👤";
     }
 
@@ -60,6 +69,13 @@
             index = [];
         }
 
+        var defaultHits = index.filter(function (hit) {
+            return (
+                hit.k === "work" ||
+                hit.k === "workers" ||
+                hit.k === "business"
+            );
+        });
         var activeIndex = -1;
         var visibleHits = [];
 
@@ -172,7 +188,7 @@
             setClearVisible();
 
             if (query.length < 1) {
-                renderHits([]);
+                renderHits(defaultHits);
                 return;
             }
 
@@ -274,12 +290,11 @@
         });
 
         input.addEventListener("focus", function () {
-            if (input.value.trim()) {
-                search(input.value);
-            }
+            search(input.value);
         });
 
         setClearVisible();
         updateAllLink("");
+        renderHits(defaultHits);
     });
 })();

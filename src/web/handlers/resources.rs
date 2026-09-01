@@ -6,17 +6,19 @@ use super::types::{AddResourceForm, EditResourceForm, ReportResourcePayload};
 use crate::state::app_state::AppState;
 use crate::web::templates;
 use axum::{
-    extract::{Form, Path, State},
+    extract::{Form, Path, Query, State},
     http::{header, HeaderMap, StatusCode},
     response::{Html, IntoResponse, Redirect, Response},
     Json,
 };
 use rusqlite::OptionalExtension;
 use serde_json::json;
+use std::collections::BTreeMap;
 
 pub async fn app_cat(
     State(state): State<AppState>,
     Path((ci, si, zi, k)): Path<(usize, usize, usize, String)>,
+    Query(params): Query<BTreeMap<String, String>>,
 ) -> Html<String> {
     let db = match crate::db::pool::get_connection(&state.db_pool) {
         Ok(db) => db,
@@ -25,9 +27,25 @@ pub async fn app_cat(
         }
     };
 
-    let resources: Vec<crate::web::view_models::CategoryResourceRow> = db
-        .prepare(
-            "SELECT id, title, description, contact, address, rating, votes, is_verified, is_premium
+    let listing_type = match params.get("type").map(|value| value.trim()) {
+        Some("offer") => Some("offer"),
+        Some("seeker") => Some("seeker"),
+        _ => None,
+    };
+
+    let sql = if listing_type.is_some() {
+        "SELECT id, title, description, contact, address, rating, votes, is_verified, is_premium
+             FROM resources
+             WHERE continent_index = ?1
+               AND country_index = ?2
+               AND city_index = ?3
+               AND category = ?4
+               AND listing_type = ?5
+               AND is_active = 1
+               AND moderation_status = 'approved'
+             ORDER BY is_verified DESC, rating DESC, votes DESC, id DESC"
+    } else {
+        "SELECT id, title, description, contact, address, rating, votes, is_verified, is_premium
              FROM resources
              WHERE continent_index = ?1
                AND country_index = ?2
@@ -35,12 +53,15 @@ pub async fn app_cat(
                AND category = ?4
                AND is_active = 1
                AND moderation_status = 'approved'
-             ORDER BY is_verified DESC, rating DESC, votes DESC, id DESC",
-        )
-        .and_then(|mut stmt| {
-            stmt.query_map(
-                rusqlite::params![ci, si, zi, k],
-                |row| {
+             ORDER BY is_verified DESC, rating DESC, votes DESC, id DESC"
+    };
+
+    let resources: Vec<crate::web::view_models::CategoryResourceRow> = if let Some(listing_type) =
+        listing_type
+    {
+        db.prepare(sql)
+            .and_then(|mut stmt| {
+                stmt.query_map(rusqlite::params![ci, si, zi, k, listing_type], |row| {
                     Ok((
                         row.get(0)?,
                         row.get(1)?,
@@ -52,11 +73,30 @@ pub async fn app_cat(
                         row.get(7)?,
                         row.get(8)?,
                     ))
-                },
-            )?
-            .collect::<Result<Vec<_>, _>>()
-        })
-        .unwrap_or_default();
+                })?
+                .collect::<Result<Vec<_>, _>>()
+            })
+            .unwrap_or_default()
+    } else {
+        db.prepare(sql)
+            .and_then(|mut stmt| {
+                stmt.query_map(rusqlite::params![ci, si, zi, k], |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                        row.get(5)?,
+                        row.get(6)?,
+                        row.get(7)?,
+                        row.get(8)?,
+                    ))
+                })?
+                .collect::<Result<Vec<_>, _>>()
+            })
+            .unwrap_or_default()
+    };
 
     drop(db);
 
@@ -69,7 +109,14 @@ pub async fn app_cat(
             .then_with(|| b.6.cmp(&a.6))
     });
 
-    Html(templates::render_category(ci, si, zi, &k, resources))
+    Html(templates::render_category(
+        ci,
+        si,
+        zi,
+        &k,
+        listing_type,
+        resources,
+    ))
 }
 
 pub async fn resource_profile(State(state): State<AppState>, Path(id): Path<i64>) -> Html<String> {

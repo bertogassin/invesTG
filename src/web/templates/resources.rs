@@ -11,6 +11,7 @@ pub fn render_category(
     si: usize,
     zi: usize,
     category: &str,
+    listing_type: Option<&str>,
     resources: Vec<crate::web::view_models::CategoryResourceRow>,
 ) -> String {
     let city_url = format!("/app/{}/{}/{}", ci, si, zi);
@@ -149,15 +150,29 @@ pub fn render_category(
         cards = cards,
     );
 
+    let heading = match (category.to_ascii_lowercase().as_str(), listing_type) {
+        ("work", Some("offer")) => "Работа",
+        ("work", Some("seeker")) => "Работники",
+        ("work", _) => "Работа",
+        ("business", _) => "Бизнес",
+        ("services", _) => "Услуги",
+        _ => category,
+    };
+    let heading_copy = match listing_type {
+        Some("offer") => "Вакансии и предложения работы в городе.",
+        Some("seeker") => "Люди, которые ищут работу в городе.",
+        _ => "Объявления города в этом разделе.",
+    };
+
     page_shell(
-        &format!("{} · ResursMap", category),
+        &format!("{} · ResursMap", heading),
         &topbar("Категория", "globe"),
         &back_hero(
             &back_link(&city_url, "Вернуться к городу", "chevron"),
             "map",
-            "Категория",
-            category,
-            "Ресурсы города в выбранной категории.",
+            "Раздел",
+            heading,
+            heading_copy,
         ),
         &content,
         &bottom_nav("map"),

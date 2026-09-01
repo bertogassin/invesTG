@@ -96,6 +96,28 @@ fn build_home_explore_index(
         *professions.entry(key).or_insert(0) += count;
     }
 
+    push_explore_entry(
+        &mut parts,
+        "work",
+        "Работа",
+        "Вакансии и предложения работы",
+        "/app/search?kind=work",
+    );
+    push_explore_entry(
+        &mut parts,
+        "workers",
+        "Работники",
+        "Люди, которые ищут работу",
+        "/app/search?kind=workers",
+    );
+    push_explore_entry(
+        &mut parts,
+        "business",
+        "Бизнес",
+        "Компании, услуги и специалисты",
+        "/app/search?kind=business",
+    );
+
     for (category, count) in professions {
         let label = profession_label(&category);
         let subtitle = if count > 0 {
@@ -206,7 +228,7 @@ pub fn render_continents(
 
     .rm-stats-row {
         display:grid;
-        grid-template-columns:repeat(4,minmax(0,1fr));
+        grid-template-columns:repeat(3,minmax(0,1fr));
         gap:10px;
         margin-top:22px;
         position:relative;
@@ -450,6 +472,74 @@ pub fn render_continents(
         justify-content:center;
     }
 
+    .rm-intent-grid {
+        display:grid;
+        grid-template-columns:repeat(3,minmax(0,1fr));
+        gap:10px;
+        margin-top:16px;
+    }
+
+    .rm-intent-card {
+        display:flex;
+        flex-direction:column;
+        gap:6px;
+        min-height:92px;
+        padding:14px 12px;
+        border-radius:16px;
+        border:1px solid rgba(232,204,150,.24);
+        background:
+            linear-gradient(160deg, rgba(232,204,150,.10), rgba(126,212,228,.05));
+        text-decoration:none;
+        color:inherit;
+        box-shadow:0 10px 24px rgba(0,0,0,.16);
+        transition:
+            transform .16s ease,
+            border-color .16s ease;
+    }
+
+    .rm-intent-card:hover {
+        transform:translateY(-2px);
+        border-color:rgba(232,204,150,.42);
+    }
+
+    .rm-intent-card strong {
+        font-size:15px;
+        line-height:1.2;
+    }
+
+    .rm-intent-card span {
+        color:var(--muted);
+        font-size:12px;
+        line-height:1.35;
+    }
+
+    .rm-kind-chips {
+        display:flex;
+        flex-wrap:wrap;
+        gap:8px;
+        margin:0 0 16px;
+    }
+
+    .rm-kind-chip {
+        display:inline-flex;
+        align-items:center;
+        min-height:36px;
+        padding:0 13px;
+        border-radius:999px;
+        border:1px solid rgba(232,204,150,.24);
+        background:rgba(232,204,150,.07);
+        color:var(--text);
+        text-decoration:none;
+        font-size:13px;
+        font-weight:700;
+    }
+
+    .rm-kind-chip.is-active {
+        border-color:rgba(232,204,150,.48);
+        background:rgba(232,204,150,.16);
+        color:var(--gold-light);
+    }
+
     .rm-flow {
         display:grid;
         gap:10px;
@@ -493,6 +583,10 @@ pub fn render_continents(
             grid-template-columns:repeat(3,minmax(0,1fr));
         }
 
+        .rm-intent-grid {
+            grid-template-columns:repeat(3,minmax(0,1fr));
+        }
+
         .rm-flow {
             grid-template-columns:repeat(3,minmax(0,1fr));
         }
@@ -510,6 +604,10 @@ pub fn render_continents(
 
         .rm-quick-card {
             padding:14px;
+        }
+
+        .rm-intent-grid {
+            grid-template-columns:1fr;
         }
 
         .rm-home-label {
@@ -534,17 +632,17 @@ pub fn render_continents(
 
     <h1>Карта ресурсов</h1>
 
-    <p>Люди, города, услуги и возможности — всё необходимое рядом с вами.</p>
+    <p>Работа, работники и бизнес — найдите нужное рядом.</p>
 
     {guest_hint}
 
     <section class="rm-home-explorer card" id="rm-home-explorer">
         <div class="rm-home-explorer-head">
             <div class="card-title rm-home-explorer-title">
-                Быстрый поиск
+                Поиск
             </div>
             <div class="card-meta rm-home-explorer-copy">
-                Континенты, страны, города, профессии и услуги
+                Город, профессия, вакансия или компания
             </div>
         </div>
 
@@ -557,8 +655,8 @@ pub fn render_continents(
                    autocomplete="off"
                    autocapitalize="off"
                    spellcheck="false"
-                   placeholder="Например: Ницца, электрик, Франция…"
-                   aria-label="Поиск по карте ResursMap">
+                   placeholder="Ницца, электрик, вакансия…"
+                   aria-label="Поиск работы, работников и бизнеса">
             <button id="rm-home-explorer-clear"
                     class="rm-home-explorer-clear"
                     type="button"
@@ -569,15 +667,22 @@ pub fn render_continents(
         <div id="rm-home-explorer-results"
              class="rm-home-explorer-results"
              hidden></div>
-
-        <div class="rm-home-explorer-actions">
-            <a id="rm-home-explorer-all"
-               class="ui-button rm-home-explorer-all"
-               href="/app/search">
-                Полный поиск
-            </a>
-        </div>
     </section>
+
+    <div class="rm-intent-grid">
+        <a class="rm-intent-card" href="/app/search?kind=work">
+            <strong>Работа</strong>
+            <span>Вакансии и предложения</span>
+        </a>
+        <a class="rm-intent-card" href="/app/search?kind=workers">
+            <strong>Работники</strong>
+            <span>Кто ищет работу</span>
+        </a>
+        <a class="rm-intent-card" href="/app/search?kind=business">
+            <strong>Бизнес</strong>
+            <span>Компании и услуги</span>
+        </a>
+    </div>
 
     <div class="rm-stats-row">
         <div class="rm-stat">
@@ -590,24 +695,8 @@ pub fn render_continents(
         </div>
         <div class="rm-stat">
             <strong>{resources_count}</strong>
-            <span>ресурсов</span>
+            <span>объявлений</span>
         </div>
-        <div class="rm-stat">
-            <strong>{categories_count}</strong>
-            <span>профессий</span>
-        </div>
-    </div>
-
-    <div class="rm-categories">
-        {categories_html}
-    </div>
-
-    <div class="rm-home-professions-kicker">
-        Люди по профессиям
-    </div>
-
-    <div class="rm-categories">
-        {people_categories_html}
     </div>
 </section>"#,
         globe_icon = icon("globe"),
@@ -615,37 +704,6 @@ pub fn render_continents(
         users_count = users_count,
         online_count = online_count,
         resources_count = resources_count,
-        categories_count = people_by_category.len(),
-        categories_html = _categories
-            .iter()
-            .map(|(cat, cnt)| {
-                let label = profession_label(cat);
-                format!(
-                    r#"<a class="rm-category" href="/app/search?q={q}">{label} <span>{cnt}</span></a>"#,
-                    q = urlencoding::encode(cat),
-                    label = escape_html(&label),
-                    cnt = cnt,
-                )
-            })
-            .collect::<Vec<_>>()
-            .join(""),
-        people_categories_html = if people_by_category.is_empty() {
-            r#"<p class="rm-empty-professions">Пока нет указанных профессий. Откройте Аккаунт и укажите, чем вы занимаетесь.</p>"#.to_string()
-        } else {
-            people_by_category
-                .iter()
-                .map(|(cat, cnt)| {
-                    let label = profession_label(cat);
-                    format!(
-                        r#"<a class="rm-category" href="/app/search?q={q}">{label} <span>{cnt}</span></a>"#,
-                        q = urlencoding::encode(cat),
-                        label = escape_html(&label),
-                        cnt = cnt,
-                    )
-                })
-                .collect::<Vec<_>>()
-                .join("")
-        },
     );
 
     let main_html = format!(
@@ -659,77 +717,7 @@ pub fn render_continents(
 <div class="grid">
     {cards}
 </div>
-
-<section id="resursmap-app-home" class="rm-home-section">
-
-    <div class="rm-desktop-two">
-
-
-        <div>
-            <div class="rm-home-label">
-                Начать
-            </div>
-
-            <div class="card rm-home-start-card">
-
-                <div class="card-title rm-home-start-title">
-                    Всё нужное — в одном месте
-                </div>
-
-                <div class="card-meta rm-home-start-copy">
-                    Найдите человека, специалиста, услугу,
-                    бизнес или другой ресурс через карту
-                    или вкладку «Поиск» внизу.
-                </div>
-
-            </div>
-        </div>
-
-    </div>
-
-    <div class="rm-home-section">
-
-        <div class="rm-home-label">
-            Как это работает
-        </div>
-
-        <div class="rm-flow">
-
-            <div class="card rm-flow-item">
-                <div class="rm-flow-number">01</div>
-                <div class="card-title rm-flow-title">
-                    Найдите
-                </div>
-                <div class="card-meta rm-flow-copy">
-                    Используйте карту или поиск.
-                </div>
-            </div>
-
-            <div class="card rm-flow-item">
-                <div class="rm-flow-number">02</div>
-                <div class="card-title rm-flow-title">
-                    Изучите
-                </div>
-                <div class="card-meta rm-flow-copy">
-                    Посмотрите профиль и детали ресурса.
-                </div>
-            </div>
-
-            <div class="card rm-flow-item">
-                <div class="rm-flow-number">03</div>
-                <div class="card-title rm-flow-title">
-                    Свяжитесь
-                </div>
-                <div class="card-meta rm-flow-copy">
-                    Откройте профиль и начните диалог.
-                </div>
-            </div>
-
-        </div>
-
-    </div>
-
-</section>"####,
+"####,
         topbar = topbar("Карта", "globe"),
         hero = hero,
         cards = cards,
@@ -863,7 +851,7 @@ pub fn render_country(ci: usize, si: usize) -> String {
 pub fn render_city(ci: usize, si: usize, zi: usize) -> String {
     let w = world();
 
-    if let Some((cname, countries)) = w.iter().nth(ci) {
+    if let Some((_cname, countries)) = w.iter().nth(ci) {
         if let Some((country, cities)) = countries.iter().nth(si) {
             if let Some(city) = cities.get(zi) {
                 let section_head_sections = section_head("Разделы", "Выберите направление", None);
@@ -886,10 +874,10 @@ pub fn render_city(ci: usize, si: usize, zi: usize) -> String {
 "#,
                     section_head_sections = section_head_sections,
                     work_card = navigation_card(
-                        &format!("/app/{}/{}/{}/cat/work", ci, si, zi),
+                        &format!("/app/{}/{}/{}/cat/work?type=offer", ci, si, zi),
                         "briefcase",
                         "Работа",
-                        "Вакансии и предложения",
+                        "Вакансии рядом",
                     ),
                     business_card = navigation_card(
                         &format!("/app/{}/{}/{}/cat/business", ci, si, zi),
@@ -898,16 +886,16 @@ pub fn render_city(ci: usize, si: usize, zi: usize) -> String {
                         "Компании и услуги",
                     ),
                     services_card = navigation_card(
+                        &format!("/app/{}/{}/{}/cat/work?type=seeker", ci, si, zi),
+                        "user",
+                        "Работники",
+                        "Кто ищет работу",
+                    ),
+                    community_card = navigation_card(
                         &format!("/app/{}/{}/{}/cat/services", ci, si, zi),
                         "map",
                         "Услуги",
-                        "Помощь и специалисты",
-                    ),
-                    community_card = navigation_card(
-                        &format!("/app/{}/{}/{}/cat/community", ci, si, zi),
-                        "user",
-                        "Сообщество",
-                        "Люди и контакты",
+                        "Специалисты рядом",
                     ),
                 );
 
@@ -918,11 +906,7 @@ pub fn render_city(ci: usize, si: usize, zi: usize) -> String {
                         "map-pin",
                         country,
                         city,
-                        &format!(
-                            "{} · {}<br>Ресурсы города.",
-                            escape_html(cname),
-                            escape_html(country),
-                        ),
+                        "Работа, работники и бизнес в городе.",
                     ),
                     &content,
                     &bottom_nav("map"),
@@ -940,6 +924,7 @@ pub fn render_city(ci: usize, si: usize, zi: usize) -> String {
 
 pub fn render_search(
     q: &str,
+    kind: &str,
     resources: Vec<crate::web::view_models::SearchResourceRow>,
     people: Vec<crate::web::view_models::SearchPersonRow>,
     guest_mode: bool,
@@ -995,9 +980,55 @@ pub fn render_search(
         }
     }
 
+    let kind = kind.trim();
+    let q_query = if q.trim().is_empty() {
+        String::new()
+    } else {
+        format!("q={}", urlencoding::encode(q.trim()))
+    };
+    let chip_href = |value: &str| -> String {
+        let mut href = String::from("/app/search?");
+        if !q.trim().is_empty() {
+            href.push_str(&q_query);
+            href.push('&');
+        }
+        if !value.is_empty() {
+            href.push_str("kind=");
+            href.push_str(&urlencoding::encode(value));
+        } else if href.ends_with('&') {
+            href.pop();
+        }
+        if href.ends_with('?') {
+            href.pop();
+        }
+        href
+    };
+    let chip = |value: &str, label: &str| -> String {
+        let class = if kind == value {
+            "rm-kind-chip is-active"
+        } else {
+            "rm-kind-chip"
+        };
+        format!(
+            r#"<a class="{class}" href="{href}">{label}</a>"#,
+            class = class,
+            href = chip_href(value),
+            label = label,
+        )
+    };
+    let kind_chips = format!(
+        r#"<nav class="rm-kind-chips" aria-label="Что искать">
+    {all}{work}{workers}{business}
+</nav>"#,
+        all = chip("", "Все"),
+        work = chip("work", "Работа"),
+        workers = chip("workers", "Работники"),
+        business = chip("business", "Бизнес"),
+    );
+
     let people_count = people.len();
 
-    let people_section = if q.trim().is_empty() || people.is_empty() {
+    let people_section = if people.is_empty() {
         String::new()
     } else {
         let people_cards = people
@@ -1099,22 +1130,34 @@ pub fn render_search(
 </section>
 "#,
             people_head =
-                section_head("Участники", &format!("Найдено: {}", people_count), Some(24),),
+                section_head("Работники", &format!("Найдено: {}", people_count), Some(24),),
             people_cards = people_cards,
         )
     };
 
     let result_count = resources.len();
 
-    let results = if q.trim().is_empty() {
+    let results = if q.trim().is_empty() && kind.is_empty() {
         empty_state_card(
             "Начните поиск",
-            "Введите название, услугу, категорию или адрес.",
+            "Выберите работу, работников или бизнес — либо введите город и профессию.",
         )
     } else if resources.is_empty() && people.is_empty() && location_results.is_empty() {
         empty_state_card(
             "Ничего не найдено",
-            &format!("По запросу «{}» пока ничего не найдено.", escape_html(q),),
+            &format!(
+                "По запросу «{}» пока ничего не найдено.",
+                escape_html(if q.trim().is_empty() {
+                    match kind {
+                        "work" => "работа",
+                        "workers" => "работники",
+                        "business" => "бизнес",
+                        _ => q,
+                    }
+                } else {
+                    q
+                }),
+            ),
         )
     } else if resources.is_empty() {
         if people.is_empty() && location_results.is_empty() {
@@ -1188,7 +1231,7 @@ pub fn render_search(
             .join("")
     };
 
-    let location_section = if q.trim().is_empty() || location_results.is_empty() {
+    let location_section = if q.trim().is_empty() || location_results.is_empty() || !kind.is_empty() {
         String::new()
     } else {
         format!(
@@ -1205,7 +1248,7 @@ pub fn render_search(
         )
     };
 
-    let result_header = if q.trim().is_empty() {
+    let result_header = if q.trim().is_empty() && kind.is_empty() {
         String::new()
     } else if resources.is_empty() {
         if people.is_empty() && location_results.is_empty() {
@@ -1215,7 +1258,12 @@ pub fn render_search(
         }
     } else {
         section_head(
-            "Результаты",
+            match kind {
+                "work" => "Вакансии",
+                "workers" => "Работники",
+                "business" => "Бизнес",
+                _ => "Результаты",
+            },
             &format!("Найдено: {}", result_count),
             Some(24),
         )
@@ -1224,6 +1272,8 @@ pub fn render_search(
     let content = format!(
         r#"
 {guest_hint}
+
+{kind_chips}
 
 {location_section}
 
@@ -1236,6 +1286,7 @@ pub fn render_search(
 </section>
 "#,
         guest_hint = guest_hint,
+        kind_chips = kind_chips,
         location_section = location_section,
         people_section = people_section,
         result_header = result_header,
@@ -1247,10 +1298,16 @@ pub fn render_search(
         &topbar("Поиск", "search"),
         &search_form_hero(
             "Поиск",
-            "Найти ресурс",
-            "Ищите услуги, компании, специалистов и другие ресурсы.",
+            match kind {
+                "work" => "Найти работу",
+                "workers" => "Найти работников",
+                "business" => "Найти бизнес",
+                _ => "Найти рядом",
+            },
+            "Работа, работники, бизнес, город или профессия.",
             q,
-            "Например: охранник, бизнес, улица...",
+            "Например: электрик, Ницца, вакансия...",
+            kind,
         ),
         &content,
         &bottom_nav("search"),
