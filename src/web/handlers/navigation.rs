@@ -209,7 +209,13 @@ fn discoverable_profile_clause() -> &'static str {
        )"
 }
 
-fn location_match_score(query: &str, query_chars: usize, city: &str, country: &str, continent: &str) -> i32 {
+fn location_match_score(
+    query: &str,
+    query_chars: usize,
+    city: &str,
+    country: &str,
+    continent: &str,
+) -> i32 {
     let city_l = city.to_lowercase();
     let country_l = country.to_lowercase();
     let continent_l = continent.to_lowercase();

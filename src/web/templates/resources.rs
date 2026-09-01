@@ -151,11 +151,7 @@ pub fn render_category(
         format!(
             r#"{head}
 <div>{cards}</div>"#,
-            head = section_head(
-                "По профессии",
-                &format!("Найдено: {people_count}"),
-                None,
-            ),
+            head = section_head("По профессии", &format!("Найдено: {people_count}"), None,),
             cards = search_people_cards(&people),
         )
     };

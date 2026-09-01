@@ -60,12 +60,9 @@ fn profiles_fts_column_names(conn: &Connection) -> Result<Vec<String>> {
 }
 
 fn profiles_fts_indexes_names(columns: &[String]) -> bool {
-    columns.iter().any(|column| {
-        matches!(
-            column.as_str(),
-            "username" | "first_name" | "last_name"
-        )
-    })
+    columns
+        .iter()
+        .any(|column| matches!(column.as_str(), "username" | "first_name" | "last_name"))
 }
 
 fn ensure_profiles_fts_parameters_only(conn: &Connection) -> Result<()> {
