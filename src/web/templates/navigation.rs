@@ -157,6 +157,298 @@ fn build_home_explore_index(
 // LUCIDE SVG
 // ============================================================
 
+pub fn render_geo_root(
+    users_count: i64,
+    online_count: i64,
+    resources_count: i64,
+    continents: Vec<(i64, String, i64)>,
+    guest_mode: bool,
+) -> String {
+    let cards = continents
+        .iter()
+        .map(|(id, name, countries)| {
+            navigation_card(
+                &format!("/app/map/continent/{id}"),
+                "globe",
+                name,
+                &format!("{countries} стран"),
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("");
+    let guest_hint = if guest_mode { guest_mode_hint() } else { "" };
+    let hero = format!(
+        r#"<section class="hero rm-map-hero">
+    <div class="eyebrow">{logo} GRABIT</div>
+    <h1>Глобальная карта</h1>
+    <p>Выберите континент и двигайтесь последовательно: страна, город, раздел и профессия.</p>
+    {guest_hint}
+    <div class="rm-map-stats">
+        <div><strong>{users_count}</strong><span>участников</span></div>
+        <div><strong>{online_count}</strong><span>онлайн</span></div>
+        <div><strong>{resources_count}</strong><span>объявлений</span></div>
+    </div>
+</section>"#,
+        logo = icon("globe"),
+    );
+    let content = format!(
+        r#"{head}<div class="grid rm-map-grid">{cards}</div>"#,
+        head = section_head("Континенты", "Все регионы мира без приоритетов", None),
+    );
+    let styles = r#"<style>
+.rm-map-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:20px}
+.rm-map-stats div{padding:12px 6px;border:1px solid rgba(232,204,150,.22);border-radius:15px;text-align:center;background:rgba(255,255,255,.025)}
+.rm-map-stats strong,.rm-map-stats span{display:block}.rm-map-stats strong{color:var(--gold-light);font-size:21px}.rm-map-stats span{margin-top:4px;color:var(--muted);font-size:9px;text-transform:uppercase}
+.rm-map-grid{align-items:stretch}
+</style>"#;
+    page_document(
+        "GRABIT · Глобальная карта",
+        styles,
+        "",
+        &format!("{}{}{}", topbar("Карта", "globe"), hero, content),
+        &bottom_nav("map"),
+        "",
+    )
+}
+
+pub fn render_geo_continent(
+    _continent_id: i64,
+    name: &str,
+    countries: Vec<(i64, String, i64)>,
+) -> String {
+    let cards = countries
+        .iter()
+        .map(|(id, country, cities)| {
+            navigation_card(
+                &format!("/app/map/country/{id}"),
+                "building",
+                country,
+                &format!("{cities} городов"),
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("");
+    let content = format!(
+        r#"{back}{head}<div class="grid">{cards}</div>"#,
+        back = navigation_card("/app", "chevron", "Все континенты", "Назад к карте"),
+        head = section_head(
+            "Страны",
+            &format!("{} · по алфавиту", countries.len()),
+            Some(22)
+        ),
+    );
+    page_shell(
+        name,
+        &topbar("Карта", "globe"),
+        &simple_hero(
+            "globe",
+            "Континент",
+            name,
+            "Выберите страну для продолжения.",
+        ),
+        &content,
+        &bottom_nav("map"),
+    )
+}
+
+pub fn render_geo_country(
+    country_id: i64,
+    country: &str,
+    continent_id: i64,
+    continent: &str,
+    cities: Vec<(i64, String)>,
+    total: i64,
+) -> String {
+    let cards = cities
+        .iter()
+        .map(|(id, city)| navigation_card(&format!("/app/map/city/{id}"), "map-pin", city, country))
+        .collect::<Vec<_>>()
+        .join("");
+    let more = if cities.len() < total as usize {
+        format!(
+            r#"<button type="button" class="ui-button rm-map-more" id="rm-map-more" data-country-id="{country_id}" data-offset="{}">Показать следующие города</button>"#,
+            cities.len()
+        )
+    } else {
+        String::new()
+    };
+    let content = format!(
+        r#"{back}{head}<div class="grid" id="rm-map-city-grid">{cards}</div>{more}<script src="{script}" defer></script>"#,
+        back = navigation_card(
+            &format!("/app/map/continent/{continent_id}"),
+            "chevron",
+            continent,
+            "Назад к странам",
+        ),
+        head = section_head("Города", &format!("{total} · по алфавиту"), Some(22)),
+        script = static_asset("map-cities.js"),
+    );
+    page_shell(
+        country,
+        &topbar("Карта", "globe"),
+        &simple_hero(
+            "building",
+            continent,
+            country,
+            "Выберите город. Список загружается частями без изменения порядка.",
+        ),
+        &content,
+        &bottom_nav("map"),
+    )
+}
+
+pub fn render_geo_city(
+    city_id: i64,
+    city: &str,
+    country_id: i64,
+    country: &str,
+    _continent_id: i64,
+    continent: &str,
+    sectors: Vec<(String, String, i64)>,
+) -> String {
+    let category = |title: &str, subtitle: &str, query: &str, icon_name: &str| {
+        navigation_card(
+            &format!(
+                "/app/search?city_id={city_id}&q={}",
+                urlencoding::encode(query)
+            ),
+            icon_name,
+            title,
+            subtitle,
+        )
+    };
+    let sector_cards = sectors
+        .iter()
+        .map(|(key, name, count)| {
+            navigation_card(
+                &format!(
+                    "/app/map/city/{city_id}/sector/{}",
+                    urlencoding::encode(key)
+                ),
+                "briefcase",
+                name,
+                &format!("{count} профессий"),
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("");
+    let content = format!(
+        r#"{back}{section_head}<div class="grid">{work}{services}{business}{housing}{transport}{education}{help}{other}</div>{profession_head}<div class="grid">{sector_cards}</div>"#,
+        back = navigation_card(
+            &format!("/app/map/country/{country_id}"),
+            "chevron",
+            country,
+            "Назад к городам"
+        ),
+        section_head = section_head(
+            "Что вам нужно",
+            "Ищу или предлагаю — всё внутри города",
+            Some(22)
+        ),
+        work = category("Работа", "Вакансии и поиск работы", "работа", "briefcase"),
+        services = category(
+            "Услуги",
+            "Ищу специалиста или предлагаю услугу",
+            "услуги",
+            "user"
+        ),
+        business = category(
+            "Бизнес",
+            "Компании, партнёры и сотрудничество",
+            "бизнес",
+            "building"
+        ),
+        housing = category(
+            "Жильё",
+            "Сниму, сдам, куплю или продам",
+            "жильё",
+            "building"
+        ),
+        transport = category(
+            "Транспорт",
+            "Куплю, продам, аренда и перевозки",
+            "транспорт",
+            "map"
+        ),
+        education = category(
+            "Обучение",
+            "Курсы, преподаватели и ученики",
+            "обучение",
+            "briefcase"
+        ),
+        help = category("Помощь", "Нужна помощь или могу помочь", "помощь", "heart"),
+        other = category(
+            "Другое",
+            "Остальные предложения и запросы",
+            "другое",
+            "menu"
+        ),
+        profession_head = section_head("Профессии", "Выберите профессиональную отрасль", Some(28)),
+    );
+    page_shell(
+        city,
+        &topbar("Карта", "globe"),
+        &simple_hero(
+            "map-pin",
+            &format!("{continent} · {country}"),
+            city,
+            "Все направления, объявления и профессии этого города.",
+        ),
+        &content,
+        &bottom_nav("map"),
+    )
+}
+
+pub fn render_geo_professions(
+    city_id: i64,
+    city: &str,
+    country: &str,
+    sector: &str,
+    professions: Vec<(String, String)>,
+) -> String {
+    let cards = professions
+        .iter()
+        .map(|(_, profession)| {
+            navigation_card(
+                &format!(
+                    "/app/search?city_id={city_id}&q={}",
+                    urlencoding::encode(profession)
+                ),
+                "user",
+                profession,
+                "Ищу или предлагаю",
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("");
+    let content = format!(
+        r#"{back}{head}<div class="grid">{cards}</div>"#,
+        back = navigation_card(
+            &format!("/app/map/city/{city_id}"),
+            "chevron",
+            city,
+            "Назад к разделам"
+        ),
+        head = section_head(
+            "Профессии",
+            &format!("{} · по алфавиту", professions.len()),
+            Some(22)
+        ),
+    );
+    page_shell(
+        sector,
+        &topbar("Карта", "globe"),
+        &simple_hero(
+            "briefcase",
+            country,
+            sector,
+            "Выберите профессию, затем нужное объявление или специалиста.",
+        ),
+        &content,
+        &bottom_nav("map"),
+    )
+}
+
 pub fn render_continents(
     users_count: i64,
     online_count: i64,
@@ -713,6 +1005,7 @@ pub fn render_search(
     resources: Vec<crate::web::view_models::SearchResourceRow>,
     people: Vec<crate::web::view_models::SearchPersonRow>,
     guest_mode: bool,
+    city_id: Option<i64>,
 ) -> String {
     let guest_hint = if guest_mode { guest_mode_hint() } else { "" };
     let world_data = world();
@@ -782,6 +1075,13 @@ pub fn render_search(
             href.push_str(&urlencoding::encode(kind_value));
         } else if href.ends_with('&') {
             href.pop();
+        }
+        if let Some(city_id) = city_id {
+            if href.ends_with('?') {
+                href.push_str(&format!("city_id={city_id}"));
+            } else {
+                href.push_str(&format!("&city_id={city_id}"));
+            }
         }
         if href.ends_with('?') {
             href.pop();
@@ -1002,6 +1302,7 @@ pub fn render_search(
             q,
             "Например: электрик, Ницца, вакансия...",
             kind,
+            city_id,
             &hero_extra,
         ),
         &content,

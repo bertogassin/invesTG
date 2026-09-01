@@ -7,7 +7,7 @@ pub fn escape_html(value: &str) -> String {
         .replace('\'', "&#39;")
 }
 
-pub const STATIC_ASSET_VERSION: &str = "4.9.45";
+pub const STATIC_ASSET_VERSION: &str = "4.9.46";
 
 pub fn profession_label(raw: &str) -> String {
     match raw.trim().to_lowercase().as_str() {
@@ -5392,6 +5392,7 @@ pub(crate) fn simple_hero(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn search_form_hero(
     eyebrow: &str,
     title: &str,
@@ -5399,6 +5400,7 @@ pub(crate) fn search_form_hero(
     query: &str,
     placeholder: &str,
     kind: &str,
+    city_id: Option<i64>,
     extra_html: &str,
 ) -> String {
     let kind_field = if kind.trim().is_empty() {
@@ -5409,6 +5411,10 @@ pub(crate) fn search_form_hero(
             escape_html(kind.trim()),
         )
     };
+    let city_field = city_id
+        .filter(|value| *value > 0)
+        .map(|value| format!(r#"<input type="hidden" name="city_id" value="{value}">"#))
+        .unwrap_or_default();
 
     format!(
         r#"<section class="hero">
@@ -5427,6 +5433,7 @@ pub(crate) fn search_form_hero(
           class="search">
         {search_input_icon}
         {kind_field}
+        {city_field}
 
         <input
             name="q"
@@ -5442,6 +5449,7 @@ pub(crate) fn search_form_hero(
         search_icon = icon("search"),
         search_input_icon = icon("search"),
         kind_field = kind_field,
+        city_field = city_field,
         extra_html = extra_html,
         eyebrow = escape_html(eyebrow),
         title = escape_html(title),
