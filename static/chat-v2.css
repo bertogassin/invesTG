@@ -252,6 +252,44 @@
         animation: none;
     }
 }
+
+.chat-request-gate {
+    margin: 12px 0;
+    padding: 14px;
+    border: 1px solid rgba(244, 196, 48, 0.35);
+    border-radius: 14px;
+    background: rgba(244, 196, 48, 0.06);
+}
+
+.chat-request-gate p {
+    margin: 6px 0 0;
+    color: var(--text-muted, #9ca3af);
+}
+
+.chat-request-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.chat-request-actions form {
+    flex: 1;
+}
+
+.chat-request-actions button {
+    width: 100%;
+    min-height: 44px;
+    border: 1px solid currentColor;
+    border-radius: 12px;
+    background: transparent;
+    color: inherit;
+    font-weight: 700;
+}
+
+.chat-request-gate.is-rejected {
+    border-color: rgba(239, 68, 68, 0.35);
+    background: rgba(239, 68, 68, 0.06);
+}
 .chat-message-row {
     scroll-margin-block: 70px;
     width: 100%;

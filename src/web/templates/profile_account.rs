@@ -1649,21 +1649,13 @@ pub fn render_public_user_profile(params: RenderPublicUserProfileParams<'_>) -> 
                 if (data.status === "pending") {{
                     if (status) {{
                         status.textContent =
-                            "Запрос отправлен. Ждите ответа.";
+                            "Сообщение отправлено. Открываем чат…";
                     }}
 
-                    if (panel) {{
-                        panel.style.display = "none";
+                    if (data.chat_url) {{
+                        window.location.href = data.chat_url;
+                        return;
                     }}
-
-                    if (openButton) {{
-                        openButton.disabled = false;
-                        openButton.textContent =
-                            "Запрос отправлен";
-                    }}
-
-                    sendButton.disabled = false;
-                    return;
                 }}
 
                 if (status) {{

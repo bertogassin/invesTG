@@ -154,10 +154,10 @@ fn provision_email_account(
                 ?2,
                 ?3,
                 ?4,
-                ?4,
-                ?4
+                ?5,
+                ?5
              )",
-            rusqlite::params![next_id, email, password_hash, now],
+            rusqlite::params![next_id, email, password_hash, 0, now],
         )
         .map_err(|_| "identity_create_failed")?;
 
@@ -353,7 +353,17 @@ pub async fn register_email(
             .into_response();
     }
 
-    email_password_auth_response(&state, user_id, &headers)
+    drop(db);
+
+    (
+        StatusCode::OK,
+        Json(json!({
+            "ok": true,
+            "user_id": user_id,
+            "verification_required": true
+        })),
+    )
+        .into_response()
 }
 
 pub async fn login_email(
@@ -419,19 +429,19 @@ pub async fn login_email(
         }
     };
 
-    let row: Option<(i64, String)> = db
+    let row: Option<(i64, String, i64)> = db
         .query_row(
-            "SELECT user_id, password_hash
+            "SELECT user_id, password_hash, verified_at
              FROM auth_identities
              WHERE provider = 'email'
                AND email = ?1
              LIMIT 1",
             rusqlite::params![&email],
-            |row| Ok((row.get(0)?, row.get(1)?)),
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
         )
         .ok();
 
-    let (user_id, password_hash) = match row {
+    let (user_id, password_hash, verified_at) = match row {
         Some(row) => row,
         None => {
             return (
@@ -444,6 +454,17 @@ pub async fn login_email(
                 .into_response();
         }
     };
+
+    if verified_at <= 0 {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({
+                "ok": false,
+                "error": "verification_required"
+            })),
+        )
+            .into_response();
+    }
 
     if !verify_password(payload.password.trim(), &password_hash) {
         let error = if password_hash.is_empty() {
@@ -649,6 +670,7 @@ pub async fn register_page(Query(query): Query<AuthNextQuery>) -> Html<String> {
             password_too_long: "Пароль слишком длинный.",
             password_mismatch: "Пароли не совпадают.",
             email_already_registered: "Этот email уже зарегистрирован. Попробуйте войти или восстановить пароль.",
+            verification_required: "Подтвердите email кодом из письма.",
             rate_limited: "Слишком много попыток. Попробуйте позже.",
             database_unavailable: "Сервис временно недоступен."
         }};
@@ -698,6 +720,13 @@ pub async fn register_page(Query(query): Query<AuthNextQuery>) -> Html<String> {
 
             if (!response.ok || !data.ok) {{
                 setStatus(errorMessage(data.error), true);
+                return;
+            }}
+
+            if (data.verification_required) {{
+                setStatus("Теперь подтвердите email кодом.", false);
+                const next = encodeURIComponent(redirectTarget);
+                window.location.replace("/login/code?next=" + next);
                 return;
             }}
 

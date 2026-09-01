@@ -612,6 +612,30 @@ pub async fn email_auth_verify(
 
     if transaction
         .execute(
+            "UPDATE auth_identities
+             SET verified_at = CASE
+                    WHEN verified_at > 0 THEN verified_at
+                    ELSE ?2
+                 END,
+                 updated_at = ?2
+             WHERE user_id = ?1
+               AND provider = 'email'",
+            rusqlite::params![user_id, unix_now()],
+        )
+        .is_err()
+    {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({
+                "ok": false,
+                "error": "identity_verify_failed"
+            })),
+        )
+            .into_response();
+    }
+
+    if transaction
+        .execute(
             "UPDATE email_login_codes
              SET consumed_at = ?2
              WHERE id = ?1

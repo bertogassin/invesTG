@@ -225,7 +225,7 @@ pub async fn accept_contact_request(
 
     (
         StatusCode::SEE_OTHER,
-        [(header::LOCATION, "/app/contact-requests")],
+        [(header::LOCATION, format!("/app/chat/{sender_user_id}"))],
     )
         .into_response()
 }
@@ -331,7 +331,7 @@ pub async fn reject_contact_request(
 
     (
         StatusCode::SEE_OTHER,
-        [(header::LOCATION, "/app/contact-requests")],
+        [(header::LOCATION, format!("/app/chat/{sender_user_id}"))],
     )
         .into_response()
 }

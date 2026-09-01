@@ -663,6 +663,13 @@ fn render_chat_message_row(
     )
 }
 
+pub struct ChatContactRequestState {
+    pub id: i64,
+    pub sender_user_id: i64,
+    pub status: String,
+}
+
+#[allow(clippy::too_many_arguments)]
 pub fn render_chat(
     authenticated: bool,
     viewer_user_id: i64,
@@ -671,6 +678,7 @@ pub fn render_chat(
     first_name: &str,
     last_name: &str,
     messages: Vec<crate::web::view_models::ChatMessageRow>,
+    contact_request: Option<&ChatContactRequestState>,
 ) -> String {
     let safe_username = escape_html(username);
     let safe_first_name = escape_html(first_name);
@@ -735,6 +743,83 @@ pub fn render_chat(
                 })
                 .collect::<Vec<_>>()
                 .join("")
+        };
+
+        let contact_gate = contact_request
+            .map(|request| {
+                if request.status == "pending" && request.sender_user_id != viewer_user_id {
+                    format!(
+                        r#"<aside class="chat-request-gate">
+<strong>Запрос на общение</strong>
+<p>Примите запрос, чтобы продолжить переписку.</p>
+<div class="chat-request-actions">
+<form method="post" action="/app/contact-request/{id}/accept"><button type="submit">Принять</button></form>
+<form method="post" action="/app/contact-request/{id}/reject"><button type="submit">Отклонить</button></form>
+</div>
+</aside>"#,
+                        id = request.id
+                    )
+                } else if request.status == "pending" {
+                    r#"<aside class="chat-request-gate"><strong>Сообщение отправлено</strong><p>Ожидаем решения пользователя. Второе сообщение пока недоступно.</p></aside>"#.to_string()
+                } else if request.status == "rejected" {
+                    r#"<aside class="chat-request-gate is-rejected"><strong>Запрос отклонён</strong><p>Продолжить этот диалог сейчас нельзя.</p></aside>"#.to_string()
+                } else {
+                    String::new()
+                }
+            })
+            .unwrap_or_default();
+
+        let composer_locked = contact_request
+            .is_some_and(|request| request.status == "pending" || request.status == "rejected");
+
+        let composer = if composer_locked {
+            String::new()
+        } else {
+            r#"
+<form id="chat-form"
+      class="ui-form chat-composer">
+
+    <div id="chat-reply-bar"
+         class="chat-reply-bar"
+         hidden>
+        <div class="chat-reply-accent"></div>
+        <div class="chat-reply-copy">
+            <strong>Ответ</strong>
+            <span id="chat-reply-text"></span>
+        </div>
+        <button id="chat-reply-close"
+                type="button"
+                aria-label="Отменить ответ">
+            ×
+        </button>
+    </div>
+
+    <div id="chat-forward-bar"
+         class="chat-forward-bar"
+         hidden>
+        <div class="chat-forward-accent"></div>
+        <div class="chat-reply-copy">
+            <strong>Переслать</strong>
+            <span id="chat-forward-text"></span>
+        </div>
+        <button id="chat-forward-close"
+                type="button"
+                aria-label="Отменить пересылку">
+            ×
+        </button>
+    </div>
+
+    <div class="chat-composer-main">
+        <textarea id="chat-input" name="message" rows="1" maxlength="2000" required autocomplete="off" enterkeyhint="send" aria-label="Текст сообщения" placeholder="Сообщение…" class="ui-textarea chat-input"></textarea>
+        <button id="chat-clear" type="button" class="chat-clear-button" aria-label="Очистить сообщение" hidden>×</button>
+    </div>
+    <input type="file" id="chat-image-input" accept="image/jpeg,image/png,image/webp" hidden>
+    <button id="chat-voice-btn" type="button" class="chat-voice-btn">Голос</button>
+    <button id="chat-image-btn" type="button" class="chat-image-btn">Фото</button>
+    <button id="chat-send" type="submit" class="ui-button chat-send-button">Отправить</button>
+    <div class="chat-composer-footer"><span id="chat-send-state">Enter — отправить · Shift+Enter — новая строка</span><span id="chat-counter">0 / 2000</span></div>
+</form>
+"#.to_string()
         };
 
         format!(
@@ -811,6 +896,11 @@ pub fn render_chat(
 
 </section>
 
+{contact_gate}
+
+{composer}
+
+<!-- legacy composer removed
 <form id="chat-form"
       class="ui-form chat-composer">
 
@@ -900,6 +990,7 @@ pub fn render_chat(
         <span id="chat-counter">0 / 2000</span>
     </div>
 </form>
+-->
 
 <script src="{chat_js}" defer></script>
 <script src="{chat_blocks_js}" defer></script>
@@ -913,6 +1004,8 @@ pub fn render_chat(
             last_message_id = last_message_id,
             may_have_older = may_have_older,
             message_cards = message_cards,
+            contact_gate = contact_gate,
+            composer = composer,
         )
     };
 

@@ -1,4 +1,5 @@
 use super::auth::verify_user_session;
+use super::chat_api::{chat_contact_gate_error, user_has_verified_identity};
 use super::common::{input_text_is_valid, rate_limit_retry_after, request_is_cross_site, unix_now};
 use super::user_blocks::users_are_blocked;
 use crate::state::app_state::AppState;
@@ -267,6 +268,12 @@ pub async fn api_chat_send_image(
     if users_are_blocked(&connection, user_id, other_user_id) {
         return json_error(StatusCode::FORBIDDEN, "user_blocked");
     }
+    if !user_has_verified_identity(&connection, user_id) {
+        return json_error(StatusCode::FORBIDDEN, "verification_required");
+    }
+    if let Some(error) = chat_contact_gate_error(&connection, user_id, other_user_id) {
+        return json_error(StatusCode::FORBIDDEN, error);
+    }
     let conversation_id = match conversation_id(&connection, user_id, other_user_id) {
         Some(id) => id,
         None => return json_error(StatusCode::FORBIDDEN, "conversation_not_open"),
@@ -503,6 +510,12 @@ pub async fn api_chat_send_voice(
     };
     if users_are_blocked(&connection, user_id, other_user_id) {
         return json_error(StatusCode::FORBIDDEN, "user_blocked");
+    }
+    if !user_has_verified_identity(&connection, user_id) {
+        return json_error(StatusCode::FORBIDDEN, "verification_required");
+    }
+    if let Some(error) = chat_contact_gate_error(&connection, user_id, other_user_id) {
+        return json_error(StatusCode::FORBIDDEN, error);
     }
     let conversation_id = match conversation_id(&connection, user_id, other_user_id) {
         Some(id) => id,

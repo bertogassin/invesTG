@@ -250,6 +250,48 @@ fn conversation_id(
         .ok()
 }
 
+pub(super) fn chat_contact_gate_error(
+    connection: &rusqlite::Connection,
+    current_user_id: i64,
+    other_user_id: i64,
+) -> Option<&'static str> {
+    let status: Option<String> = connection
+        .query_row(
+            "SELECT status
+             FROM contact_requests
+             WHERE (
+                 sender_user_id = ?1 AND receiver_user_id = ?2
+             ) OR (
+                 sender_user_id = ?2 AND receiver_user_id = ?1
+             )
+             ORDER BY id DESC
+             LIMIT 1",
+            rusqlite::params![current_user_id, other_user_id],
+            |row| row.get(0),
+        )
+        .ok();
+
+    match status.as_deref() {
+        Some("pending") => Some("request_pending"),
+        Some("rejected") => Some("request_rejected"),
+        _ => None,
+    }
+}
+
+pub(super) fn user_has_verified_identity(connection: &rusqlite::Connection, user_id: i64) -> bool {
+    connection
+        .query_row(
+            "SELECT EXISTS(
+                SELECT 1 FROM auth_identities
+                WHERE user_id = ?1 AND verified_at > 0
+            )",
+            rusqlite::params![user_id],
+            |row| row.get::<_, i64>(0),
+        )
+        .unwrap_or(0)
+        == 1
+}
+
 fn touch_profile_last_seen(connection: &rusqlite::Connection, user_id: i64) {
     let now = crate::web::handlers::common::unix_now();
 
@@ -809,6 +851,14 @@ pub async fn api_chat_send(
 
     if users_are_blocked(&connection, user_id, other_user_id) {
         return json_error(StatusCode::FORBIDDEN, "user_blocked");
+    }
+
+    if !user_has_verified_identity(&connection, user_id) {
+        return json_error(StatusCode::FORBIDDEN, "verification_required");
+    }
+
+    if let Some(error) = chat_contact_gate_error(&connection, user_id, other_user_id) {
+        return json_error(StatusCode::FORBIDDEN, error);
     }
 
     let conversation_id = match conversation_id(&connection, user_id, other_user_id) {
