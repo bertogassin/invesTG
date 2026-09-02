@@ -1,13 +1,13 @@
 use super::common::{
-    bottom_nav, empty_state_card, escape_html, guest_mode_hint, icon, intent_kind_chips, kind_chip,
-    navigation_card, page_document, page_shell, premium_badge_html, profession_label,
-    resource_listing_label, resource_result_card, search_form_hero, search_people_cards,
-    section_head, simple_hero, static_asset, topbar, verified_badge_html,
+    back_navigation_card, bottom_nav, empty_state_card, escape_html, guest_mode_hint, icon,
+    intent_kind_chips, kind_chip, navigation_card, page_document, page_shell, premium_badge_html,
+    profession_label, resource_listing_label, resource_result_card, search_form_hero,
+    search_people_cards, section_head, simple_hero, static_asset, topbar, verified_badge_html,
 };
 use crate::geography::world;
 use std::collections::BTreeMap;
 
-fn search_page_href(q: &str, kind: &str, rubric: Option<&str>) -> String {
+fn search_page_href(q: &str, kind: &str, rubric: Option<&str>, city_id: Option<i64>) -> String {
     let mut href = String::from("/app/search?");
     let mut parts = Vec::new();
     if !q.trim().is_empty() {
@@ -18,6 +18,9 @@ fn search_page_href(q: &str, kind: &str, rubric: Option<&str>) -> String {
     }
     if let Some(rubric) = rubric.filter(|value| !value.is_empty()) {
         parts.push(format!("rubric={}", urlencoding::encode(rubric)));
+    }
+    if let Some(city_id) = city_id.filter(|value| *value > 0) {
+        parts.push(format!("city_id={city_id}"));
     }
     href.push_str(&parts.join("&"));
     if href.ends_with('?') {
@@ -30,6 +33,7 @@ fn search_rubric_chips(
     q: &str,
     kind: &str,
     active: Option<&crate::catalog::Rubric>,
+    city_id: Option<i64>,
 ) -> String {
     let filter_kind = match kind {
         "business" => Some(crate::catalog::RubricKind::Business),
@@ -43,13 +47,13 @@ fn search_rubric_chips(
     let mut chips = String::from(r#"<nav class="rm-kind-chips" aria-label="Рубрика">"#);
     chips.push_str(&kind_chip(
         active.is_none(),
-        &search_page_href(q, kind, None),
+        &search_page_href(q, kind, None, city_id),
         "Все",
     ));
     for rubric in crate::catalog::by_kind(filter_kind) {
         chips.push_str(&kind_chip(
             active.is_some_and(|item| item.id == rubric.id),
-            &search_page_href(q, kind, Some(rubric.id)),
+            &search_page_href(q, kind, Some(rubric.id), city_id),
             rubric.label,
         ));
     }
@@ -211,6 +215,307 @@ fn build_home_explore_index(
 // ============================================================
 // LUCIDE SVG
 // ============================================================
+
+pub fn render_geo_root(
+    users_count: i64,
+    online_count: i64,
+    resources_count: i64,
+    continents: Vec<(i64, String, i64)>,
+    guest_mode: bool,
+) -> String {
+    let cards = continents
+        .iter()
+        .map(|(id, name, countries)| {
+            navigation_card(
+                &format!("/app/map/continent/{id}"),
+                "globe",
+                name,
+                &format!("{countries} стран"),
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("");
+    let guest_hint = if guest_mode { guest_mode_hint() } else { "" };
+    let hero = format!(
+        r#"<section class="hero rm-map-hero">
+    <div class="eyebrow">{logo} GRABIT</div>
+    <h1>Глобальная карта</h1>
+    <p>Выберите континент и двигайтесь последовательно: страна, город, раздел и профессия.</p>
+    {guest_hint}
+    <div class="rm-map-stats">
+        <div><strong>{users_count}</strong><span>участников</span></div>
+        <div><strong>{online_count}</strong><span>онлайн</span></div>
+        <div><strong>{resources_count}</strong><span>объявлений</span></div>
+    </div>
+</section>"#,
+        logo = icon("globe"),
+    );
+    let content = format!(
+        r#"{head}<div class="grid rm-map-grid">{cards}</div>"#,
+        head = section_head("Континенты", "Все регионы мира без приоритетов", None),
+    );
+    let styles = r#"<style>
+.rm-map-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:20px}
+.rm-map-stats div{padding:12px 6px;border:1px solid rgba(232,204,150,.22);border-radius:15px;text-align:center;background:rgba(255,255,255,.025)}
+.rm-map-stats strong,.rm-map-stats span{display:block}.rm-map-stats strong{color:var(--gold-light);font-size:21px}.rm-map-stats span{margin-top:4px;color:var(--muted);font-size:9px;text-transform:uppercase}
+.rm-map-grid{align-items:stretch}
+</style>"#;
+    page_document(
+        "GRABIT · Глобальная карта",
+        styles,
+        "",
+        &format!("{}{}{}", topbar("Карта", "globe"), hero, content),
+        &bottom_nav("map"),
+        "",
+    )
+}
+
+pub fn render_geo_continent(
+    _continent_id: i64,
+    name: &str,
+    countries: Vec<(i64, String, i64)>,
+) -> String {
+    let cards = countries
+        .iter()
+        .map(|(id, country, cities)| {
+            navigation_card(
+                &format!("/app/map/country/{id}"),
+                "building",
+                country,
+                &format!("{cities} городов"),
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("");
+    let content = format!(
+        r#"{back}{head}<div class="grid">{cards}</div>"#,
+        back = back_navigation_card("/app", "Все континенты", "Назад к карте"),
+        head = section_head(
+            "Страны",
+            &format!("{} · по алфавиту", countries.len()),
+            Some(22)
+        ),
+    );
+    page_shell(
+        name,
+        &topbar("Карта", "globe"),
+        &simple_hero(
+            "globe",
+            "Континент",
+            name,
+            "Выберите страну для продолжения.",
+        ),
+        &content,
+        &bottom_nav("map"),
+    )
+}
+
+pub fn render_geo_country(
+    country_id: i64,
+    country: &str,
+    continent_id: i64,
+    continent: &str,
+    cities: Vec<(i64, String)>,
+    total: i64,
+) -> String {
+    let cards = cities
+        .iter()
+        .map(|(id, city)| navigation_card(&format!("/app/map/city/{id}"), "map-pin", city, country))
+        .collect::<Vec<_>>()
+        .join("");
+    let more = if cities.len() < total as usize {
+        format!(
+            r#"<button type="button" class="ui-button rm-map-more" id="rm-map-more" data-country-id="{country_id}" data-offset="{}">Показать следующие города</button>"#,
+            cities.len()
+        )
+    } else {
+        String::new()
+    };
+    let city_search = format!(
+        r#"<div class="search rm-catalog-search"><span aria-hidden="true">{icon}</span><input id="rm-map-city-search" type="search" autocomplete="off" placeholder="Найти город в этой стране" data-country-id="{country_id}"><button id="rm-map-city-clear" type="button" aria-label="Очистить поиск">×</button></div>"#,
+        icon = icon("search"),
+    );
+    let content = format!(
+        r#"{back}{head}{search}<div class="grid" id="rm-map-city-grid">{cards}</div>{more}<div class="rm-catalog-search-status" id="rm-map-city-status" aria-live="polite"></div><script src="{script}" defer></script>"#,
+        back = back_navigation_card(
+            &format!("/app/map/continent/{continent_id}"),
+            continent,
+            "Назад к странам",
+        ),
+        head = section_head("Города", &format!("{total} · по алфавиту"), Some(22)),
+        search = city_search,
+        script = static_asset("map-cities.js"),
+    );
+    page_shell(
+        country,
+        &topbar("Карта", "globe"),
+        &simple_hero(
+            "building",
+            continent,
+            country,
+            "Выберите город. Список загружается частями без изменения порядка.",
+        ),
+        &content,
+        &bottom_nav("map"),
+    )
+}
+
+pub fn render_geo_city(
+    city_id: i64,
+    city: &str,
+    country_id: i64,
+    country: &str,
+    _continent_id: i64,
+    continent: &str,
+    sectors: Vec<(String, String, i64)>,
+) -> String {
+    let category = |title: &str, subtitle: &str, query: &str, icon_name: &str| {
+        navigation_card(
+            &format!(
+                "/app/search?city_id={city_id}&q={}",
+                urlencoding::encode(query)
+            ),
+            icon_name,
+            title,
+            subtitle,
+        )
+    };
+    let sector_cards = sectors
+        .iter()
+        .map(|(key, name, count)| {
+            navigation_card(
+                &format!(
+                    "/app/map/city/{city_id}/sector/{}",
+                    urlencoding::encode(key)
+                ),
+                "briefcase",
+                name,
+                &format!("{count} профессий"),
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("");
+    let catalog_search = format!(
+        r#"<div class="search rm-catalog-search"><span aria-hidden="true">{icon}</span><input id="rm-city-catalog-search" type="search" autocomplete="off" placeholder="Что найти в этом городе?" data-city-id="{city_id}"><button id="rm-city-catalog-clear" type="button" aria-label="Очистить поиск">×</button></div>"#,
+        icon = icon("search"),
+    );
+    let content = format!(
+        r#"{back}{search}{search_status}{section_head}<div class="grid" id="rm-city-category-grid">{work}{services}{business}{housing}{transport}{education}{help}{other}</div>{profession_head}<div class="grid" id="rm-city-sector-grid">{sector_cards}</div><div class="grid" id="rm-city-profession-results"></div><script src="{catalog_script}" defer></script>"#,
+        back = back_navigation_card(
+            &format!("/app/map/country/{country_id}"),
+            country,
+            "Назад к городам"
+        ),
+        search = catalog_search,
+        search_status = r#"<div class="rm-catalog-search-status" id="rm-city-catalog-status" aria-live="polite"></div>"#,
+        section_head = section_head(
+            "Что вам нужно",
+            "Ищу или предлагаю — всё внутри города",
+            Some(22)
+        ),
+        work = category("Работа", "Вакансии и поиск работы", "работа", "briefcase"),
+        services = category(
+            "Услуги",
+            "Ищу специалиста или предлагаю услугу",
+            "услуги",
+            "user"
+        ),
+        business = category(
+            "Бизнес",
+            "Компании, партнёры и сотрудничество",
+            "бизнес",
+            "building"
+        ),
+        housing = category(
+            "Жильё",
+            "Сниму, сдам, куплю или продам",
+            "жильё",
+            "building"
+        ),
+        transport = category(
+            "Транспорт",
+            "Куплю, продам, аренда и перевозки",
+            "транспорт",
+            "map"
+        ),
+        education = category(
+            "Обучение",
+            "Курсы, преподаватели и ученики",
+            "обучение",
+            "briefcase"
+        ),
+        help = category("Помощь", "Нужна помощь или могу помочь", "помощь", "heart"),
+        other = category(
+            "Другое",
+            "Остальные предложения и запросы",
+            "другое",
+            "menu"
+        ),
+        profession_head = section_head("Профессии", "Выберите профессиональную отрасль", Some(28)),
+        catalog_script = static_asset("map-catalog-search.js"),
+    );
+    page_shell(
+        city,
+        &topbar("Карта", "globe"),
+        &simple_hero(
+            "map-pin",
+            &format!("{continent} · {country}"),
+            city,
+            "Все направления, объявления и профессии этого города.",
+        ),
+        &content,
+        &bottom_nav("map"),
+    )
+}
+
+pub fn render_geo_professions(
+    city_id: i64,
+    city: &str,
+    country: &str,
+    sector: &str,
+    professions: Vec<(String, String)>,
+) -> String {
+    let cards = professions
+        .iter()
+        .map(|(_, profession)| {
+            navigation_card(
+                &format!(
+                    "/app/search?city_id={city_id}&q={}",
+                    urlencoding::encode(profession)
+                ),
+                "user",
+                profession,
+                "Ищу или предлагаю",
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("");
+    let content = format!(
+        r#"{back}{head}<div class="grid">{cards}</div>"#,
+        back = back_navigation_card(
+            &format!("/app/map/city/{city_id}"),
+            city,
+            "Назад к разделам"
+        ),
+        head = section_head(
+            "Профессии",
+            &format!("{} · по алфавиту", professions.len()),
+            Some(22)
+        ),
+    );
+    page_shell(
+        sector,
+        &topbar("Карта", "globe"),
+        &simple_hero(
+            "briefcase",
+            country,
+            sector,
+            "Выберите профессию, затем нужное объявление или специалиста.",
+        ),
+        &content,
+        &bottom_nav("map"),
+    )
+}
 
 pub fn render_continents(
     users_count: i64,
@@ -806,6 +1111,7 @@ pub fn render_search(
     resources: Vec<crate::web::view_models::SearchResourceRow>,
     people: Vec<crate::web::view_models::SearchPersonRow>,
     guest_mode: bool,
+    city_id: Option<i64>,
 ) -> String {
     let guest_hint = if guest_mode { guest_mode_hint() } else { "" };
     let world_data = world();
@@ -862,7 +1168,7 @@ pub fn render_search(
     let rubric = rubric.trim();
     let active_rubric = crate::catalog::by_id(rubric);
     let search_href = |kind_value: &str, rubric_value: Option<&str>| -> String {
-        search_page_href(q, kind_value, rubric_value)
+        search_page_href(q, kind_value, rubric_value, city_id)
     };
     let kind_chips = intent_kind_chips(
         kind,
@@ -872,7 +1178,7 @@ pub fn render_search(
         &search_href("workers", active_rubric.map(|item| item.id)),
         &search_href("business", active_rubric.map(|item| item.id)),
     );
-    let rubric_chips = search_rubric_chips(q, kind, active_rubric);
+    let rubric_chips = search_rubric_chips(q, kind, active_rubric, city_id);
 
     let people_count = people.len();
     let people_section = if people.is_empty() {
@@ -1057,7 +1363,7 @@ pub fn render_search(
         for rubric in crate::catalog::all().iter().take(12) {
             chips.push_str(&kind_chip(
                 false,
-                &search_page_href("", "", Some(rubric.id)),
+                &search_page_href("", "", Some(rubric.id), city_id),
                 rubric.label,
             ));
         }
@@ -1139,6 +1445,7 @@ pub fn render_search(
             q,
             "Например: электрик, Ницца, вакансия...",
             kind,
+            city_id,
             &hero_extra,
         ),
         &content,

@@ -182,7 +182,7 @@ pub async fn app_cat(
 
     let mut resources = resources;
     if sort == "new" {
-        resources.sort_by(|a, b| b.0.cmp(&a.0));
+        resources.sort_by_key(|a| std::cmp::Reverse(a.0));
     } else {
         resources.sort_by(|a, b| {
             b.8.cmp(&a.8)
@@ -431,6 +431,7 @@ fn listing_add_query(params: &BTreeMap<String, String>) -> Option<String> {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn add_form_error(
     status: StatusCode,
     ci: usize,

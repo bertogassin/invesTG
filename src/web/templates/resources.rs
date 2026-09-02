@@ -247,11 +247,7 @@ pub fn render_category(params: RenderCategoryParams<'_>) -> String {
         format!(
             r#"{head}
 <div>{cards}</div>"#,
-            head = section_head(
-                "По профессии",
-                &format!("Найдено: {people_count}"),
-                None,
-            ),
+            head = section_head("По профессии", &format!("Найдено: {people_count}"), None,),
             cards = search_people_cards(&people),
         )
     };
@@ -1928,6 +1924,7 @@ pub struct AddResourceDraft<'a> {
     pub address: &'a str,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn render_add_resource(
     ci: usize,
     si: usize,
@@ -1964,10 +1961,10 @@ pub fn render_add_resource(
             )
         })
         .unwrap_or_default();
-    let title_value = draft.map(|value| value.title).unwrap_or("");
-    let description_value = draft.map(|value| value.description).unwrap_or("");
-    let contact_value = draft.map(|value| value.contact).unwrap_or("");
-    let address_value = draft.map(|value| value.address).unwrap_or("");
+    let title_value = draft.as_ref().map(|value| value.title).unwrap_or("");
+    let description_value = draft.as_ref().map(|value| value.description).unwrap_or("");
+    let contact_value = draft.as_ref().map(|value| value.contact).unwrap_or("");
+    let address_value = draft.as_ref().map(|value| value.address).unwrap_or("");
 
     let content = format!(
         r####"{error_html}

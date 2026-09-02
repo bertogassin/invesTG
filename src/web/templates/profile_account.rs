@@ -201,41 +201,7 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
     let safe_first_name = escape_html(first_name);
     let safe_last_name = escape_html(last_name);
     let safe_intent_text = escape_html(intent_text);
-    let selected_rubric = crate::catalog::resolve(category)
-        .map(|rubric| rubric.id)
-        .unwrap_or("");
-    let work_options = crate::catalog::by_kind(crate::catalog::RubricKind::Work)
-        .map(|rubric| {
-            let selected = if selected_rubric == rubric.id {
-                " selected"
-            } else {
-                ""
-            };
-            format!(
-                r#"                <option value="{id}"{selected}>{label}</option>"#,
-                id = escape_html(rubric.id),
-                selected = selected,
-                label = escape_html(rubric.label),
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
-    let business_options = crate::catalog::by_kind(crate::catalog::RubricKind::Business)
-        .map(|rubric| {
-            let selected = if selected_rubric == rubric.id {
-                " selected"
-            } else {
-                ""
-            };
-            format!(
-                r#"                <option value="{id}"{selected}>{label}</option>"#,
-                id = escape_html(rubric.id),
-                selected = selected,
-                label = escape_html(rubric.label),
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
+    let safe_category = escape_html(category);
 
     let intent_status_text = if safe_intent_text.is_empty() {
         "Статус не указан".to_string()
@@ -429,10 +395,13 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
         let availability_class = "available";
         let availability_text = "Внутренние сообщения доступны";
 
-        let category_display = crate::catalog::by_id(selected_rubric)
-            .map(|rubric| rubric.label)
-            .unwrap_or("Направление не выбрано");
-        let category_text = category_display;
+        let category_text = if let Some(rubric) = crate::catalog::resolve(category) {
+            rubric.label
+        } else if !category.trim().is_empty() {
+            category.trim()
+        } else {
+            "Направление не выбрано"
+        };
 
         let admin_navigation = if moderator_level > 0 {
             format!(
@@ -1021,18 +990,22 @@ body.light-theme .rm-command-icon {{
             Профессия или направление
         </div>
 
-        <select
+        <input
             id="profile-category"
-            class="ui-input"
-        >
-            <option value="">Не выбрано</option>
-            <optgroup label="Я работаю как">
-{work_options}
-            </optgroup>
-            <optgroup label="Мой бизнес">
-{business_options}
-            </optgroup>
-        </select>
+            type="text"
+            list="profile-profession-suggestions"
+            maxlength="80"
+            value="{safe_category}"
+            placeholder="Например: электрик, сантехник, дизайнер..."
+            autocomplete="off"
+         class="ui-input">
+
+        <datalist id="profile-profession-suggestions"></datalist>
+
+        <div class="card-meta rm-profile-profession-help">
+            Начните печатать — каталог понимает русские, английские и французские названия.
+            Если профессии ещё нет, её всё равно можно сохранить.
+        </div>
 
     </label>
 
@@ -1086,8 +1059,7 @@ body.light-theme .rm-command-icon {{
         settings_icon = icon("settings"),
         intent_status_text = intent_status_text,
         safe_intent_text = safe_intent_text,
-        work_options = work_options,
-        business_options = business_options,
+        safe_category = safe_category,
         home_city_select =
             home_city_select_html(home_continent_index, home_country_index, home_city_index,),
     );
@@ -1142,7 +1114,7 @@ body.light-theme .rm-command-icon {{
     function profileErrorText(code) {
         switch (code) {
             case "invalid_category":
-                return "Выберите профессию из списка.";
+                return "Проверьте название профессии.";
             case "invalid_intent":
                 return "Текст статуса слишком длинный.";
             case "invalid_duration":
@@ -1209,6 +1181,54 @@ body.light-theme .rm-command-icon {{
         homeCity.addEventListener("change", persistDraft);
     }
     window.addEventListener("beforeunload", persistDraft);
+
+    const professionList =
+        document.getElementById("profile-profession-suggestions");
+    let professionTimer = 0;
+    let professionRequest = 0;
+
+    async function loadProfessionSuggestions() {
+        const requestId = ++professionRequest;
+        const query = categoryInput.value.trim();
+
+        try {
+            const response = await fetch(
+                "/api/professions/suggest?q=" +
+                encodeURIComponent(query) +
+                "&limit=20",
+                { headers: { "Accept": "application/json" } }
+            );
+            const data = await response.json();
+
+            if (
+                requestId !== professionRequest ||
+                !professionList ||
+                !data.ok ||
+                !Array.isArray(data.items)
+            ) {
+                return;
+            }
+
+            professionList.replaceChildren();
+            data.items.forEach(function (item) {
+                const option = document.createElement("option");
+                option.value = item.name || "";
+                option.label = [item.sector, item.name_fr, item.name_en]
+                    .filter(Boolean)
+                    .join(" · ");
+                professionList.appendChild(option);
+            });
+        } catch (_) {
+            // Свободный ввод остаётся доступен без подсказок.
+        }
+    }
+
+    categoryInput.addEventListener("input", function () {
+        persistDraft();
+        window.clearTimeout(professionTimer);
+        professionTimer = window.setTimeout(loadProfessionSuggestions, 180);
+    });
+    categoryInput.addEventListener("focus", loadProfessionSuggestions);
 
     saveButton.addEventListener(
         "click",

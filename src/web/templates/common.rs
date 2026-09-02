@@ -7,7 +7,7 @@ pub fn escape_html(value: &str) -> String {
         .replace('\'', "&#39;")
 }
 
-pub const STATIC_ASSET_VERSION: &str = "4.9.48";
+pub const STATIC_ASSET_VERSION: &str = "4.9.51";
 
 pub fn profession_label(raw: &str) -> String {
     if crate::catalog::resolve(raw).is_some() {
@@ -420,46 +420,10 @@ body {
 
     color: var(--text);
 
-    background:
-        radial-gradient(
-            circle at 12% 0%,
-            rgba(126, 212, 228, .20),
-            transparent 40%
-        ),
-        radial-gradient(
-            circle at 88% 8%,
-            rgba(232, 204, 150, .18),
-            transparent 36%
-        ),
-        radial-gradient(
-            circle at 50% 100%,
-            rgba(111, 232, 184, .07),
-            transparent 42%
-        ),
-        linear-gradient(
-            145deg,
-            var(--bg) 0%,
-            var(--bg-soft) 45%,
-            var(--bg) 100%
-        );
+    background: var(--bg-soft);
 }
 
-body::before {
-    content: "";
-    position: fixed;
-    inset: 0;
-    pointer-events: none;
-
-    background:
-        linear-gradient(
-            120deg,
-            transparent 0%,
-            rgba(0,0,0,.018) 50%,
-            transparent 100%
-        );
-
-    opacity: .5;
-}
+body::before { display: none; }
 
 .page {
     width: min(100% - 32px, 900px);
@@ -685,6 +649,27 @@ body::before {
 
 .search input::placeholder {
     color: var(--muted);
+}
+
+.rm-catalog-search {
+    margin: 0 0 18px;
+}
+
+.rm-catalog-search button {
+    flex: 0 0 auto;
+    border: 0;
+    padding: 6px 8px;
+    color: var(--muted);
+    background: transparent;
+    font: inherit;
+    cursor: pointer;
+}
+
+.rm-catalog-search-status {
+    min-height: 20px;
+    margin: -8px 4px 14px;
+    color: var(--muted);
+    font-size: 12px;
 }
 
 /* -----------------------------------------------------------
@@ -3960,7 +3945,7 @@ pub(crate) struct AuthPageParams<'a> {
 
 pub(crate) fn auth_support_scripts() -> String {
     format!(
-        r#"<script src="{auth_forms_js}" defer></script>"#,
+        r#"<script src="{auth_forms_js}"></script>"#,
         auth_forms_js = static_asset("auth-forms.js"),
     )
 }
@@ -4180,6 +4165,17 @@ pub(crate) fn navigation_card(href: &str, icon_name: &str, title: &str, meta: &s
         title,
         meta,
         trailing_html: None,
+    })
+}
+
+pub(crate) fn back_navigation_card(href: &str, title: &str, meta: &str) -> String {
+    extended_navigation_card(ExtendedNavigationCardParams {
+        id: None,
+        href,
+        icon_html: icon("chevron-left"),
+        title,
+        meta,
+        trailing_html: Some(""),
     })
 }
 
@@ -5630,6 +5626,7 @@ pub(crate) fn simple_hero(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn search_form_hero(
     eyebrow: &str,
     title: &str,
@@ -5637,6 +5634,7 @@ pub(crate) fn search_form_hero(
     query: &str,
     placeholder: &str,
     kind: &str,
+    city_id: Option<i64>,
     extra_html: &str,
 ) -> String {
     let kind_field = if kind.trim().is_empty() {
@@ -5647,6 +5645,10 @@ pub(crate) fn search_form_hero(
             escape_html(kind.trim()),
         )
     };
+    let city_field = city_id
+        .filter(|value| *value > 0)
+        .map(|value| format!(r#"<input type="hidden" name="city_id" value="{value}">"#))
+        .unwrap_or_default();
 
     format!(
         r#"<section class="hero">
@@ -5665,6 +5667,7 @@ pub(crate) fn search_form_hero(
           class="search">
         {search_input_icon}
         {kind_field}
+        {city_field}
 
         <input
             name="q"
@@ -5680,6 +5683,7 @@ pub(crate) fn search_form_hero(
         search_icon = icon("search"),
         search_input_icon = icon("search"),
         kind_field = kind_field,
+        city_field = city_field,
         extra_html = extra_html,
         eyebrow = escape_html(eyebrow),
         title = escape_html(title),

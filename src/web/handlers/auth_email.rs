@@ -631,7 +631,7 @@ pub async fn register_page(Query(query): Query<AuthNextQuery>) -> Html<String> {
         <label class="rm-auth-label" for="password-input">Пароль</label>
         <div class="rm-auth-password-row">
             <input id="password-input" class="ui-input rm-auth-input" type="password" autocomplete="new-password" maxlength="128" placeholder="Минимум 8 символов">
-            <button id="password-toggle" type="button" class="rm-auth-password-toggle" aria-label="ПShow пароль">Показать</button>
+            <button id="password-toggle" type="button" class="rm-auth-password-toggle" aria-label="Показать пароль">Показать</button>
         </div>
 
         <label class="rm-auth-label" for="password-confirm-input">Повторите пароль</label>

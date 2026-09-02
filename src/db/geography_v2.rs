@@ -190,6 +190,10 @@ pub fn initialize_connection(connection: &mut Connection) -> Result<()> {
             "source_modified_at",
             "ALTER TABLE geo_cities ADD COLUMN source_modified_at TEXT NOT NULL DEFAULT ''",
         ),
+        (
+            "place_kind",
+            "ALTER TABLE geo_cities ADD COLUMN place_kind TEXT NOT NULL DEFAULT 'city'",
+        ),
     ] {
         add_column_if_missing(connection, "geo_cities", column, alter_sql)?;
     }
@@ -410,6 +414,17 @@ pub fn initialize_connection(connection: &mut Connection) -> Result<()> {
             [],
         )?;
     }
+
+    transaction.execute(
+        "UPDATE geo_cities
+         SET place_kind='district'
+         WHERE feature_code='PPLX'
+            OR (
+                country_id=(SELECT id FROM geo_countries WHERE iso2='FR')
+                AND name_ascii GLOB 'Paris [0-9]*'
+            )",
+        [],
+    )?;
 
     transaction.execute(
         "UPDATE resources
