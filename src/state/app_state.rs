@@ -9,13 +9,22 @@ use std::{
 };
 use tokio::sync::{broadcast, Mutex};
 
+fn serialize_realtime_user_id<S>(value: &i64, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    serializer.serialize_str(&value.to_string())
+}
+
 #[derive(Clone, Debug, Serialize)]
 pub struct ChatRealtimeEvent {
     pub event_id: u64,
     pub kind: String,
     pub conversation_id: i64,
     pub message_id: i64,
+    #[serde(serialize_with = "serialize_realtime_user_id")]
     pub user1_id: i64,
+    #[serde(serialize_with = "serialize_realtime_user_id")]
     pub user2_id: i64,
 }
 
@@ -29,9 +38,13 @@ impl ChatRealtimeEvent {
 pub struct ChatTypingEvent {
     pub event_id: u64,
     pub kind: String,
+    #[serde(serialize_with = "serialize_realtime_user_id")]
     pub actor_user_id: i64,
+    #[serde(serialize_with = "serialize_realtime_user_id")]
     pub other_user_id: i64,
+    #[serde(serialize_with = "serialize_realtime_user_id")]
     pub user1_id: i64,
+    #[serde(serialize_with = "serialize_realtime_user_id")]
     pub user2_id: i64,
 }
 
@@ -205,6 +218,23 @@ mod tests {
         assert!(event.is_visible_to(9));
         assert!(!event.is_visible_to(3));
         assert!(!event.is_visible_to(4));
+    }
+
+    #[test]
+    fn realtime_user_ids_serialize_without_javascript_rounding() {
+        let event = ChatTypingEvent {
+            event_id: 1,
+            kind: "typing.start".to_string(),
+            actor_user_id: 4_000_000_000_000_000_007,
+            other_user_id: 4_000_000_000_000_000_009,
+            user1_id: 4_000_000_000_000_000_007,
+            user2_id: 4_000_000_000_000_000_009,
+        };
+
+        let value = serde_json::to_value(event).expect("serialize typing event");
+
+        assert_eq!(value["actor_user_id"], "4000000000000000007");
+        assert_eq!(value["other_user_id"], "4000000000000000009");
     }
 
     #[test]

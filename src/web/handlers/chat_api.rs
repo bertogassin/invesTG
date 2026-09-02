@@ -66,6 +66,7 @@ struct MessageReaction {
 #[derive(Debug, Serialize)]
 struct ChatApiMessage {
     id: i64,
+    #[serde(serialize_with = "serialize_user_id")]
     sender_user_id: i64,
     message: String,
     is_mine: bool,
@@ -73,6 +74,7 @@ struct ChatApiMessage {
     read_at: i64,
     created_at: i64,
     reply_to_message_id: Option<i64>,
+    #[serde(serialize_with = "serialize_optional_user_id")]
     reply_sender_user_id: Option<i64>,
     reply_message: String,
     edited_at: i64,
@@ -88,6 +90,23 @@ struct ChatApiMessage {
     attachment_url: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     reactions: Vec<MessageReaction>,
+}
+
+fn serialize_user_id<S>(value: &i64, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    serializer.serialize_str(&value.to_string())
+}
+
+fn serialize_optional_user_id<S>(value: &Option<i64>, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    match value {
+        Some(value) => serializer.serialize_some(&value.to_string()),
+        None => serializer.serialize_none(),
+    }
 }
 
 const CHAT_REACTION_EMOJIS: &[&str] = &["❤️", "👍", "😂", "😮", "😢", "🙏"];

@@ -2254,3 +2254,52 @@ body.light-theme.chat-keyboard-open #chat-form.chat-composer {
             rgba(246, 242, 233, .99)
         ) !important;
 }
+
+/* ResursMap 4.9.53: single-flow composer and exact chat IDs */
+
+/*
+ * Composer belongs to the chat flex column.
+ * This overrides the legacy fixed layer that caused doubled panels.
+ */
+#chat-form.chat-composer,
+body.chat-keyboard-open #chat-form.chat-composer {
+    position: relative !important;
+    z-index: 20 !important;
+    left: auto !important;
+    right: auto !important;
+    top: auto !important;
+    bottom: auto !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    transform: none !important;
+    flex: 0 0 auto !important;
+}
+
+.chat-shell {
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+#chat-messages,
+.chat-messages-panel {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    padding-bottom: 12px !important;
+    scroll-padding-bottom: 18px !important;
+}
+
+body.chat-keyboard-open #chat-messages,
+body.chat-keyboard-open .chat-messages-panel {
+    padding-bottom: 10px !important;
+    scroll-padding-bottom: 14px !important;
+}
+
+@media (max-width: 540px) {
+    #chat-form.chat-composer,
+    body.chat-keyboard-open #chat-form.chat-composer {
+        width: 100% !important;
+        max-width: 100% !important;
+        border-radius: 18px !important;
+    }
+}

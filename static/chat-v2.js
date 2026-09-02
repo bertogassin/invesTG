@@ -2885,13 +2885,14 @@
                 quote.dataset.targetMessageId =
                     String(message.reply_to_message_id);
 
-                var replySender =
-                    Number(message.reply_sender_user_id || 0);
+                var replySender = String(
+                    message.reply_sender_user_id || ""
+                ).trim();
                 var author = "Сообщение";
 
-                if (replySender > 0) {
+                if (replySender) {
                     author =
-                        String(replySender) === otherUserId
+                        replySender === otherUserId
                             ? "Собеседник"
                             : "Вы";
                 }
@@ -2947,7 +2948,7 @@
                 sender_user_id:
                     row.dataset.mine === "1"
                         ? 0
-                        : Number(otherUserId),
+                        : otherUserId,
                 message:
                     row.dataset.messageText ||
                     (body ? body.textContent : ""),
@@ -2961,7 +2962,7 @@
                 reply_message:
                     row.dataset.replyMessage || "",
                 reply_sender_user_id:
-                    Number(row.dataset.replySender || 0) ||
+                    String(row.dataset.replySender || "").trim() ||
                     null,
                 read_at:
                     Number(row.dataset.readAt || 0),
@@ -3003,7 +3004,7 @@
                     sender_user_id:
                         row.dataset.mine === "1"
                             ? 0
-                            : Number(otherUserId),
+                            : otherUserId,
                     message:
                         row.dataset.messageText ||
                         (body ? body.textContent : ""),
@@ -3017,7 +3018,7 @@
                     reply_message:
                         row.dataset.replyMessage || "",
                     reply_sender_user_id:
-                        Number(row.dataset.replySender || 0) ||
+                        String(row.dataset.replySender || "").trim() ||
                         null,
                     read_at:
                         Number(row.dataset.readAt || 0),
@@ -3116,8 +3117,9 @@
 
             window.ResursMapChatReply = {
                 id: Number(message.id),
-                senderUserId:
-                    Number(message.sender_user_id),
+                senderUserId: String(
+                    message.sender_user_id || ""
+                ).trim(),
                 message: String(message.message || "")
             };
 

@@ -31,11 +31,11 @@
             return;
         }
 
-        var otherUserId =
-            Number(history.dataset.otherUserId || 0);
+        var otherUserId = String(
+            history.dataset.otherUserId || ""
+        ).trim();
 
-        if (!Number.isSafeInteger(otherUserId) ||
-            otherUserId <= 0) {
+        if (!/^[1-9][0-9]{0,18}$/.test(otherUserId)) {
             return;
         }
 
