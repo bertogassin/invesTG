@@ -2121,3 +2121,136 @@ body.light-theme .chat-secondary-button {
     color: var(--text);
     border-color: rgba(26, 29, 33, .12);
 }
+
+/* ResursMap 4.9.52: mobile keyboard and message bubble fix */
+
+/*
+ * visualViewport сообщает фактически видимую область над клавиатурой.
+ * Убираем старые минимальные высоты только во время ввода.
+ */
+body.chat-keyboard-open .chat-shell {
+    height: var(--chat-shell-visible-height, 360px) !important;
+    min-height: 0 !important;
+    max-height: var(--chat-shell-visible-height, 360px) !important;
+    margin-bottom: 0 !important;
+    overflow: hidden !important;
+}
+
+body.chat-keyboard-open #chat-messages,
+body.chat-keyboard-open .chat-messages-panel {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    flex: 1 1 auto !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    padding-bottom:
+        calc(
+            var(--chat-composer-height, 112px)
+            + 24px
+        ) !important;
+    scroll-padding-bottom:
+        calc(
+            var(--chat-composer-height, 112px)
+            + 24px
+        ) !important;
+    overscroll-behavior: contain;
+}
+
+/* Когда сообщения уже есть, приветственный пустой блок не показывается. */
+#chat-messages:has(.chat-message-row) .chat-empty-thread,
+.chat-messages-panel:has(.chat-message-row) .chat-empty-thread {
+    display: none !important;
+}
+
+/*
+ * Панель ввода остаётся над клавиатурой, но получает непрозрачную основу:
+ * содержимое сообщений больше не просвечивает сквозь неё.
+ */
+body.chat-keyboard-open #chat-form.chat-composer {
+    background:
+        linear-gradient(
+            155deg,
+            rgba(24, 29, 38, .985),
+            rgba(17, 21, 29, .99)
+        ) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    box-shadow:
+        0 -10px 34px rgba(5, 7, 11, .48),
+        0 14px 34px rgba(0, 0, 0, .38),
+        inset 0 1px 0 rgba(255, 255, 255, .055) !important;
+}
+
+/* Безопасная геометрия пузырей и текста. */
+.chat-message-row {
+    min-width: 0 !important;
+    padding-inline: 6px !important;
+}
+
+.chat-message-row .chat-bubble {
+    box-sizing: border-box !important;
+    width: fit-content;
+    min-width: 54px;
+    max-width: min(86%, 620px) !important;
+}
+
+/* Текстовые сообщения получают собственные внутренние поля. */
+.chat-message-row .chat-bubble:has(
+    .chat-message-body:not(.chat-message-body--voice)
+) {
+    padding: 10px 14px 8px !important;
+}
+
+.chat-message-body:not(.chat-message-body--voice) {
+    display: block;
+    min-width: 0;
+    max-width: 100%;
+    padding: 0 2px !important;
+    font-size: 15px;
+    line-height: 1.42;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere !important;
+    word-break: break-word !important;
+    hyphens: auto;
+}
+
+.chat-message-row .chat-message-meta {
+    box-sizing: border-box;
+    min-width: 0;
+    margin-top: 7px;
+    padding-top: 5px;
+    padding-inline: 2px;
+}
+
+/* Фото и голос сохраняют собственную геометрию. */
+.chat-bubble:has(.chat-message-image),
+.chat-bubble:has(.chat-message-body--voice) {
+    max-width: min(90%, 620px) !important;
+}
+
+@media (max-width: 540px) {
+    body.chat-keyboard-open #chat-form.chat-composer {
+        width: calc(100vw - 12px) !important;
+    }
+
+    .chat-message-row .chat-bubble {
+        max-width: calc(100% - 30px) !important;
+    }
+
+    .chat-message-row .chat-bubble:has(
+        .chat-message-body:not(.chat-message-body--voice)
+    ) {
+        padding: 10px 13px 8px !important;
+    }
+}
+
+html.light-theme body.chat-keyboard-open #chat-form.chat-composer,
+body.light-theme.chat-keyboard-open #chat-form.chat-composer {
+    background:
+        linear-gradient(
+            155deg,
+            rgba(255, 255, 255, .99),
+            rgba(246, 242, 233, .99)
+        ) !important;
+}

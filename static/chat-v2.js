@@ -367,6 +367,47 @@
                 "--chat-keyboard-inset",
                 Math.round(bottomInset) + "px"
             );
+
+            var keyboardOpen =
+                bottomInset > 80 ||
+                height < window.innerHeight * 0.78;
+
+            document.body.classList.toggle(
+                "chat-keyboard-open",
+                keyboardOpen
+            );
+
+            var shell =
+                document.querySelector(".chat-shell");
+
+            if (shell) {
+                var visibleBottom =
+                    offsetTop + height;
+
+                var shellTop =
+                    shell.getBoundingClientRect().top;
+
+                var shellVisibleHeight =
+                    Math.max(
+                        220,
+                        visibleBottom - shellTop - 6
+                    );
+
+                document.documentElement.style.setProperty(
+                    "--chat-shell-visible-height",
+                    Math.round(shellVisibleHeight) + "px"
+                );
+            }
+
+            if (
+                keyboardOpen &&
+                document.activeElement === input
+            ) {
+                window.requestAnimationFrame(function () {
+                    messages.scrollTop =
+                        messages.scrollHeight;
+                });
+            }
         }
 
         function autoResize() {
