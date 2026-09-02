@@ -915,14 +915,12 @@
         }
 
         async function pollMessages(force) {
+            // WebSocket accelerates synchronization, but it must never
+            // disable fallback polling. A missed realtime event would
+            // otherwise leave a stored message invisible until reconnect.
             if (
                 polling ||
-                document.visibilityState === "hidden" ||
-                (
-                    force !== true &&
-                    document.documentElement.dataset
-                        .chatRealtime === "online"
-                )
+                document.visibilityState === "hidden"
             ) {
                 return;
             }
@@ -1129,6 +1127,13 @@
                         }
                     );
                     if (data.message) {
+                        // Keep the optimistic row and the stored message
+                        // linked even if an older server omits this field.
+                        if (!data.message.client_message_id) {
+                            data.message.client_message_id =
+                                item.clientMessageId;
+                        }
+
                         if (
                             !data.message.reply_to_message_id &&
                             item.replyToMessageId

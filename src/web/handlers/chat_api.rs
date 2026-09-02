@@ -1203,7 +1203,8 @@ pub async fn api_chat_send(
                 "reply_sender_user_id": null,
                 "reply_message": "",
                 "edited_at": 0,
-                "deleted_at": 0
+                "deleted_at": 0,
+                "client_message_id": client_message_id
             }
         })),
     )
