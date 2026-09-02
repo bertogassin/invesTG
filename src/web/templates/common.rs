@@ -7,7 +7,7 @@ pub fn escape_html(value: &str) -> String {
         .replace('\'', "&#39;")
 }
 
-pub const STATIC_ASSET_VERSION: &str = "4.9.57";
+pub const STATIC_ASSET_VERSION: &str = "4.9.58";
 
 pub fn profession_label(raw: &str) -> String {
     if crate::catalog::resolve(raw).is_some() {
@@ -3895,6 +3895,21 @@ pub(crate) fn page_document(
 
 <body>
 
+<style>
+.rm-version-footer {{
+    width: 100%;
+    margin: 18px auto 86px;
+    padding: 8px 16px;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.3;
+    text-align: center;
+    letter-spacing: .04em;
+    opacity: .82;
+}}
+</style>
+
 {body_before_main}
 
 <main class="page">
@@ -3902,6 +3917,11 @@ pub(crate) fn page_document(
 {main}
 
 </main>
+
+<footer class="rm-version-footer"
+        aria-label="Версия приложения">
+    ResursMap · v{asset_version}
+</footer>
 
 {bottom_nav}
 

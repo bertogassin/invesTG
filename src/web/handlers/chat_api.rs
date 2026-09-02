@@ -813,7 +813,11 @@ pub async fn api_chat_messages(
 
     let mut messages = match rows_result {
         Ok(messages) => messages,
-        Err(_) => {
+        Err(error) => {
+            eprintln!(
+                "chat message query failed for user {} and peer {}: {}",
+                user_id, other_user_id, error
+            );
             return json_error(StatusCode::INTERNAL_SERVER_ERROR, "message_query_failed");
         }
     };

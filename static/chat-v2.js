@@ -771,6 +771,7 @@
         function appendMessages(messages) {
             var shouldStick = nearBottom();
             var incomingCount = 0;
+            var insertedCount = 0;
 
             messages.forEach(function (message) {
                 var id = Number(message.id);
@@ -794,6 +795,7 @@
                         : id;
                 lastMessageId =
                     Math.max(lastMessageId, id);
+                insertedCount += 1;
 
                 if (!message.is_mine) {
                     incomingCount += 1;
@@ -804,6 +806,14 @@
                 String(firstMessageId);
             history.dataset.lastMessageId =
                 String(lastMessageId);
+
+            if (insertedCount > 0) {
+                history.querySelectorAll(
+                    ".chat-empty-thread"
+                ).forEach(function (emptyState) {
+                    emptyState.remove();
+                });
+            }
 
             if (shouldStick || incomingCount > 0) {
                 scrollToBottom(

@@ -228,6 +228,7 @@
             try {
                 var response = await fetch("/api/chat/conversations", {
                     credentials: "same-origin",
+                    cache: "no-store",
                     headers: {
                         Accept: "application/json",
                     },
@@ -391,16 +392,12 @@
         function startPollingFallback() {
             window.clearInterval(pollTimer);
 
+            // WebSocket gives immediate updates, but it must never
+            // disable the reliable fallback. Mobile networks can keep a
+            // socket formally open after realtime events stop arriving.
             pollTimer = window.setInterval(function () {
-                if (
-                    socket &&
-                    socket.readyState === WebSocket.OPEN
-                ) {
-                    return;
-                }
-
                 refreshInbox();
-            }, 60000);
+            }, 5000);
         }
 
         window.addEventListener("visibilitychange", function () {
