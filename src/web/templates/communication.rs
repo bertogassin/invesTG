@@ -914,109 +914,20 @@ pub fn render_chat(
         ↓
     </button>
 
+    {contact_gate}
+
+    {composer}
+
 </section>
 
-{contact_gate}
 
-{composer}
-
-<!-- legacy composer removed
-<form id="chat-form"
-      class="ui-form chat-composer">
-
-    <div id="chat-reply-bar"
-         class="chat-reply-bar"
-         hidden>
-        <div class="chat-reply-accent"></div>
-        <div class="chat-reply-copy">
-            <strong>Ответ</strong>
-            <span id="chat-reply-text"></span>
-        </div>
-        <button id="chat-reply-close"
-                type="button"
-                aria-label="Отменить ответ">
-            ×
-        </button>
-    </div>
-
-    <div id="chat-forward-bar"
-         class="chat-forward-bar"
-         hidden>
-        <div class="chat-forward-accent"></div>
-        <div class="chat-reply-copy">
-            <strong>Переслать</strong>
-            <span id="chat-forward-text"></span>
-        </div>
-        <button id="chat-forward-close"
-                type="button"
-                aria-label="Отменить пересылку">
-            ×
-        </button>
-    </div>
-
-    <div class="chat-composer-main">
-        <textarea
-            id="chat-input"
-            name="message"
-            rows="1"
-            maxlength="2000"
-            required
-            autocomplete="off"
-            enterkeyhint="send"
-            aria-label="Текст сообщения"
-            placeholder="Сообщение…"
-            class="ui-textarea chat-input"></textarea>
-
-        <button id="chat-clear"
-                type="button"
-                class="chat-clear-button"
-                aria-label="Очистить сообщение"
-                hidden>
-            ×
-        </button>
-    </div>
-
-    <input type="file"
-           id="chat-image-input"
-           accept="image/jpeg,image/png,image/webp"
-           hidden>
-
-    <button id="chat-voice-btn"
-            type="button"
-            class="chat-voice-btn"
-            aria-label="Голосовое сообщение"
-            title="Удерживайте для записи">
-        Голос
-    </button>
-
-    <button id="chat-image-btn"
-            type="button"
-            class="chat-image-btn"
-            aria-label="Отправить фото">
-        Фото
-    </button>
-
-    <button id="chat-send"
-            type="submit"
-            class="ui-button chat-send-button"
-            aria-label="Отправить сообщение">
-        Отправить
-    </button>
-
-    <div class="chat-composer-footer">
-        <span id="chat-send-state">
-            Enter — отправить · Shift+Enter — новая строка
-        </span>
-        <span id="chat-counter">0 / 2000</span>
-    </div>
-</form>
--->
-
+<script src="{chat_voice_js}" defer></script>
 <script src="{chat_js}" defer></script>
 <script src="{chat_blocks_js}" defer></script>
 
 "#,
             chat_css = static_asset("chat-v2.css"),
+            chat_voice_js = static_asset("chat-voice-player.js"),
             chat_js = static_asset("chat-v2.js"),
             chat_blocks_js = static_asset("chat-blocks.js"),
             other_user_id = other_user_id,
@@ -1064,7 +975,7 @@ pub fn render_chat(
 </section>
 
 {content}"####,
-        back_link = back_link("/app/messages", "Назад", "chevron"),
+        back_link = back_link("/app/messages", "Назад", "arrow-left"),
         user_icon = icon("user"),
         display_name = display_name,
         subtitle = subtitle,

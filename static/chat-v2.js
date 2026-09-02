@@ -1572,18 +1572,76 @@
         }
 
         if (voiceBtn) {
-            voiceBtn.addEventListener("pointerdown", function (event) {
-                event.preventDefault();
-                startVoiceRecording();
-            });
+            var voicePointerId = null;
 
-            ["pointerup", "pointerleave", "pointercancel"].forEach(
-                function (eventName) {
-                    voiceBtn.addEventListener(eventName, function () {
-                        if (voiceRecording) {
-                            stopVoiceRecording(true);
-                        }
-                    });
+            voiceBtn.addEventListener(
+                "pointerdown",
+                function (event) {
+                    if (
+                        event.pointerType === "mouse" &&
+                        event.button !== 0
+                    ) {
+                        return;
+                    }
+
+                    event.preventDefault();
+                    voicePointerId = event.pointerId;
+
+                    try {
+                        voiceBtn.setPointerCapture(
+                            event.pointerId
+                        );
+                    } catch (_) {}
+
+                    if (navigator.vibrate) {
+                        navigator.vibrate(12);
+                    }
+
+                    startVoiceRecording();
+                }
+            );
+
+            voiceBtn.addEventListener(
+                "pointerup",
+                function (event) {
+                    if (
+                        voicePointerId !== null &&
+                        event.pointerId !== voicePointerId
+                    ) {
+                        return;
+                    }
+
+                    event.preventDefault();
+
+                    if (voiceRecording) {
+                        stopVoiceRecording(true);
+                    }
+
+                    if (navigator.vibrate) {
+                        navigator.vibrate([8, 24, 12]);
+                    }
+
+                    voicePointerId = null;
+                }
+            );
+
+            voiceBtn.addEventListener(
+                "pointercancel",
+                function (event) {
+                    event.preventDefault();
+
+                    if (voiceRecording) {
+                        stopVoiceRecording(false);
+                    }
+
+                    voicePointerId = null;
+                }
+            );
+
+            voiceBtn.addEventListener(
+                "contextmenu",
+                function (event) {
+                    event.preventDefault();
                 }
             );
         }
