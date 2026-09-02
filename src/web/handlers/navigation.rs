@@ -680,10 +680,7 @@ pub async fn app_search(
         };
 
         let text_terms = search_text_terms(q, &location_matches);
-        let fts_terms: Vec<String> = text_terms
-            .iter()
-            .map(|term| format!("{}*", term))
-            .collect();
+        let fts_terms: Vec<String> = text_terms.iter().map(|term| format!("{}*", term)).collect();
 
         let fts_source = if text_terms.is_empty() {
             q.to_string()

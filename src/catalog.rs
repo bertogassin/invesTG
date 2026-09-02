@@ -311,7 +311,10 @@ pub fn resolve(raw: &str) -> Option<&'static Rubric> {
         return None;
     }
 
-    if let Some(rubric) = RUBRICS.iter().find(|rubric| rubric_matches(rubric, &needle)) {
+    if let Some(rubric) = RUBRICS
+        .iter()
+        .find(|rubric| rubric_matches(rubric, &needle))
+    {
         return Some(rubric);
     }
 

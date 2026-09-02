@@ -13,7 +13,17 @@ use axum::{
 };
 use serde_json::json;
 
-type PublicProfileRow = (i64, String, String, String, String, i64, String, i64, String);
+type PublicProfileRow = (
+    i64,
+    String,
+    String,
+    String,
+    String,
+    i64,
+    String,
+    i64,
+    String,
+);
 type MeProfileRow = (
     String,
     String,

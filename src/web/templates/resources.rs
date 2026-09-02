@@ -30,10 +30,7 @@ fn category_list_href(
     let base = if category.eq_ignore_ascii_case("all") {
         format!("/app/{ci}/{si}/{zi}/all")
     } else {
-        format!(
-            "/app/{ci}/{si}/{zi}/cat/{}",
-            urlencoding::encode(category)
-        )
+        format!("/app/{ci}/{si}/{zi}/cat/{}", urlencoding::encode(category))
     };
     let mut parts = Vec::new();
     match listing_type {
@@ -739,7 +736,7 @@ pub fn render_resource_profile(params: RenderResourceProfileParams<'_>) -> Strin
         String::new()
     } else {
         format!(
-        r####"<script>
+            r####"<script>
 (function () {{
     const resourceId = {id};
 
@@ -1007,8 +1004,8 @@ pub fn render_resource_profile(params: RenderResourceProfileParams<'_>) -> Strin
     }});
 }})();
 </script>"####,
-        id = id,
-    )
+            id = id,
+        )
     };
 
     page_document(
@@ -1865,10 +1862,7 @@ pub fn render_add_rubric_picker(
             heading,
             "Один список для поиска и публикации — без свободного ввода.",
         ),
-        &format!(
-            r#"<div class="grid">{cards}</div>"#,
-            cards = cards
-        ),
+        &format!(r#"<div class="grid">{cards}</div>"#, cards = cards),
         &bottom_nav("map"),
     )
 }
@@ -1894,7 +1888,11 @@ fn rubric_select_html(selected: &str, kind: Option<crate::catalog::RubricKind>) 
             escape_html(group_label)
         ));
         for rubric in crate::catalog::by_kind(group_kind) {
-            let selected_attr = if selected == rubric.id { " selected" } else { "" };
+            let selected_attr = if selected == rubric.id {
+                " selected"
+            } else {
+                ""
+            };
             options.push_str(&format!(
                 r#"<option value="{id}"{selected_attr}>{label}</option>"#,
                 id = escape_html(rubric.id),

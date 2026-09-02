@@ -239,8 +239,7 @@ pub async fn chat_page(
     let mut messages: Vec<crate::web::view_models::ChatMessageRow> = if conversation_id <= 0 {
         Vec::new()
     } else {
-        db
-        .prepare(
+        db.prepare(
             "SELECT
                 messages.id,
                 messages.sender_user_id,

@@ -159,18 +159,19 @@ pub async fn app_cat(
             stmt.query_map(
                 rusqlite::params![ci as i64, si as i64, zi as i64, rubric_id],
                 |row| {
-                Ok((
-                    row.get(0)?,
-                    row.get(1)?,
-                    row.get(2)?,
-                    row.get(3)?,
-                    row.get(4)?,
-                    row.get(5)?,
-                    row.get(6)?,
-                    row.get(7)?,
-                    row.get(8)?,
-                ))
-            })?
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                        row.get(5)?,
+                        row.get(6)?,
+                        row.get(7)?,
+                        row.get(8)?,
+                    ))
+                },
+            )?
             .collect::<Result<Vec<_>, _>>()
         })
         .unwrap_or_default()
@@ -305,8 +306,9 @@ pub async fn resource_profile(
             rubric,
         )) => {
             let is_public = is_active != 0 && moderation_status == "approved";
-            let is_owner = verify_authenticated_user(&state, &headers)
-                .is_some_and(|user| !owner_client_id.is_empty() && user.client_id == owner_client_id);
+            let is_owner = verify_authenticated_user(&state, &headers).is_some_and(|user| {
+                !owner_client_id.is_empty() && user.client_id == owner_client_id
+            });
 
             if !is_public && !is_owner {
                 return Html(templates::status_page(
@@ -501,7 +503,10 @@ pub async fn add_resource(
     let section_ok = matches!(
         (k.trim().to_ascii_lowercase().as_str(), rubric.kind),
         ("work", crate::catalog::RubricKind::Work)
-            | ("business" | "services", crate::catalog::RubricKind::Business)
+            | (
+                "business" | "services",
+                crate::catalog::RubricKind::Business
+            )
     );
     if !section_ok {
         return add_form_error(
@@ -638,10 +643,8 @@ pub async fn add_resource(
         }
     };
 
-    let listing_type = crate::catalog::listing_type_for_intent(
-        rubric.kind,
-        form.listing_type.as_deref(),
-    );
+    let listing_type =
+        crate::catalog::listing_type_for_intent(rubric.kind, form.listing_type.as_deref());
 
     let city_id: Option<i64> = db
         .query_row(
@@ -986,7 +989,8 @@ pub async fn edit_resource(
         crate::catalog::listing_type_for_intent(rubric.kind, form.listing_type.as_deref());
     let category = crate::catalog::resource_category_for(rubric);
 
-    let changed = db.execute(
+    let changed = db
+        .execute(
             "UPDATE resources
          SET title = ?1,
              description = ?2,

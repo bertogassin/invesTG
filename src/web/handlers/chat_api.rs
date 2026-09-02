@@ -338,8 +338,7 @@ fn ensure_conversation_for_outgoing(
         return Err("conversation_create_failed");
     }
 
-    conversation_id(connection, current_user_id, other_user_id)
-        .ok_or("conversation_lookup_failed")
+    conversation_id(connection, current_user_id, other_user_id).ok_or("conversation_lookup_failed")
 }
 
 pub(super) fn chat_contact_gate_error(
@@ -962,13 +961,13 @@ pub async fn api_chat_send(
         return json_error(StatusCode::FORBIDDEN, error);
     }
 
-    let conversation_id = match ensure_conversation_for_outgoing(&connection, user_id, other_user_id)
-    {
-        Ok(conversation_id) => conversation_id,
-        Err(error) => {
-            return json_error(StatusCode::FORBIDDEN, error);
-        }
-    };
+    let conversation_id =
+        match ensure_conversation_for_outgoing(&connection, user_id, other_user_id) {
+            Ok(conversation_id) => conversation_id,
+            Err(error) => {
+                return json_error(StatusCode::FORBIDDEN, error);
+            }
+        };
 
     if !client_message_id.is_empty() {
         let existing_id: Option<i64> = connection

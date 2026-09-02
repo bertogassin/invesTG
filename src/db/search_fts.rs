@@ -358,7 +358,8 @@ fn backfill_catalog_values(conn: &Connection) -> Result<()> {
     drop(resource_stmt);
 
     for (id, title, category) in resources {
-        let guessed = crate::catalog::resolve(&title).or_else(|| crate::catalog::resolve(&category));
+        let guessed =
+            crate::catalog::resolve(&title).or_else(|| crate::catalog::resolve(&category));
 
         if let Some(rubric) = guessed {
             conn.execute(

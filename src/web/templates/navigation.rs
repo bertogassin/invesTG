@@ -142,10 +142,7 @@ fn build_home_explore_index(
     }
 
     let mut counts: BTreeMap<String, i64> = BTreeMap::new();
-    for (category, count) in resource_categories
-        .iter()
-        .chain(people_categories.iter())
-    {
+    for (category, count) in resource_categories.iter().chain(people_categories.iter()) {
         let key = crate::catalog::resolve(category)
             .map(|rubric| rubric.id.to_string())
             .unwrap_or_else(|| category.trim().to_string());
@@ -1542,7 +1539,12 @@ pub fn render_menu() -> String {
 </section>"#,
         section_head_settings = section_head("Меню", "Профиль, объявление и настройки", None),
         profile_card = navigation_card("/app/me", "user", "Профиль", "Аккаунт и объявления"),
-        add_card = navigation_card("/app/add", "plus", "Добавить объявление", "В последнем городе"),
+        add_card = navigation_card(
+            "/app/add",
+            "plus",
+            "Добавить объявление",
+            "В последнем городе"
+        ),
         volume_icon = icon("volume"),
         phone_icon = icon("smartphone"),
         play_icon = icon("play"),
@@ -1589,7 +1591,7 @@ mod search_catalog_tests {
 
     #[test]
     fn search_page_shows_rubric_chips_for_active_profession() {
-        let html = render_search("", "", "security", Vec::new(), Vec::new(), false);
+        let html = render_search("", "", "security", Vec::new(), Vec::new(), false, None);
 
         assert!(html.contains("aria-label=\"Рубрика\""));
         assert!(html.contains("Охрана"));
@@ -1599,7 +1601,7 @@ mod search_catalog_tests {
 
     #[test]
     fn empty_search_has_no_rubric_chips() {
-        let html = render_search("", "", "", Vec::new(), Vec::new(), false);
+        let html = render_search("", "", "", Vec::new(), Vec::new(), false, None);
 
         assert!(!html.contains("aria-label=\"Рубрика\""));
     }

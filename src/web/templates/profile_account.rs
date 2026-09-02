@@ -2,7 +2,8 @@ use super::common::{
     back_hero, back_link, bottom_nav, bottom_nav_with_badge, empty_state_action, empty_state_card,
     empty_state_card_with_actions, escape_html, guest_locked_section, guest_mode_panel, icon,
     moderator_level_badge, navigation_card, page_document, page_shell, premium_badge_html,
-    profession_label, profile_resource_card, section_head, simple_hero, topbar, verified_badge_html,
+    profession_label, profile_resource_card, section_head, simple_hero, topbar,
+    verified_badge_html,
 };
 
 pub struct RenderMeParams<'a> {
@@ -201,7 +202,9 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
     let safe_first_name = escape_html(first_name);
     let safe_last_name = escape_html(last_name);
     let safe_intent_text = escape_html(intent_text);
-    let safe_category = escape_html(category);
+    let safe_category = crate::catalog::resolve(category)
+        .map(|rubric| escape_html(rubric.label))
+        .unwrap_or_default();
 
     let intent_status_text = if safe_intent_text.is_empty() {
         "Статус не указан".to_string()
@@ -395,13 +398,9 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
         let availability_class = "available";
         let availability_text = "Внутренние сообщения доступны";
 
-        let category_text = if let Some(rubric) = crate::catalog::resolve(category) {
-            rubric.label
-        } else if !category.trim().is_empty() {
-            category.trim()
-        } else {
-            "Направление не выбрано"
-        };
+        let category_text = crate::catalog::resolve(category)
+            .map(|rubric| rubric.label)
+            .unwrap_or("Направление не выбрано");
 
         let admin_navigation = if moderator_level > 0 {
             format!(
