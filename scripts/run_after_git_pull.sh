@@ -65,6 +65,6 @@ fi
 echo "SERVICE=$(systemctl is-active resursmap)"
 echo "HEALTH=ok"
 echo "SQLITE=ok"
-echo "CACHE_VERSION=4.9.53"
+echo "CACHE_VERSION=4.9.54"
 git status --short --branch
 echo "DEPLOY=COMPLETE"
