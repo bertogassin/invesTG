@@ -1193,7 +1193,7 @@ pub async fn api_chat_send(
             "ok": true,
             "message": {
                 "id": message_id,
-                "sender_user_id": user_id,
+                "sender_user_id": user_id.to_string(),
                 "message": message,
                 "is_mine": true,
                 "delivered_at": 0,
@@ -1460,7 +1460,7 @@ pub async fn api_chat_peer(
         StatusCode::OK,
         Json(json!({
             "ok": true,
-            "peer_user_id": other_user_id,
+            "peer_user_id": other_user_id.to_string(),
             "online": online,
             "last_seen_at": last_seen_at,
             "open_contact": open_contact == 1
@@ -1523,7 +1523,7 @@ pub async fn api_chat_conversations(State(state): State<AppState>, headers: Head
             };
 
             json!({
-                "other_user_id": conversation.other_user_id,
+                "other_user_id": conversation.other_user_id.to_string(),
                 "display_name": display_name,
                 "username": conversation.username,
                 "last_message": last_message,
@@ -1691,6 +1691,42 @@ mod tests {
         assert_eq!(normalized_limit(Some(0)), 1);
         assert_eq!(normalized_limit(Some(10)), 10);
         assert_eq!(normalized_limit(Some(999)), 100);
+    }
+
+    #[test]
+    fn chat_api_user_ids_serialize_without_javascript_rounding() {
+        let message = ChatApiMessage {
+            id: 159,
+            sender_user_id: 4_000_000_000_000_000_007,
+            message: "Есть".to_string(),
+            is_mine: false,
+            delivered_at: 0,
+            read_at: 0,
+            created_at: 1,
+            reply_to_message_id: Some(158),
+            reply_sender_user_id: Some(4_000_000_000_000_000_009),
+            reply_message: "Ответ".to_string(),
+            edited_at: 0,
+            deleted_at: 0,
+            client_message_id: String::new(),
+            attachment_kind: String::new(),
+            attachment_mime: String::new(),
+            attachment_size: 0,
+            attachment_url: String::new(),
+            reactions: Vec::new(),
+        };
+
+        let value = serde_json::to_value(message).expect("serialize chat API message");
+
+        assert_eq!(value["sender_user_id"], "4000000000000000007");
+        assert_eq!(value["reply_sender_user_id"], "4000000000000000009");
+
+        let conversation = serde_json::json!({
+            "other_user_id":
+                4_000_000_000_000_000_007_i64.to_string()
+        });
+
+        assert_eq!(conversation["other_user_id"], "4000000000000000007");
     }
 
     #[test]
