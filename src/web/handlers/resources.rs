@@ -3,6 +3,7 @@ use super::common::{
     csrf_rejected_response, input_text_is_valid, rate_limit_retry_after, request_is_cross_site,
 };
 use super::types::{AddResourceForm, EditResourceForm, ReportResourcePayload};
+use crate::resource_screening::screen_listing_content;
 use crate::state::app_state::AppState;
 use crate::web::templates;
 use axum::{
@@ -249,7 +250,8 @@ pub async fn resource_profile(
                 r.client_id,
                 r.moderation_status,
                 r.is_active,
-                COALESCE(r.rubric, '')
+                COALESCE(r.rubric, ''),
+                r.city_id
          FROM resources r
          LEFT JOIN profiles p
            ON p.client_id = r.client_id
@@ -276,6 +278,7 @@ pub async fn resource_profile(
                     row.get::<_, String>(16)?,
                     row.get::<_, i64>(17)?,
                     row.get::<_, String>(18)?,
+                    row.get::<_, Option<i64>>(19)?,
                 ))
             },
         )
@@ -304,6 +307,7 @@ pub async fn resource_profile(
             moderation_status,
             is_active,
             rubric,
+            city_id,
         )) => {
             let is_public = is_active != 0 && moderation_status == "approved";
             let is_owner = verify_authenticated_user(&state, &headers).is_some_and(|user| {
@@ -341,6 +345,7 @@ pub async fn resource_profile(
                     continent_index,
                     country_index,
                     city_index,
+                    city_id,
                     _created_at: created_at,
                     owner_public_id: &owner_public_id,
                     rubric: &rubric,
@@ -608,6 +613,20 @@ pub async fn add_resource(
             &form,
             rubric,
             "Адрес слишком длинный или содержит недопустимые символы.",
+        );
+    }
+
+    let screening = screen_listing_content(title, description, contact);
+    if !screening.passed {
+        return add_form_error(
+            StatusCode::BAD_REQUEST,
+            ci,
+            si,
+            zi,
+            k.trim(),
+            &form,
+            rubric,
+            &screening.reason,
         );
     }
 

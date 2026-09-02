@@ -29,6 +29,12 @@ pub use professions::*;
 mod resources;
 pub use resources::*;
 
+mod resource_create_v2;
+pub use resource_create_v2::{
+    resource_create_city_page, resource_create_city_submit, resource_create_continent,
+    resource_create_country, resource_create_start,
+};
+
 mod resource_promotions;
 pub use resource_promotions::{
     admin_approve_promotion, admin_promotion_queue, admin_reject_promotion,

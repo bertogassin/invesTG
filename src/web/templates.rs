@@ -11,9 +11,9 @@ pub(crate) use common::page_document;
 pub(crate) use common::status_page;
 pub use common::transactional_code_email_html;
 pub(crate) use common::{
-    admin_ops_page, admin_ops_page_themed, moderation_queue_badge, premium_badge_html,
-    report_queue_badge, resource_visibility_badge, resource_visibility_with_status,
-    workflow_status_label_or_raw,
+    admin_ops_page, admin_ops_page_themed, back_navigation_card, moderation_queue_badge,
+    premium_badge_html, report_queue_badge, resource_visibility_badge,
+    resource_visibility_with_status, workflow_status_label_or_raw,
 };
 pub(crate) use common::{render_auth_page, AuthPageParams};
 

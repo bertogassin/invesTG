@@ -4,7 +4,7 @@ use crate::state::app_state::AppState;
 use crate::web::templates;
 use axum::{
     extract::{Path, Query, State},
-    http::{header, HeaderMap, StatusCode},
+    http::{HeaderMap, StatusCode},
     response::{Html, IntoResponse, Redirect, Response},
 };
 use serde_json::{json, Value};
@@ -16,24 +16,6 @@ pub async fn home() -> Redirect {
 
 pub async fn app_menu() -> Html<String> {
     Html(templates::render_menu())
-}
-
-pub async fn app_add(headers: HeaderMap) -> Redirect {
-    let city_path = headers
-        .get(header::COOKIE)
-        .and_then(|value| value.to_str().ok())
-        .and_then(|cookies| {
-            cookies.split(';').find_map(|part| {
-                let raw = part.trim().strip_prefix("rm_last_city=")?;
-                let mut parts = raw.split('.');
-                let ci: usize = parts.next()?.parse().ok()?;
-                let si: usize = parts.next()?.parse().ok()?;
-                let zi: usize = parts.next()?.parse().ok()?;
-                Some(format!("/app/{ci}/{si}/{zi}"))
-            })
-        });
-
-    Redirect::to(city_path.as_deref().unwrap_or("/app"))
 }
 
 pub async fn app_root(State(state): State<AppState>, headers: HeaderMap) -> Html<String> {

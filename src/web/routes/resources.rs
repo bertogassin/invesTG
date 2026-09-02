@@ -2,7 +2,9 @@ use super::super::handlers::{
     add_resource, add_resource_page, api_favorite_status, api_favorite_toggle, api_report_resource,
     api_resource_vote, app_cat, app_city_all, confirm_promotion_payment, edit_resource,
     edit_resource_page, my_resources, promotion_payment_page, promotion_payment_return,
-    request_resource_promotion, resource_profile, resource_promotion_page, retry_promotion_publish,
+    request_resource_promotion, resource_create_city_page, resource_create_city_submit,
+    resource_create_continent, resource_create_country, resource_create_start, resource_profile,
+    resource_promotion_page, retry_promotion_publish,
 };
 use crate::state::app_state::AppState;
 use axum::{
@@ -12,6 +14,19 @@ use axum::{
 
 pub(super) fn routes() -> Router<AppState> {
     Router::new()
+        .route("/app/add", get(resource_create_start))
+        .route(
+            "/app/add/continent/{continent_id}",
+            get(resource_create_continent),
+        )
+        .route(
+            "/app/add/country/{country_id}",
+            get(resource_create_country),
+        )
+        .route(
+            "/app/add/city/{city_id}",
+            get(resource_create_city_page).post(resource_create_city_submit),
+        )
         .route("/app/my-resources", get(my_resources))
         .route("/app/resource/{id}", get(resource_profile))
         .route("/app/resource/{id}/promote", get(resource_promotion_page))

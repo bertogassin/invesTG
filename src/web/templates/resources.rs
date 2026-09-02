@@ -398,6 +398,7 @@ pub struct RenderResourceProfileParams<'a> {
     pub continent_index: i64,
     pub country_index: i64,
     pub city_index: i64,
+    pub city_id: Option<i64>,
     pub _created_at: i64,
     pub owner_public_id: &'a str,
     pub rubric: &'a str,
@@ -422,6 +423,7 @@ pub fn render_resource_profile(params: RenderResourceProfileParams<'_>) -> Strin
         continent_index,
         country_index,
         city_index,
+        city_id,
         _created_at,
         owner_public_id,
         rubric,
@@ -459,13 +461,17 @@ pub fn render_resource_profile(params: RenderResourceProfileParams<'_>) -> Strin
     };
     let (back_url, back_label) = if owner_preview {
         ("/app/my-resources".to_string(), "Мои ресурсы")
-    } else {
+    } else if continent_index >= 0 && country_index >= 0 && city_index >= 0 {
         (
             format!(
                 "/app/{continent_index}/{country_index}/{city_index}/cat/{category_url}{type_query}"
             ),
             "Вернуться к разделу",
         )
+    } else if let Some(city_id) = city_id {
+        (format!("/app/map/city/{city_id}"), "Вернуться в город")
+    } else {
+        ("/app".to_string(), "Вернуться к городам")
     };
     let moderation_banner = if !owner_preview {
         String::new()
@@ -2104,6 +2110,7 @@ mod catalog_publish_tests {
             continent_index: 0,
             country_index: 0,
             city_index: 0,
+            city_id: Some(13),
             _created_at: 0,
             owner_public_id: "abc",
             rubric: "security",
