@@ -1,36 +1,36 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <defs>
-    <radialGradient id="bgGlow" cx="50%" cy="35%" r="70%">
-      <stop offset="0%" stop-color="#1a2030"/>
-      <stop offset="100%" stop-color="#080a0d"/>
-    </radialGradient>
-    <radialGradient id="pinGlow" cx="50%" cy="38%" r="62%">
-      <stop offset="0%" stop-color="#ffe4b8"/>
-      <stop offset="55%" stop-color="#e8cc96"/>
-      <stop offset="100%" stop-color="#c9a45a"/>
-    </radialGradient>
-    <linearGradient id="ring" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#7ed4e4" stop-opacity=".35"/>
-      <stop offset="100%" stop-color="#e8cc96" stop-opacity=".45"/>
+    <linearGradient id="bg" x1="18%" y1="0%" x2="88%" y2="100%">
+      <stop offset="0%" stop-color="#1b1d21"/>
+      <stop offset="100%" stop-color="#0b0c0e"/>
     </linearGradient>
-    <filter id="softGlow" x="-30%" y="-30%" width="160%" height="160%">
-      <feGaussianBlur stdDeviation="8" result="blur"/>
-      <feMerge>
-        <feMergeNode in="blur"/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
-    </filter>
+    <linearGradient id="pin" x1="30%" y1="0%" x2="70%" y2="100%">
+      <stop offset="0%" stop-color="#ffb347"/>
+      <stop offset="55%" stop-color="#ff8a1a"/>
+      <stop offset="100%" stop-color="#e56d00"/>
+    </linearGradient>
+    <linearGradient id="fur" x1="20%" y1="0%" x2="80%" y2="100%">
+      <stop offset="0%" stop-color="#9aa0a8"/>
+      <stop offset="100%" stop-color="#6d737c"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="62%" cy="58%" r="28%">
+      <stop offset="0%" stop-color="#ff8a1a" stop-opacity=".55"/>
+      <stop offset="100%" stop-color="#ff8a1a" stop-opacity="0"/>
+    </radialGradient>
   </defs>
-  <rect width="512" height="512" rx="112" fill="url(#bgGlow)"/>
-  <circle cx="256" cy="256" r="228" fill="none" stroke="url(#ring)" stroke-width="2" opacity=".55"/>
-  <circle cx="256" cy="256" r="188" fill="none" stroke="url(#pinGlow)" stroke-opacity=".10" stroke-width="1.5"/>
-  <g opacity=".18" stroke="#7ed4e4" stroke-width="1">
-    <path d="M96 256h320M256 96v320"/>
-    <circle cx="256" cy="256" r="72" fill="none"/>
-    <circle cx="256" cy="256" r="132" fill="none"/>
+  <rect width="512" height="512" rx="108" fill="url(#bg)"/>
+  <g opacity=".16" fill="none" stroke="#ff8a1a" stroke-width="2">
+    <path d="M64 160h384M64 256h384M64 352h384M160 64v384M256 64v384M352 64v384"/>
   </g>
-  <circle cx="256" cy="220" r="118" fill="none" stroke="url(#pinGlow)" stroke-opacity=".22" stroke-width="24"/>
-  <path filter="url(#softGlow)" d="M256 96c-68 0-124 56-124 124 0 92 124 204 124 204s124-112 124-204c0-68-56-124-124-124zm0 172a48 48 0 1 1 0-96 48 48 0 0 1 0 96z" fill="url(#pinGlow)"/>
-  <circle cx="256" cy="220" r="22" fill="#080a0d" opacity=".35"/>
-  <circle cx="248" cy="208" r="10" fill="#fff8ea" opacity=".35"/>
+  <circle cx="328" cy="318" r="92" fill="url(#glow)"/>
+  <path fill="#2a2e34" d="M86 318c8-54 42-96 96-112 18-42 58-70 108-66 28 2 52 16 70 38 14-4 30-4 46 4 28 14 40 44 34 74-4 22-16 40-34 52 8 18 10 40 2 60-12 28-40 46-74 50-48 6-102-8-148-36-28-16-62-24-100-18-18 4-28-8-20-28 8-20 16-34 20-48z"/>
+  <path fill="url(#fur)" d="M188 214c36-18 74-24 112-10 18 6 34 18 44 34-20 6-40 6-60 2-28-6-58-4-88 8-10-10-12-22-8-34z"/>
+  <path fill="#d7dbe1" d="M292 168c22 2 40 16 50 34 8-18 28-28 50-24 6 18 2 38-10 52-16-20-38-34-64-40-10-8-18-16-26-22z"/>
+  <path fill="#1a1d21" d="M368 196c14 4 24 16 26 30 2 12-4 22-14 28-12-18-24-32-38-42 8-8 16-14 26-16z"/>
+  <circle cx="402" cy="228" r="7" fill="#ff8a1a"/>
+  <circle cx="400" cy="226" r="2.4" fill="#fff"/>
+  <path fill="#ff8a1a" d="M328 268c42 8 70 48 66 92-2 22-14 40-32 52-4-28-18-52-40-70-16-14-22-34-18-54 8-8 16-16 24-20z"/>
+  <path fill="url(#pin)" d="M328 246c-44 0-80 36-80 80 0 62 80 140 80 140s80-78 80-140c0-44-36-80-80-80z"/>
+  <circle cx="328" cy="322" r="34" fill="#14161a"/>
+  <path fill="#fff" d="M313 322.5 323 333l22-28 8 6-30 38-18-18z"/>
 </svg>

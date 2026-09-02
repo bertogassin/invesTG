@@ -7,6 +7,7 @@ pub struct AddResourceForm {
     pub contact: String,
     pub address: String,
     pub listing_type: Option<String>,
+    pub rubric: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -16,6 +17,7 @@ pub struct EditResourceForm {
     pub contact: String,
     pub address: String,
     pub listing_type: Option<String>,
+    pub rubric: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

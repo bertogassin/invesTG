@@ -32,6 +32,14 @@ pub async fn app_cat(
         Some("seeker") => Some("seeker"),
         _ => None,
     };
+    let sort = match params.get("sort").map(|value| value.trim()) {
+        Some("new") => "new",
+        _ => "rating",
+    };
+    let rubric_id = params
+        .get("rubric")
+        .and_then(|value| crate::catalog::by_id(value.trim()))
+        .map(|rubric| rubric.id);
 
     let city_id: Option<i64> = db
         .query_row(
@@ -49,27 +57,35 @@ pub async fn app_cat(
         .ok()
         .flatten();
 
+    let order_sql = if sort == "new" {
+        "ORDER BY id DESC"
+    } else {
+        "ORDER BY is_verified DESC, rating DESC, votes DESC, id DESC"
+    };
+    let list_sql = format!(
+        "SELECT id, title, description, contact, address, rating, votes, is_verified, is_premium,
+                COALESCE(listing_type, 'general'), COALESCE(rubric, '')
+         FROM resources
+         WHERE (
+                (continent_index = ?1 AND country_index = ?2 AND city_index = ?3)
+                OR (?6 IS NOT NULL AND city_id = ?6)
+              )
+           AND (
+                LOWER(?4) = 'all'
+                OR (LOWER(?4) = 'business' AND category IN ('business', 'services'))
+                OR category = ?4
+           )
+           AND (?5 IS NULL OR listing_type = ?5)
+           AND (?7 IS NULL OR rubric = ?7)
+           AND is_active = 1
+           AND moderation_status = 'approved'
+         {order_sql}"
+    );
     let resources: Vec<crate::web::view_models::CategoryResourceRow> = db
-        .prepare(
-            "SELECT id, title, description, contact, address, rating, votes, is_verified, is_premium,
-                    COALESCE(listing_type, 'general')
-             FROM resources
-             WHERE (
-                    (continent_index = ?1 AND country_index = ?2 AND city_index = ?3)
-                    OR (?6 IS NOT NULL AND city_id = ?6)
-                  )
-               AND (
-                    (LOWER(?4) = 'business' AND category IN ('business', 'services'))
-                    OR category = ?4
-               )
-               AND (?5 IS NULL OR listing_type = ?5)
-               AND is_active = 1
-               AND moderation_status = 'approved'
-             ORDER BY is_verified DESC, rating DESC, votes DESC, id DESC",
-        )
+        .prepare(&list_sql)
         .and_then(|mut stmt| {
             stmt.query_map(
-                rusqlite::params![ci, si, zi, k, listing_type, city_id],
+                rusqlite::params![ci, si, zi, k, listing_type, city_id, rubric_id],
                 |row| {
                     Ok((
                         row.get(0)?,
@@ -82,6 +98,7 @@ pub async fn app_cat(
                         row.get(7)?,
                         row.get(8)?,
                         row.get(9)?,
+                        row.get(10)?,
                     ))
                 },
             )?
@@ -89,7 +106,8 @@ pub async fn app_cat(
         })
         .unwrap_or_default();
 
-    let people: Vec<crate::web::view_models::SearchPersonRow> = if listing_type == Some("seeker") {
+    let include_people = listing_type == Some("seeker") || rubric_id.is_some();
+    let people: Vec<crate::web::view_models::SearchPersonRow> = if include_people {
         db.prepare(
             "SELECT
                     p.public_id,
@@ -109,6 +127,7 @@ pub async fn app_cat(
                    AND p.home_continent_index = ?1
                    AND p.home_country_index = ?2
                    AND p.home_city_index = ?3
+                   AND (?4 IS NULL OR p.category = ?4)
                    AND (
                         trim(p.category) <> ''
                         OR (
@@ -137,7 +156,9 @@ pub async fn app_cat(
                  LIMIT 50",
         )
         .and_then(|mut stmt| {
-            stmt.query_map(rusqlite::params![ci as i64, si as i64, zi as i64], |row| {
+            stmt.query_map(
+                rusqlite::params![ci as i64, si as i64, zi as i64, rubric_id],
+                |row| {
                 Ok((
                     row.get(0)?,
                     row.get(1)?,
@@ -160,25 +181,45 @@ pub async fn app_cat(
     drop(db);
 
     let mut resources = resources;
-    resources.sort_by(|a, b| {
-        b.8.cmp(&a.8)
-            .then_with(|| b.7.cmp(&a.7))
-            .then_with(|| b.5.partial_cmp(&a.5).unwrap_or(std::cmp::Ordering::Equal))
-            .then_with(|| b.6.cmp(&a.6))
-    });
+    if sort == "new" {
+        resources.sort_by(|a, b| b.0.cmp(&a.0));
+    } else {
+        resources.sort_by(|a, b| {
+            b.8.cmp(&a.8)
+                .then_with(|| b.7.cmp(&a.7))
+                .then_with(|| b.5.partial_cmp(&a.5).unwrap_or(std::cmp::Ordering::Equal))
+                .then_with(|| b.6.cmp(&a.6))
+        });
+    }
 
     Html(templates::render_category(
-        ci,
-        si,
-        zi,
-        &k,
-        listing_type,
-        resources,
-        people,
+        templates::RenderCategoryParams {
+            ci,
+            si,
+            zi,
+            category: &k,
+            listing_type,
+            active_rubric: rubric_id,
+            sort,
+            resources,
+            people,
+        },
     ))
 }
 
-pub async fn resource_profile(State(state): State<AppState>, Path(id): Path<i64>) -> Html<String> {
+pub async fn app_city_all(
+    state: State<AppState>,
+    Path((ci, si, zi)): Path<(usize, usize, usize)>,
+    params: Query<BTreeMap<String, String>>,
+) -> Html<String> {
+    app_cat(state, Path((ci, si, zi, "all".to_string())), params).await
+}
+
+pub async fn resource_profile(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    headers: HeaderMap,
+) -> Html<String> {
     let db = match crate::db::pool::get_connection(&state.db_pool) {
         Ok(db) => db,
         Err(_) => {
@@ -203,13 +244,15 @@ pub async fn resource_profile(State(state): State<AppState>, Path(id): Path<i64>
                 COALESCE(r.listing_type, 'general'),
                 r.continent_index,
                 r.country_index,
-                r.city_index
+                r.city_index,
+                r.client_id,
+                r.moderation_status,
+                r.is_active,
+                COALESCE(r.rubric, '')
          FROM resources r
          LEFT JOIN profiles p
            ON p.client_id = r.client_id
-         WHERE r.id = ?1
-           AND r.is_active = 1
-           AND r.moderation_status = 'approved'",
+         WHERE r.id = ?1",
             rusqlite::params![id],
             |row| {
                 Ok((
@@ -228,6 +271,10 @@ pub async fn resource_profile(State(state): State<AppState>, Path(id): Path<i64>
                     row.get::<_, i64>(12)?,
                     row.get::<_, i64>(13)?,
                     row.get::<_, i64>(14)?,
+                    row.get::<_, String>(15)?,
+                    row.get::<_, String>(16)?,
+                    row.get::<_, i64>(17)?,
+                    row.get::<_, String>(18)?,
                 ))
             },
         )
@@ -252,33 +299,62 @@ pub async fn resource_profile(State(state): State<AppState>, Path(id): Path<i64>
             continent_index,
             country_index,
             city_index,
-        )) => Html(templates::render_resource_profile(
-            templates::RenderResourceProfileParams {
-                id,
-                title: &title,
-                description: &description,
-                contact: &contact,
-                address: &address,
-                rating,
-                votes,
-                premium,
-                verified,
-                category: &category,
-                listing_type: &listing_type,
-                continent_index,
-                country_index,
-                city_index,
-                _created_at: created_at,
-                owner_public_id: &owner_public_id,
-            },
-        )),
+            owner_client_id,
+            moderation_status,
+            is_active,
+            rubric,
+        )) => {
+            let is_public = is_active != 0 && moderation_status == "approved";
+            let is_owner = verify_authenticated_user(&state, &headers)
+                .is_some_and(|user| !owner_client_id.is_empty() && user.client_id == owner_client_id);
+
+            if !is_public && !is_owner {
+                return Html(templates::status_page(
+                    "Ресурс не найден · ResursMap",
+                    "⚠ ResursMap",
+                    "Ресурс не найден",
+                    "Этот ресурс ещё на проверке, скрыт или был удалён.",
+                    &templates::navigation_card(
+                        "/app",
+                        "map",
+                        "Вернуться к городам",
+                        "Открыть ResursMap",
+                    ),
+                ));
+            }
+
+            Html(templates::render_resource_profile(
+                templates::RenderResourceProfileParams {
+                    id,
+                    title: &title,
+                    description: &description,
+                    contact: &contact,
+                    address: &address,
+                    rating,
+                    votes,
+                    premium,
+                    verified,
+                    category: &category,
+                    listing_type: &listing_type,
+                    continent_index,
+                    country_index,
+                    city_index,
+                    _created_at: created_at,
+                    owner_public_id: &owner_public_id,
+                    rubric: &rubric,
+                    owner_preview: !is_public,
+                    moderation_status: &moderation_status,
+                    is_active,
+                },
+            ))
+        }
 
         None => Html(templates::status_page(
             "Ресурс не найден · ResursMap",
             "⚠ ResursMap",
             "Ресурс не найден",
             "Этот ресурс больше недоступен или был удалён.",
-            &templates::navigation_card("/app", "map", "Вернуться на карту", "Открыть ResursMap"),
+            &templates::navigation_card("/app", "map", "Вернуться к городам", "Открыть ResursMap"),
         )),
     }
 }
@@ -286,18 +362,109 @@ pub async fn resource_profile(State(state): State<AppState>, Path(id): Path<i64>
 pub async fn add_resource_page(
     State(state): State<AppState>,
     Path((ci, si, zi, k)): Path<(usize, usize, usize, String)>,
+    Query(params): Query<BTreeMap<String, String>>,
     headers: HeaderMap,
 ) -> Response {
     if verify_authenticated_user(&state, &headers).is_none() {
         let category = k.trim();
         let category_url = urlencoding::encode(category);
-        let next = format!("/app/{ci}/{si}/{zi}/cat/{category_url}/add");
+        let mut next = format!("/app/{ci}/{si}/{zi}/cat/{category_url}/add");
+        if let Some(query) = listing_add_query(&params) {
+            next.push('?');
+            next.push_str(&query);
+        }
 
         return Redirect::temporary(&format!("/login?next={}", urlencoding::encode(&next)))
             .into_response();
     }
 
-    Html(templates::render_add_resource(ci, si, zi, k.trim())).into_response()
+    let listing_type = match params.get("type").map(|value| value.trim()) {
+        Some("seeker") => Some("seeker"),
+        Some("offer") => Some("offer"),
+        _ => None,
+    };
+    let rubric = params
+        .get("rubric")
+        .and_then(|value| crate::catalog::by_id(value.trim()));
+
+    if let Some(rubric) = rubric {
+        return Html(templates::render_add_resource(
+            ci,
+            si,
+            zi,
+            k.trim(),
+            listing_type,
+            rubric,
+            None,
+            None,
+        ))
+        .into_response();
+    }
+
+    Html(templates::render_add_rubric_picker(
+        ci,
+        si,
+        zi,
+        k.trim(),
+        listing_type,
+    ))
+    .into_response()
+}
+
+fn listing_add_query(params: &BTreeMap<String, String>) -> Option<String> {
+    let mut parts = Vec::new();
+    if let Some(kind) = params.get("type").map(|value| value.trim()) {
+        if matches!(kind, "offer" | "seeker") {
+            parts.push(format!("type={}", urlencoding::encode(kind)));
+        }
+    }
+    if let Some(rubric) = params
+        .get("rubric")
+        .and_then(|value| crate::catalog::by_id(value.trim()))
+    {
+        parts.push(format!("rubric={}", urlencoding::encode(rubric.id)));
+    }
+    if parts.is_empty() {
+        None
+    } else {
+        Some(parts.join("&"))
+    }
+}
+
+fn add_form_error(
+    status: StatusCode,
+    ci: usize,
+    si: usize,
+    zi: usize,
+    category: &str,
+    form: &AddResourceForm,
+    rubric: &crate::catalog::Rubric,
+    message: &str,
+) -> Response {
+    let listing_type = match form.listing_type.as_deref().map(str::trim) {
+        Some("seeker") => Some("seeker"),
+        Some("offer") => Some("offer"),
+        _ => None,
+    };
+    (
+        status,
+        Html(templates::render_add_resource(
+            ci,
+            si,
+            zi,
+            category,
+            listing_type,
+            rubric,
+            Some(templates::AddResourceDraft {
+                title: form.title.trim(),
+                description: form.description.trim(),
+                contact: form.contact.trim(),
+                address: form.address.trim(),
+            }),
+            Some(message),
+        )),
+    )
+        .into_response()
 }
 
 pub async fn add_resource(
@@ -314,18 +481,56 @@ pub async fn add_resource(
             .into_response();
     }
 
-    let category = k.trim();
+    let requested_rubric = form
+        .rubric
+        .as_deref()
+        .and_then(|value| crate::catalog::by_id(value.trim()));
+    let rubric = match requested_rubric {
+        Some(rubric) => rubric,
+        None => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Html("<h1>400</h1><p>Выберите рубрику из списка.</p>".to_string()),
+            )
+                .into_response();
+        }
+    };
+
+    let category = crate::catalog::resource_category_for(rubric);
+    let section_ok = matches!(
+        (k.trim().to_ascii_lowercase().as_str(), rubric.kind),
+        ("work", crate::catalog::RubricKind::Work)
+            | ("business" | "services", crate::catalog::RubricKind::Business)
+    );
+    if !section_ok {
+        return add_form_error(
+            StatusCode::BAD_REQUEST,
+            ci,
+            si,
+            zi,
+            k.trim(),
+            &form,
+            rubric,
+            "Рубрика не подходит к этому разделу.",
+        );
+    }
+
     let title = form.title.trim();
     let description = form.description.trim();
     let contact = form.contact.trim();
     let address = form.address.trim();
 
     if !input_text_is_valid(category, 1, 100) {
-        return (
+        return add_form_error(
             StatusCode::BAD_REQUEST,
-            Html("<h1>400</h1><p>Некорректная категория.</p>".to_string()),
-        )
-            .into_response();
+            ci,
+            si,
+            zi,
+            k.trim(),
+            &form,
+            rubric,
+            "Некорректная категория.",
+        );
     }
 
     let category_url = urlencoding::encode(category);
@@ -349,55 +554,76 @@ pub async fn add_resource(
     }
 
     if !input_text_is_valid(title, 1, 120) {
-        return (
+        return add_form_error(
             StatusCode::BAD_REQUEST,
-            Html("<h1>400</h1><p>Название должно содержать от 1 до 120 символов.</p>".to_string()),
-        )
-            .into_response();
+            ci,
+            si,
+            zi,
+            k.trim(),
+            &form,
+            rubric,
+            "Название должно содержать от 1 до 120 символов.",
+        );
     }
 
     if !input_text_is_valid(description, 1, 1000) {
-        return (
+        return add_form_error(
             StatusCode::BAD_REQUEST,
-            Html("<h1>400</h1><p>Описание должно содержать от 1 до 1000 символов.</p>".to_string()),
-        )
-            .into_response();
+            ci,
+            si,
+            zi,
+            k.trim(),
+            &form,
+            rubric,
+            "Описание должно содержать от 1 до 1000 символов.",
+        );
     }
 
-    if !input_text_is_valid(contact, 0, 120) {
-        return (
+    if contact.is_empty() || !input_text_is_valid(contact, 1, 120) {
+        return add_form_error(
             StatusCode::BAD_REQUEST,
-            Html(
-                "<h1>400</h1><p>Контакт слишком длинный или содержит недопустимые символы.</p>"
-                    .to_string(),
-            ),
-        )
-            .into_response();
+            ci,
+            si,
+            zi,
+            k.trim(),
+            &form,
+            rubric,
+            "Укажите телефон, Telegram или другой контакт.",
+        );
     }
 
     if !input_text_is_valid(address, 0, 250) {
-        return (
+        return add_form_error(
             StatusCode::BAD_REQUEST,
-            Html(
-                "<h1>400</h1><p>Адрес слишком длинный или содержит недопустимые символы.</p>"
-                    .to_string(),
-            ),
-        )
-            .into_response();
+            ci,
+            si,
+            zi,
+            k.trim(),
+            &form,
+            rubric,
+            "Адрес слишком длинный или содержит недопустимые символы.",
+        );
     }
 
     if let Some(retry_after) =
         rate_limit_retry_after(&state, owner_user_id, "resource_add", 10, 3600).await
     {
-        return (
+        let mut response = add_form_error(
             StatusCode::TOO_MANY_REQUESTS,
-            [(header::RETRY_AFTER, retry_after.to_string())],
-            Html(
-                "<h1>429</h1><p>Слишком много добавлений ресурсов. Попробуйте позже.</p>"
-                    .to_string(),
-            ),
-        )
-            .into_response();
+            ci,
+            si,
+            zi,
+            k.trim(),
+            &form,
+            rubric,
+            "Слишком много добавлений. Попробуйте позже.",
+        );
+        response.headers_mut().insert(
+            header::RETRY_AFTER,
+            header::HeaderValue::from_str(&retry_after.to_string())
+                .unwrap_or_else(|_| header::HeaderValue::from_static("3600")),
+        );
+        return response;
     }
 
     let db = match crate::db::pool::get_connection(&state.db_pool) {
@@ -411,15 +637,10 @@ pub async fn add_resource(
         }
     };
 
-    let listing_type = if category.eq_ignore_ascii_case("work") {
-        match form.listing_type.as_deref().map(str::trim) {
-            Some("seeker") => "seeker",
-            Some("offer") => "offer",
-            _ => "offer",
-        }
-    } else {
-        "general"
-    };
+    let listing_type = crate::catalog::listing_type_for_intent(
+        rubric.kind,
+        form.listing_type.as_deref(),
+    );
 
     let city_id: Option<i64> = db
         .query_row(
@@ -442,12 +663,12 @@ pub async fn add_resource(
         (client_id, continent_index, country_index, city_index, city_id,
          category, title, description, contact, address,
          rating, votes, is_premium, is_verified, is_active,
-         moderation_status, rejection_reason, listing_type,
+         moderation_status, rejection_reason, listing_type, rubric,
          created_at, updated_at)
         VALUES
         (?9, ?1, ?2, ?3, ?11, ?4, ?5, ?6, ?7, ?8,
          0, 0, 0, 0, 1,
-         'pending', '', ?10,
+         'pending', '', ?10, ?12,
          strftime('%s','now'), strftime('%s','now'))",
         rusqlite::params![
             ci,
@@ -461,25 +682,49 @@ pub async fn add_resource(
             owner_client_id,
             listing_type,
             city_id,
+            rubric.id,
         ],
     );
+
+    let inserted_id = match &result {
+        Ok(_) => db.last_insert_rowid(),
+        Err(_) => 0,
+    };
 
     drop(db);
 
     match result {
-        Ok(_) => Html(templates::status_page(
-            "Ресурс добавлен · ResursMap",
-            "✓ Готово",
-            "Ресурс добавлен",
-            "Спасибо! Ресурс появился в категории и ожидает проверки.",
-            &templates::navigation_card(
-                &format!("/app/{}/{}/{}/cat/{}", ci, si, zi, category_url),
-                "map",
-                "Вернуться к ресурсам",
-                "Открыть категорию",
-            ),
-        ))
-        .into_response(),
+        Ok(_) => {
+            let preview_href = if inserted_id > 0 {
+                format!("/app/resource/{inserted_id}")
+            } else {
+                "/app/my-resources".to_string()
+            };
+            let actions = format!(
+                "{}{}",
+                templates::navigation_card(
+                    &preview_href,
+                    "map-pin",
+                    "Открыть моё объявление",
+                    "Пока видите только вы",
+                ),
+                templates::navigation_card(
+                    "/app/my-resources",
+                    "user",
+                    "Мои ресурсы",
+                    "Статус проверки",
+                ),
+            );
+
+            Html(templates::status_page(
+                "На проверке · ResursMap",
+                "Проверка",
+                "Объявление на проверке",
+                "Другие участники его пока не видят. После одобрения оно появится в поиске и в городе.",
+                &actions,
+            ))
+            .into_response()
+        }
         Err(_) => Html(templates::status_page(
             "Ошибка · ResursMap",
             "⚠ Ошибка",
@@ -525,7 +770,8 @@ pub async fn my_resources(State(state): State<AppState>, headers: HeaderMap) -> 
                 moderation_status,
                 rejection_reason,
                 is_active,
-                COALESCE(listing_type, 'general')
+                COALESCE(listing_type, 'general'),
+                COALESCE(rubric, '')
              FROM resources
              WHERE client_id = ?1
              ORDER BY is_active DESC,
@@ -548,6 +794,7 @@ pub async fn my_resources(State(state): State<AppState>, headers: HeaderMap) -> 
                     row.get(9)?,
                     row.get(10)?,
                     row.get(11)?,
+                    row.get(12)?,
                 ))
             })?
             .collect::<Result<Vec<_>, _>>()
@@ -579,7 +826,7 @@ pub async fn edit_resource_page(
     let resource = db
         .query_row(
             "SELECT title, description, contact, address, category, client_id,
-                    COALESCE(listing_type, 'general')
+                    COALESCE(listing_type, 'general'), COALESCE(rubric, '')
          FROM resources
          WHERE id = ?1",
             rusqlite::params![id],
@@ -592,6 +839,7 @@ pub async fn edit_resource_page(
                     row.get::<_, String>(4)?,
                     row.get::<_, String>(5)?,
                     row.get::<_, String>(6)?,
+                    row.get::<_, String>(7)?,
                 ))
             },
         )
@@ -600,17 +848,20 @@ pub async fn edit_resource_page(
     drop(db);
 
     match resource {
-        Some((title, description, contact, address, category, owner, listing_type))
+        Some((title, description, contact, address, category, owner, listing_type, rubric))
             if !client_id.is_empty() && owner == client_id =>
         {
             Html(templates::render_edit_resource(
-                id,
-                &title,
-                &description,
-                &contact,
-                &address,
-                &category,
-                &listing_type,
+                templates::RenderEditResourceParams {
+                    id,
+                    title: &title,
+                    description: &description,
+                    contact: &contact,
+                    address: &address,
+                    category: &category,
+                    listing_type: &listing_type,
+                    rubric: &rubric,
+                },
             ))
         }
 
@@ -705,9 +956,9 @@ pub async fn edit_resource(
         }
     };
 
-    let category: String = db
+    let current_rubric: String = db
         .query_row(
-            "SELECT category
+            "SELECT COALESCE(rubric, '')
              FROM resources
              WHERE id = ?1
                AND client_id = ?2",
@@ -716,28 +967,33 @@ pub async fn edit_resource(
         )
         .unwrap_or_default();
 
-    let listing_type = if category.eq_ignore_ascii_case("work") {
-        match form.listing_type.as_deref().map(str::trim) {
-            Some("seeker") => "seeker",
-            Some("offer") => "offer",
-            _ => "offer",
-        }
-    } else if category.is_empty() {
-        ""
-    } else {
-        "general"
+    let rubric = form
+        .rubric
+        .as_deref()
+        .and_then(|value| crate::catalog::by_id(value.trim()))
+        .or_else(|| crate::catalog::by_id(&current_rubric));
+
+    let Some(rubric) = rubric else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Html("<h1>400</h1><p>Выберите рубрику из списка.</p>".to_string()),
+        )
+            .into_response();
     };
 
-    let changed = if listing_type.is_empty() {
-        0
-    } else {
-        db.execute(
+    let listing_type =
+        crate::catalog::listing_type_for_intent(rubric.kind, form.listing_type.as_deref());
+    let category = crate::catalog::resource_category_for(rubric);
+
+    let changed = db.execute(
             "UPDATE resources
          SET title = ?1,
              description = ?2,
              contact = ?3,
              address = ?4,
              listing_type = ?7,
+             rubric = ?8,
+             category = ?9,
              is_verified = 0,
              is_active = 1,
              moderation_status = 'pending',
@@ -763,10 +1019,11 @@ pub async fn edit_resource(
                 id,
                 &owner_client_id,
                 listing_type,
+                rubric.id,
+                category,
             ],
         )
-        .unwrap_or(0)
-    };
+        .unwrap_or(0);
 
     drop(db);
 

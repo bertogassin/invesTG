@@ -7,14 +7,17 @@ pub fn escape_html(value: &str) -> String {
         .replace('\'', "&#39;")
 }
 
-pub const STATIC_ASSET_VERSION: &str = "4.9.44";
+pub const STATIC_ASSET_VERSION: &str = "4.9.48";
 
 pub fn profession_label(raw: &str) -> String {
+    if crate::catalog::resolve(raw).is_some() {
+        return crate::catalog::label_for(raw);
+    }
+
     match raw.trim().to_lowercase().as_str() {
         "work" | "job" | "jobs" => "Работа".to_string(),
-        "business" => "Бизнес".to_string(),
-        "services" | "service" => "Услуги".to_string(),
-        "community" => "Сообщество".to_string(),
+        "business" | "services" | "service" => "Бизнес".to_string(),
+        "community" => String::new(),
         _ => raw.trim().to_string(),
     }
 }
@@ -36,15 +39,15 @@ pub(crate) fn icon(name: &str) -> &'static str {
         }
 
         "map" => {
-            r#"<svg class="icon" viewBox="0 0 24 24"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3V6Z"/><path d="M9 3v15"/><path d="M15 6v15"/></svg>"#
+            r#"<svg class="icon" viewBox="0 0 24 24"><path d="M20 10c0 5.2-8 12-8 12s-8-6.8-8-12a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.6"/></svg>"#
         }
 
         "search" => {
-            r#"<svg class="icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>"#
+            r#"<svg class="icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-3.6-3.6"/></svg>"#
         }
 
         "user" => {
-            r#"<svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c.8-4 3.5-6 8-6s7.2 2 8 6"/></svg>"#
+            r#"<svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.4"/><path d="M5 20.2c1.1-3.4 3.7-5.2 7-5.2s5.9 1.8 7 5.2"/></svg>"#
         }
 
         "star" => {
@@ -76,11 +79,31 @@ pub(crate) fn icon(name: &str) -> &'static str {
         }
 
         "menu" => {
-            r#"<svg class="icon" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>"#
+            r#"<svg class="icon" viewBox="0 0 24 24"><path d="M4 6h16"/><path d="M8 12h12"/><path d="M4 18h16"/></svg>"#
+        }
+
+        "sliders" => {
+            r#"<svg class="icon" viewBox="0 0 24 24"><path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h16"/><circle cx="8" cy="6" r="2"/><circle cx="14" cy="12" r="2"/><circle cx="10" cy="18" r="2"/></svg>"#
+        }
+
+        "volume" => {
+            r#"<svg class="icon" viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="M16 9.5a4 4 0 0 1 0 5"/><path d="M18.5 7a7 7 0 0 1 0 10"/></svg>"#
+        }
+
+        "smartphone" => {
+            r#"<svg class="icon" viewBox="0 0 24 24"><rect x="7" y="2.5" width="10" height="19" rx="2"/><path d="M11 18h2"/></svg>"#
+        }
+
+        "sun" => {
+            r#"<svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M4.2 4.2l1.5 1.5M18.3 18.3l1.5 1.5M3 12h2M19 12h2M4.2 19.8l1.5-1.5M18.3 5.7l1.5-1.5"/></svg>"#
+        }
+
+        "play" => {
+            r#"<svg class="icon" viewBox="0 0 24 24"><path d="M8 6.2v11.6L18.5 12 8 6.2Z"/></svg>"#
         }
 
         "logo" | "map-pin-brand" => {
-            r#"<svg class="icon brand-logo-icon" viewBox="0 0 24 24"><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></svg>"#
+            r#"<svg class="icon brand-logo-icon" viewBox="0 0 24 24"><path d="M20 10c0 5.2-8 12-8 12s-8-6.8-8-12a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="3"/><path d="m10.4 10 1.2 1.2 2.4-2.5"/></svg>"#
         }
 
         "arrow-left" => {
@@ -101,6 +124,10 @@ pub(crate) fn icon(name: &str) -> &'static str {
 
         "bell" => {
             r#"<svg class="icon" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>"#
+        }
+
+        "clock" => {
+            r#"<svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v6l4 2"/></svg>"#
         }
 
         "settings" => {
@@ -178,32 +205,44 @@ pub(crate) fn base_style() -> &'static str {
     --radius-sm: 14px;
     --radius-lg: 26px;
     --theme-color: #080a0d;
+    --bubble-mine: rgba(214,183,122,.16);
+    --bubble-peer: rgba(255,255,255,.065);
 }
 
-/* Светлая тема - активируется добавлением класса light-theme к body */
+/* Светлая тема — html.light-theme до отрисовки, body.light-theme после скрипта */
+html.light-theme,
 body.light-theme {
-    --bg: #f7f5f0;
-    --bg-soft: #efebe2;
-    --card: rgba(255, 255, 255, .82);
-    --card-hover: rgba(255, 255, 255, .95);
-    --line: rgba(0,0,0,.08);
+    --bg: #f4f1ea;
+    --bg-soft: #ebe6db;
+    --surface: #ffffff;
+    --card: #ffffff;
+    --card-hover: #fffdf8;
+    --line: rgba(26, 29, 33, .12);
 
     --text: #1a1d21;
-    --muted: #5c636e;
+    --muted: #5a616c;
 
-    --gold: #b88932;
-    --gold-light: #8f6b1e;
+    --gold: #a5761f;
+    --gold-light: #7a5814;
+    --gold-glow: rgba(165, 118, 31, .28);
 
-    --sea: #3d8b9c;
-    --sea-light: #2d6e7d;
+    --sea: #2f7d8d;
+    --sea-light: #246472;
+    --sea-glow: rgba(47, 125, 141, .20);
 
-    --success: #2f9b74;
-    --warning: #c47d1a;
-    --danger: #dc4b58;
-    --info: #3f7ec9;
+    --success: #1f8a64;
+    --warning: #b06d12;
+    --danger: #c73a47;
+    --info: #2f6db8;
+
+    --theme-color: #f4f1ea;
+    --bubble-mine: rgba(165, 118, 31, .14);
+    --bubble-peer: #f3efe6;
+    color-scheme: light;
 }
 
-body.light-theme::before {
+body.light-theme::before,
+html.light-theme body::before {
     background:
         linear-gradient(
             120deg,
@@ -211,6 +250,105 @@ body.light-theme::before {
             rgba(0,0,0,.015) 50%,
             transparent 100%
         );
+}
+
+html.light-theme body,
+body.light-theme {
+    background:
+        radial-gradient(
+            circle at 12% 0%,
+            rgba(47, 125, 141, .08),
+            transparent 40%
+        ),
+        radial-gradient(
+            circle at 88% 8%,
+            rgba(165, 118, 31, .09),
+            transparent 36%
+        ),
+        linear-gradient(
+            145deg,
+            var(--bg) 0%,
+            var(--bg-soft) 45%,
+            var(--bg) 100%
+        );
+}
+
+html.light-theme .bottom-nav,
+body.light-theme .bottom-nav {
+    background: color-mix(in srgb, #f4f1ea 90%, transparent);
+    box-shadow: 0 -6px 18px rgba(26, 29, 33, .06);
+}
+
+html.light-theme .nav-item.active,
+body.light-theme .nav-item.active {
+    color: #c45f00;
+    background: rgba(255, 138, 26, .10);
+}
+
+html.light-theme .card,
+body.light-theme .card {
+    box-shadow:
+        0 10px 28px rgba(26, 29, 33, .07),
+        inset 0 1px 0 rgba(255, 255, 255, .92);
+}
+
+html.light-theme .card:hover,
+body.light-theme .card:hover {
+    box-shadow:
+        0 16px 36px rgba(26, 29, 33, .10),
+        0 0 28px rgba(165, 118, 31, .08),
+        inset 0 1px 0 rgba(255, 255, 255, .95);
+}
+
+html.light-theme .ui-input,
+html.light-theme .ui-textarea,
+html.light-theme .ui-select,
+body.light-theme .ui-input,
+body.light-theme .ui-textarea,
+body.light-theme .ui-select {
+    background: #fff;
+    border-color: rgba(26, 29, 33, .14);
+}
+
+html.light-theme .ui-input:focus,
+html.light-theme .ui-textarea:focus,
+html.light-theme .ui-select:focus,
+body.light-theme .ui-input:focus,
+body.light-theme .ui-textarea:focus,
+body.light-theme .ui-select:focus {
+    background: #fff;
+    border-color: rgba(165, 118, 31, .45);
+    box-shadow: 0 0 0 4px rgba(165, 118, 31, .10);
+}
+
+html.light-theme .rm-kind-chip,
+body.light-theme .rm-kind-chip {
+    border-color: rgba(165, 118, 31, .28);
+    background: rgba(165, 118, 31, .08);
+}
+
+html.light-theme .rm-kind-chip.is-active,
+body.light-theme .rm-kind-chip.is-active {
+    border-color: rgba(165, 118, 31, .48);
+    background: rgba(165, 118, 31, .16);
+}
+
+html.light-theme .theme-toggle-btn,
+body.light-theme .theme-toggle-btn {
+    background: #fff;
+    color: var(--text);
+}
+
+html.light-theme .brand-logo-img,
+body.light-theme .brand-logo-img {
+    box-shadow: 0 6px 16px rgba(26, 29, 33, .12);
+}
+
+html.light-theme .hero,
+body.light-theme .hero {
+    box-shadow:
+        0 16px 40px rgba(26, 29, 33, .08),
+        inset 0 1px 0 rgba(255, 255, 255, .95);
 }
 
 * {
@@ -260,6 +398,10 @@ body.light-theme::before {
 html {
     background: var(--bg);
     color-scheme: dark;
+}
+
+html.light-theme {
+    color-scheme: light;
 }
 
 body {
@@ -331,7 +473,7 @@ body::before {
 
     fill: none;
     stroke: currentColor;
-    stroke-width: 1.8;
+    stroke-width: 2;
     stroke-linecap: round;
     stroke-linejoin: round;
 
@@ -371,33 +513,38 @@ body::before {
     display: grid;
     place-items: center;
 
-    border: 1px solid rgba(224, 196, 138, .38);
+    border: 1px solid rgba(255, 138, 26, .38);
     border-radius: 14px;
 
-    color: var(--gold-light);
+    color: #ff8a1a;
 
     background:
         radial-gradient(
             circle at 30% 25%,
-            rgba(245, 219, 168, .32),
+            rgba(255, 138, 26, .22),
             transparent 52%
         ),
-        linear-gradient(
-            145deg,
-            rgba(224, 196, 138, .18),
-            rgba(114, 196, 212, .10)
-        );
+        #14161a;
 
     box-shadow:
-        0 10px 35px rgba(0, 0, 0, .28),
-        0 0 28px rgba(224, 196, 138, .12),
-        inset 0 1px 0 rgba(255, 255, 255, .08);
+        0 10px 28px rgba(0, 0, 0, .28),
+        inset 0 1px 0 rgba(255, 255, 255, .06);
 }
 
 .brand-mark .brand-logo-icon {
     width: 24px;
     height: 24px;
-    color: var(--gold-light);
+    color: #ff8a1a;
+}
+
+.brand-logo-img {
+    display: block;
+    height: 40px;
+    width: auto;
+    max-width: min(52vw, 188px);
+    object-fit: contain;
+    border-radius: 10px;
+    background: #121212;
 }
 
 .brand-name {
@@ -827,30 +974,27 @@ body::before {
     z-index: 20;
 
     left: 50%;
-    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    bottom: 0;
 
-    width: min(calc(100% - 28px), 520px);
+    width: min(100%, 560px);
 
     transform: translateX(-50%);
 
     display: grid;
     grid-template-columns: repeat(4, 1fr);
 
-    padding: 8px;
+    padding: 6px 8px calc(8px + env(safe-area-inset-bottom, 0px));
 
-    border: 1px solid var(--line);
-    border-radius: 22px;
+    border: 0;
+    border-top: 1px solid var(--line);
+    border-radius: 0;
 
-    background: var(--card);
+    background: color-mix(in srgb, var(--bg) 88%, transparent);
 
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
 
-    box-shadow:
-        0 20px 60px rgba(0,0,0,.5),
-        0 0 0 1px rgba(224, 196, 138, .08),
-        0 0 40px rgba(224, 196, 138, .06),
-        inset 0 1px 0 rgba(255, 255, 255, .05);
+    box-shadow: 0 -8px 24px rgba(0,0,0,.12);
 }
 
 .nav-item {
@@ -859,34 +1003,36 @@ body::before {
     align-items: center;
     justify-content: center;
 
-    gap: 6px;
+    gap: 4px;
 
-    min-height: 56px;
+    min-height: 52px;
 
     color: var(--muted);
     text-decoration: none;
 
-    border-radius: 16px;
+    border-radius: 12px;
 
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: .02em;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
 
-    transition:
-        color .2s ease,
-        background .2s ease,
-        transform .2s ease;
+    transition: color .16s ease, background .16s ease;
 }
 
 .nav-item:hover,
 .nav-item.active {
-    color: var(--gold-light);
-    background: rgba(224, 196, 138, .12);
-    box-shadow: inset 0 0 24px rgba(224, 196, 138, .08);
+    color: var(--text);
+    background: rgba(255, 138, 26, .10);
+    box-shadow: none;
+}
+
+.nav-item.active {
+    color: #ff8a1a;
 }
 
 .nav-item:active {
-    transform: scale(.94);
+    transform: none;
 }
 
 .nav-item .icon {
@@ -922,17 +1068,68 @@ body::before {
 
 .nav-item.active .icon {
     stroke-width: 2.2;
-    filter: drop-shadow(0 0 12px rgba(232, 204, 150, .45));
+    filter: none;
+    color: #ff8a1a;
 }
 
 .nav-item.active::after {
-    content: "";
-    width: 5px;
-    height: 5px;
-    margin-top: 1px;
-    border-radius: 50%;
-    background: var(--gold-light);
-    box-shadow: 0 0 12px var(--gold-glow);
+    display: none;
+}
+
+.rm-inline-icon {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.rm-inline-icon .icon {
+    width: 14px;
+    height: 14px;
+}
+
+html[data-page="chat"] .bottom-nav {
+    display: none;
+}
+
+html[data-page="chat"] .page {
+    padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+}
+
+@media (min-width: 900px) {
+    .bottom-nav {
+        top: 50%;
+        bottom: auto;
+        left: 18px;
+        width: 92px;
+        transform: translateY(-50%);
+        grid-template-columns: 1fr;
+        gap: 4px;
+        padding: 10px 8px;
+        border: 1px solid var(--line);
+        border-radius: 22px;
+        background: var(--card);
+        box-shadow: 0 16px 40px rgba(0, 0, 0, .16);
+    }
+
+    .nav-item {
+        min-height: 64px;
+        border-radius: 14px;
+    }
+
+    main.page {
+        width: min(calc(100% - 140px), 900px);
+        margin-left: 124px;
+        margin-right: auto;
+        padding-bottom: 48px;
+    }
+
+    html[data-page="chat"] .bottom-nav {
+        display: grid;
+    }
+
+    html[data-page="chat"] .page {
+        padding-bottom: 48px;
+    }
 }
 
 /* -----------------------------------------------------------
@@ -1114,19 +1311,11 @@ body::before {
 }
 
 .brand-mark {
-    background:
-        radial-gradient(circle at 30% 25%,
-            rgba(245, 219, 168, .34),
-            transparent 48%),
-        linear-gradient(145deg,
-            rgba(224, 196, 138, .20),
-            rgba(114, 196, 212, .10));
-    border: 1px solid rgba(224, 196, 138, .36);
+    background: #14161a;
+    border: 1px solid rgba(255, 138, 26, .32);
     box-shadow:
-        0 8px 30px rgba(0,0,0,.35),
-        0 0 32px rgba(224, 196, 138, .14),
-        inset 0 1px 0 rgba(255,255,255,.08);
-    backdrop-filter: blur(18px);
+        0 8px 24px rgba(0,0,0,.28),
+        inset 0 1px 0 rgba(255,255,255,.06);
 }
 
 .hero {
@@ -1223,6 +1412,15 @@ body::before {
     margin: 0 0 16px;
 }
 
+.rm-search-suggest {
+    display: block;
+    padding: 18px;
+}
+
+.rm-search-suggest .rm-kind-chips {
+    margin: 12px 0 0;
+}
+
 .hero .rm-kind-chips {
     margin: 16px 0 0;
 }
@@ -1260,7 +1458,8 @@ body::before {
             145deg,
             rgba(0,0,0,.055),
             rgba(0,0,0,.018)
-        );
+        ),
+        var(--card);
     box-shadow:
         0 12px 35px rgba(0,0,0,.18),
         inset 0 1px 0 rgba(0,0,0,.045);
@@ -1359,29 +1558,21 @@ body::before {
 
 .bottom-nav {
     border-top: 1px solid var(--line);
-    background: var(--card);
-    box-shadow:
-        0 -12px 40px rgba(0,0,0,.25),
-        inset 0 1px 0 rgba(0,0,0,.04);
-    backdrop-filter: blur(22px);
-}
-
-.nav-item {
-    transition:
-        color .2s ease,
-        transform .2s ease;
+    background: color-mix(in srgb, var(--bg) 88%, transparent);
+    box-shadow: 0 -8px 24px rgba(0,0,0,.12);
+    backdrop-filter: blur(20px);
 }
 
 .nav-item:hover {
-    transform: translateY(-2px);
+    transform: none;
 }
 
 .nav-item.active {
-    color: var(--gold-light);
+    color: #ff8a1a;
 }
 
 .nav-item.active .icon {
-    filter: drop-shadow(0 0 10px rgba(224, 196, 138, .36));
+    filter: none;
 }
 
 .section-head {
@@ -2929,26 +3120,82 @@ a.feature.rm-feature-add {
     margin-bottom: 6px;
 }
 
+.rm-menu-list {
+    display: grid;
+    gap: 0;
+}
+
+.rm-menu-row,
 .rm-settings-theme-btn,
 .rm-settings-toggle-btn,
 .rm-settings-sound-btn {
     width: 100%;
-    min-height: 48px;
+    min-height: 56px;
     display: flex;
     align-items: center;
-    justify-content: center;
-    gap: 8px;
-    border: 1px solid rgba(214, 183, 122, .28);
-    border-radius: 14px;
-    background: rgba(214, 183, 122, .06);
-    color: var(--gold-light);
-    font-size: 14px;
-    font-weight: 700;
+    justify-content: flex-start;
+    gap: 12px;
+    padding: 10px 4px;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    border-radius: 0;
+    background: transparent;
+    color: var(--text);
+    font-size: 15px;
+    font-weight: 600;
+    text-align: left;
     cursor: pointer;
-    transition:
-        border-color .18s ease,
-        background .18s ease,
-        transform .18s ease;
+}
+
+.rm-menu-row:last-child,
+.rm-settings-sound-btn {
+    border-bottom: 0;
+}
+
+.rm-menu-row-icon {
+    width: 36px;
+    height: 36px;
+    display: grid;
+    place-items: center;
+    border-radius: 10px;
+    background: rgba(255, 138, 26, .10);
+    color: #ff8a1a;
+    flex: 0 0 36px;
+}
+
+.rm-menu-row-icon .icon {
+    width: 18px;
+    height: 18px;
+}
+
+.rm-menu-row-copy {
+    min-width: 0;
+    flex: 1;
+    display: grid;
+    gap: 2px;
+}
+
+.rm-menu-row-copy strong,
+.theme-toggle-label,
+.rm-menu-row-state {
+    display: block;
+}
+
+.rm-menu-row-copy strong {
+    font-size: 15px;
+    font-weight: 750;
+}
+
+.rm-menu-row-state,
+.theme-toggle-label {
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.rm-menu-row.is-off .rm-menu-row-icon {
+    background: rgba(26, 29, 33, .06);
+    color: var(--muted);
 }
 
 .rm-settings-toggle-stack {
@@ -2959,14 +3206,6 @@ a.feature.rm-feature-add {
 
 .rm-settings-toggle-btn.is-off {
     color: var(--muted);
-    border-color: rgba(255, 255, 255, .08);
-    background: rgba(255, 255, 255, .03);
-}
-
-.rm-settings-toggle-btn:active,
-.rm-settings-theme-btn:active,
-.rm-settings-sound-btn:active {
-    transform: scale(.98);
 }
 
 .rm-settings-sound-btn {
@@ -3658,6 +3897,7 @@ pub(crate) fn page_document(
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="resursmap-asset-version" content="{asset_version}">
+<script>try{{if(localStorage.getItem('resursmap-theme')==='light'){{document.documentElement.classList.add('light-theme');document.documentElement.style.colorScheme='light';}}}}catch(e){{}}</script>
 {site_head}
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;">
 <meta name="referrer" content="no-referrer">
@@ -3686,6 +3926,8 @@ pub(crate) fn page_document(
 <script src="{splash_js}" defer></script>
 <script src="{nav_badge_js}" defer></script>
 <script src="{theme_toggle_js}" defer></script>
+<script src="{place_memory_js}" defer></script>
+<script src="{share_js}" defer></script>
 
 </body>
 </html>"#,
@@ -3702,6 +3944,8 @@ pub(crate) fn page_document(
         chat_sounds_js = static_asset("chat-sounds.js"),
         nav_badge_js = static_asset("nav-badge.js"),
         theme_toggle_js = static_asset("theme-toggle.js"),
+        place_memory_js = static_asset("place-memory.js"),
+        share_js = static_asset("share.js"),
     )
 }
 
@@ -3732,7 +3976,7 @@ pub(crate) fn render_auth_page(params: AuthPageParams<'_>) -> String {
         {footer}
     </section>
     <div class="rm-auth-back">
-        <a href="/app">&larr; Вернуться на карту</a>
+        <a href="/app">&larr; Вернуться к городам</a>
     </div>
 </div>"#,
         heading = escape_html(params.heading),
@@ -3795,7 +4039,7 @@ pub(crate) fn bottom_nav_with_badge(active: &str, unread_count: i64) -> String {
 
     <a class="{map_class}" href="/app">
         {nav_map}
-        <span>Карта</span>
+        <span>Города</span>
     </a>
 
     <a class="{search_class}" href="/app/search">
@@ -3803,13 +4047,13 @@ pub(crate) fn bottom_nav_with_badge(active: &str, unread_count: i64) -> String {
         <span>Поиск</span>
     </a>
 
-    <a class="{profile_class}" href="/app/me" data-nav-attention-link>
-        {nav_user}
+    <a class="{chats_class}" href="/app/messages" data-nav-chats-link>
+        {nav_chats}
         {unread_badge}
-        <span>Профиль</span>
+        <span>Чаты</span>
     </a>
 
-    <a class="{menu_class}" href="/app/menu">
+    <a class="{menu_class}" href="/app/menu" data-nav-menu-link>
         {nav_menu}
         <span>Меню</span>
     </a>
@@ -3818,12 +4062,12 @@ pub(crate) fn bottom_nav_with_badge(active: &str, unread_count: i64) -> String {
 "#,
         map_class = item_class("map"),
         search_class = item_class("search"),
-        profile_class = item_class("profile"),
+        chats_class = item_class("chats"),
         menu_class = item_class("menu"),
         nav_map = icon("map"),
         nav_search = icon("search"),
-        nav_user = icon("user"),
-        nav_menu = icon("menu"),
+        nav_chats = icon("message-circle"),
+        nav_menu = icon("sliders"),
         unread_badge = if unread_count > 0 {
             let label = if unread_count > 99 {
                 "99+".to_string()
@@ -3842,11 +4086,8 @@ pub(crate) fn topbar(subtitle: &str, _icon_name: &str) -> String {
         r#"
 <header class="topbar">
     <a class="brand" href="/app">
-        <div class="brand-mark">{logo}</div>
-        <div>
-            <div class="brand-name">ResursMap</div>
-            <div class="brand-sub">{subtitle}</div>
-        </div>
+        <img class="brand-logo-img" src="{logo_src}" alt="ResursMap" width="188" height="40">
+        <div class="brand-sub">{subtitle}</div>
     </a>
 
     <a class="topbar-account"
@@ -3861,7 +4102,7 @@ pub(crate) fn topbar(subtitle: &str, _icon_name: &str) -> String {
     </a>
 </header>
 "#,
-        logo = brand_logo(),
+        logo_src = static_asset("brand-logo.png"),
         user_icon = icon("user"),
         subtitle = escape_html(subtitle),
     )
@@ -4021,26 +4262,23 @@ pub(crate) fn search_people_cards(people: &[crate::web::view_models::SearchPerso
             )| {
                 let safe_first_name = escape_html(first_name);
                 let safe_last_name = escape_html(last_name);
-                let safe_category = escape_html(category.trim());
+                let safe_category = escape_html(&profession_label(category));
                 let safe_intent = escape_html(intent_text);
 
                 let full_name = format!("{} {}", safe_first_name, safe_last_name)
                     .trim()
                     .to_string();
 
-                let display_name = if !full_name.is_empty() {
-                    full_name
-                } else if !safe_category.is_empty() {
+                let display_name = if !safe_category.is_empty() {
                     safe_category.clone()
                 } else {
                     "Специалист".to_string()
                 };
 
-                let profession_html = if !safe_category.is_empty() && display_name != safe_category
-                {
+                let profession_html = if !full_name.is_empty() {
                     format!(
-                        r#"<div class="card-meta rm-search-person-profession">{profession}</div>"#,
-                        profession = safe_category
+                        r#"<div class="card-meta rm-search-person-name">{name}</div>"#,
+                        name = full_name
                     )
                 } else {
                     String::new()
@@ -4165,7 +4403,7 @@ pub(crate) fn resource_result_card(params: ResourceResultCardParams<'_>) -> Stri
             </div>
 
             <div class="rm-card-rating">
-                ⭐ {rating:.1} · {votes}
+                Оценка {rating:.1} · {votes}
             </div>
         </div>
 
@@ -4178,7 +4416,7 @@ pub(crate) fn resource_result_card(params: ResourceResultCardParams<'_>) -> Stri
         </div>
 
         <div class="card-meta card-meta--mt-9">
-            📍 {location}
+            {location}
         </div>
 
         <div class="card-meta card-meta--mt-4 card-meta--wrap">
@@ -4240,7 +4478,7 @@ pub(crate) fn profile_resource_card(params: ProfileResourceCardParams<'_>) -> St
     let address_html = match address {
         Some(addr) if !addr.is_empty() => format!(
             r#"<div class="card-meta card-meta--mt-8 card-meta--wrap">
-            📍 {addr}
+            {addr}
         </div>
 "#,
             addr = escape_html(addr),
@@ -4260,7 +4498,7 @@ pub(crate) fn profile_resource_card(params: ProfileResourceCardParams<'_>) -> St
         <div class="card-meta card-meta--desc">{description}</div>
 
         {address_html}
-        <div class="card-meta card-meta--mt-8">⭐ {rating:.1} · {votes} голосов</div>
+        <div class="card-meta card-meta--mt-8">Оценка {rating:.1} · {votes} голосов</div>
 
         <div class="rm-card-row--badges">
             {premium_badge}
@@ -5262,7 +5500,7 @@ pub(crate) fn admin_ops_page_styled(
 }
 
 pub(crate) fn guest_mode_hint() -> &'static str {
-    r#"<p class="rm-guest-hint">Вы смотрите как гость. Карта и поиск доступны без регистрации. <a href="/login">Войти</a> · <a href="/register">Регистрация</a></p>"#
+    r#"<p class="rm-guest-hint">Вы смотрите как гость. Города и поиск доступны без регистрации. <a href="/login">Войти</a> · <a href="/register">Регистрация</a></p>"#
 }
 
 pub(crate) fn guest_mode_panel(next_path: &str) -> String {
@@ -5298,7 +5536,7 @@ pub(crate) fn guest_mode_panel(next_path: &str) -> String {
         {register_card}
     </div>
 </div>"#,
-        map_card = navigation_card("/app", "globe", "Карта ресурсов", "Страны и города"),
+        map_card = navigation_card("/app", "globe", "Города", "Страны и города"),
         search_card = navigation_card("/app/search", "search", "Поиск", "Люди и ресурсы"),
         login_card = navigation_card(&login_href, "user", "Войти", "Email и пароль",),
         register_card = navigation_card(
@@ -5316,7 +5554,7 @@ pub(crate) fn guest_locked_section(feature: &str, next_path: &str) -> String {
         note = empty_state_card(
             "Нужен аккаунт",
             &format!(
-                "Раздел «{feature}» доступен после входа. Карта и поиск работают без регистрации.",
+                "Раздел «{feature}» доступен после входа. Города и поиск работают без регистрации.",
                 feature = escape_html(feature),
             ),
         ),
@@ -5498,12 +5736,18 @@ mod public_entry_tests {
             "heart",
             "message-circle",
             "menu",
+            "sliders",
+            "volume",
+            "smartphone",
+            "sun",
+            "play",
             "logo",
             "arrow-left",
             "chevron-left",
             "shield",
             "users",
             "bell",
+            "clock",
             "settings",
             "alert-triangle",
             "plus",
@@ -5526,8 +5770,34 @@ mod public_entry_tests {
         assert!(html.contains("href=\"/app\""));
         assert!(html.contains("href=\"/app/me\""));
         assert!(html.contains("Профиль"));
-        assert!(html.contains("brand-logo-icon"));
+        assert!(html.contains("brand-logo-img"));
         assert!(html.contains("ResursMap"));
         assert!(!html.contains("/app/auth"));
+    }
+
+    #[test]
+    fn people_cards_lead_with_profession() {
+        let html = search_people_cards(&[(
+            "pub-1".to_string(),
+            "ivan".to_string(),
+            "Иван".to_string(),
+            "Петров".to_string(),
+            "security".to_string(),
+            0,
+            String::new(),
+            0,
+            0,
+        )]);
+
+        let profession = html.find("Охрана").expect("profession title");
+        let name = html.find("Иван").expect("person name");
+        assert!(profession < name);
+        assert!(html.contains("rm-search-person-name"));
+    }
+
+    #[test]
+    fn legacy_services_label_reads_as_business() {
+        assert_eq!(profession_label("services"), "Бизнес");
+        assert_eq!(profession_label("community"), "");
     }
 }

@@ -7,7 +7,6 @@
         }
     }
 
-    var lastAttention = 0;
     var lastNotifications = 0;
 
     function formatCount(value) {
@@ -20,13 +19,7 @@
         return count > 99 ? "99+" : String(count);
     }
 
-    function attentionLink() {
-        return document.querySelector("[data-nav-attention-link]");
-    }
-
-    function updateAttentionBadge(count) {
-        var link = attentionLink();
-
+    function setBadge(link, count) {
         if (!link) {
             return;
         }
@@ -66,16 +59,18 @@
                 return response.json();
             })
             .then(function (data) {
-                var total = Number(data.count) || 0;
+                var messages = Number(data.messages) || 0;
                 var notifications = Number(data.notifications) || 0;
+                var contacts = Number(data.contacts) || 0;
+                var menuCount = notifications + contacts;
 
                 if (notifications > lastNotifications && lastNotifications > 0) {
                     notifySound();
                 }
 
                 lastNotifications = notifications;
-                lastAttention = total;
-                updateAttentionBadge(total);
+                setBadge(document.querySelector("[data-nav-chats-link]"), messages);
+                setBadge(document.querySelector("[data-nav-menu-link]"), menuCount);
 
                 if (typeof window.resursmapOnAttentionCount === "function") {
                     window.resursmapOnAttentionCount(data);

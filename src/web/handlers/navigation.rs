@@ -4,7 +4,7 @@ use crate::state::app_state::AppState;
 use crate::web::templates;
 use axum::{
     extract::{Path, Query, State},
-    http::{HeaderMap, StatusCode},
+    http::{header, HeaderMap, StatusCode},
     response::{Html, IntoResponse, Redirect, Response},
 };
 use std::collections::BTreeMap;
@@ -41,6 +41,24 @@ pub async fn home() -> Redirect {
 
 pub async fn app_menu() -> Html<String> {
     Html(templates::render_menu())
+}
+
+pub async fn app_add(headers: HeaderMap) -> Redirect {
+    let city_path = headers
+        .get(header::COOKIE)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|cookies| {
+            cookies.split(';').find_map(|part| {
+                let raw = part.trim().strip_prefix("rm_last_city=")?;
+                let mut parts = raw.split('.');
+                let ci: usize = parts.next()?.parse().ok()?;
+                let si: usize = parts.next()?.parse().ok()?;
+                let zi: usize = parts.next()?.parse().ok()?;
+                Some(format!("/app/{ci}/{si}/{zi}"))
+            })
+        });
+
+    Redirect::to(city_path.as_deref().unwrap_or("/app"))
 }
 
 pub async fn app_root(State(state): State<AppState>, headers: HeaderMap) -> Html<String> {
@@ -97,13 +115,13 @@ pub async fn app_root(State(state): State<AppState>, headers: HeaderMap) -> Html
 
     let categories = grouped_category_counts(
         &state,
-        "SELECT trim(category) AS category, COUNT(*) AS cnt
+        "SELECT trim(rubric) AS category, COUNT(*) AS cnt
          FROM resources
          WHERE is_active = 1
-           AND trim(category) <> ''
-         GROUP BY trim(category)
+           AND trim(rubric) <> ''
+         GROUP BY trim(rubric)
          ORDER BY cnt DESC
-         LIMIT 10",
+         LIMIT 40",
     );
 
     let people_by_category = grouped_category_counts(
@@ -116,7 +134,7 @@ pub async fn app_root(State(state): State<AppState>, headers: HeaderMap) -> Html
            AND trim(p.category) <> ''
          GROUP BY trim(p.category)
          ORDER BY cnt DESC
-         LIMIT 10",
+         LIMIT 40",
     );
 
     let guest_mode = verify_user_session(&state, &headers).is_none();
@@ -209,6 +227,68 @@ fn discoverable_profile_clause() -> &'static str {
        )"
 }
 
+fn place_prefix_match(place: &str, token: &str) -> bool {
+    let place = crate::catalog::normalize(place);
+    let token = crate::catalog::normalize(token);
+    if place.is_empty() || token.is_empty() {
+        return false;
+    }
+    if place == token || place.starts_with(&token) || token.starts_with(&place) {
+        return true;
+    }
+    if token.chars().count() >= 4 && place.chars().count() >= 4 {
+        let token_prefix: String = token.chars().take(4).collect();
+        let place_prefix: String = place.chars().take(4).collect();
+        return token_prefix == place_prefix;
+    }
+    false
+}
+
+fn location_token_score(token: &str, city: &str, country: &str, continent: &str) -> i32 {
+    let token = token.trim();
+    if token.chars().count() < 3 || crate::catalog::resolve(token).is_some() {
+        return 0;
+    }
+    if place_prefix_match(city, token) {
+        return 500;
+    }
+    if place_prefix_match(country, token) {
+        return 250;
+    }
+    if token.chars().count() >= 4 && place_prefix_match(continent, token) {
+        return 120;
+    }
+    0
+}
+
+fn token_matches_locations(token: &str, locations: &[(usize, usize, usize)]) -> bool {
+    let world_data = crate::geography::world();
+    locations.iter().any(|(ci, si, zi)| {
+        world_data.iter().nth(*ci).is_some_and(|(continent, countries)| {
+            countries.iter().nth(*si).is_some_and(|(country, cities)| {
+                cities.get(*zi).is_some_and(|city| {
+                    location_token_score(token, city, country, continent) > 0
+                })
+            })
+        })
+    })
+}
+
+fn search_text_terms(q: &str, locations: &[(usize, usize, usize)]) -> Vec<String> {
+    q.split_whitespace()
+        .filter_map(|term| {
+            let clean: String = term.chars().filter(|c| c.is_alphanumeric()).collect();
+            if clean.chars().count() < 2 {
+                return None;
+            }
+            if !locations.is_empty() && token_matches_locations(&clean, locations) {
+                return None;
+            }
+            Some(clean)
+        })
+        .collect()
+}
+
 fn location_match_score(query: &str, query_chars: usize, city: &str, country: &str, continent: &str) -> i32 {
     let city_l = city.to_lowercase();
     let country_l = country.to_lowercase();
@@ -251,20 +331,28 @@ fn collect_location_matches(q: &str) -> Vec<(usize, usize, usize)> {
 
     let query_chars = query.chars().count();
     let world_data = crate::geography::world();
-    let mut scored: Vec<(i32, usize, usize, usize)> = Vec::new();
+    let mut best: BTreeMap<(usize, usize, usize), i32> = BTreeMap::new();
 
     for (ci, (continent, countries)) in world_data.iter().enumerate() {
         for (si, (country, cities)) in countries.iter().enumerate() {
             for (zi, city) in cities.iter().enumerate() {
-                let score = location_match_score(&query, query_chars, city, country, continent);
-
+                let mut score = location_match_score(&query, query_chars, city, country, continent);
+                for token in query.split(|ch: char| !ch.is_alphanumeric()) {
+                    score = score.max(location_token_score(token, city, country, continent));
+                }
                 if score > 0 {
-                    scored.push((score, ci, si, zi));
+                    best.entry((ci, si, zi))
+                        .and_modify(|current| *current = (*current).max(score))
+                        .or_insert(score);
                 }
             }
         }
     }
 
+    let mut scored: Vec<(i32, usize, usize, usize)> = best
+        .into_iter()
+        .map(|((ci, si, zi), score)| (score, ci, si, zi))
+        .collect();
     scored.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
     scored.truncate(20);
     scored
@@ -290,6 +378,7 @@ fn map_search_resource_row(
         row.get(10)?,
         row.get(11)?,
         row.get(12)?,
+        row.get(13)?,
     ))
 }
 
@@ -316,6 +405,15 @@ pub async fn app_search(
 ) -> Response {
     let q = params.get("q").map(|s| s.trim()).unwrap_or("");
     let kind = parsed_search_kind(params.get("kind").map(|s| s.as_str()).unwrap_or(""));
+    let explicit_rubric = params
+        .get("rubric")
+        .and_then(|value| crate::catalog::by_id(value.trim()));
+    let implied_rubric = if explicit_rubric.is_none() {
+        crate::catalog::resolve(q)
+    } else {
+        None
+    };
+    let rubric_filter = explicit_rubric.or(implied_rubric);
 
     if q.chars().count() > 100 || q.chars().any(|c| c.is_control()) {
         return (
@@ -331,7 +429,7 @@ pub async fn app_search(
     let mut resources: Vec<crate::web::view_models::SearchResourceRow> = Vec::new();
     let mut people: Vec<crate::web::view_models::SearchPersonRow> = Vec::new();
 
-    if !q.is_empty() || kind.is_some() {
+    if !q.is_empty() || kind.is_some() || explicit_rubric.is_some() {
         let location_matches = collect_location_matches(q);
 
         let db = match crate::db::pool::get_connection(&state.db_pool) {
@@ -345,21 +443,18 @@ pub async fn app_search(
             }
         };
 
-        let fts_terms: Vec<String> = q
-            .split_whitespace()
-            .filter_map(|term| {
-                let clean: String = term.chars().filter(|c| c.is_alphanumeric()).collect();
-
-                if clean.chars().count() < 2 {
-                    None
-                } else {
-                    Some(format!("{}*", clean))
-                }
-            })
+        let text_terms = search_text_terms(q, &location_matches);
+        let fts_terms: Vec<String> = text_terms
+            .iter()
+            .map(|term| format!("{}*", term))
             .collect();
 
         let fts_query = fts_terms.join(" ");
-        let like_pattern = format!("%{}%", q.to_lowercase());
+        let like_pattern = if let Some(term) = text_terms.first() {
+            format!("%{}%", term.to_lowercase())
+        } else {
+            format!("%{}%", q.to_lowercase())
+        };
         let kind_clause = search_kind_clause(kind);
         let fts_ready = search_fts_ready(&db);
         let use_fts = !fts_terms.is_empty() && fts_ready;
@@ -378,7 +473,8 @@ pub async fn app_search(
                     r.continent_index,
                     r.country_index,
                     r.city_index,
-                    COALESCE(r.listing_type, 'general')";
+                    COALESCE(r.listing_type, 'general'),
+                    COALESCE(r.rubric, '')";
 
         let mut sql = if use_fts {
             format!(
@@ -401,20 +497,38 @@ pub async fn app_search(
         sql.push_str(kind_clause);
 
         let mut values: Vec<rusqlite::types::Value> = Vec::new();
+
+        if let Some(rubric) = explicit_rubric {
+            values.push(rubric.id.to_string().into());
+            sql.push_str(&format!(" AND r.rubric = ?{}", values.len()));
+        }
+
         let mut match_parts: Vec<String> = Vec::new();
 
         if use_fts {
             values.push(fts_query.clone().into());
-            match_parts.push("resources_fts MATCH ?1".to_string());
-        } else if use_like {
+            match_parts.push(format!("resources_fts MATCH ?{}", values.len()));
+        } else if use_like && !text_terms.is_empty() {
             values.push(like_pattern.clone().into());
-            match_parts.push(
-                "(LOWER(r.title) LIKE ?1
-                  OR LOWER(r.description) LIKE ?1
-                  OR LOWER(r.category) LIKE ?1
-                  OR LOWER(r.address) LIKE ?1)"
-                    .to_string(),
-            );
+            match_parts.push(format!(
+                "(LOWER(r.title) LIKE ?{n}
+                  OR LOWER(r.description) LIKE ?{n}
+                  OR LOWER(r.category) LIKE ?{n}
+                  OR LOWER(r.address) LIKE ?{n}
+                  OR LOWER(r.rubric) LIKE ?{n})",
+                n = values.len()
+            ));
+        }
+
+        if let Some(rubric) = implied_rubric {
+            values.push(rubric.id.to_string().into());
+            match_parts.push(format!("r.rubric = ?{}", values.len()));
+        }
+
+        if !match_parts.is_empty() {
+            sql.push_str(" AND (");
+            sql.push_str(&match_parts.join(" OR "));
+            sql.push(')');
         }
 
         if !location_matches.is_empty() {
@@ -427,13 +541,8 @@ pub async fn app_search(
                 "r.country_index",
                 "r.city_index",
             );
-            match_parts.push(location_sql);
-        }
-
-        if !match_parts.is_empty() {
-            sql.push_str(" AND (");
-            sql.push_str(&match_parts.join(" OR "));
-            sql.push(')');
+            sql.push_str(" AND ");
+            sql.push_str(&location_sql);
         }
 
         sql.push_str(
@@ -466,7 +575,8 @@ pub async fn app_search(
             && (use_people_fts
                 || use_people_like
                 || kind == Some("workers")
-                || !location_matches.is_empty())
+                || !location_matches.is_empty()
+                || rubric_filter.is_some())
         {
             let mut people_sql = String::from(
                 "SELECT
@@ -492,14 +602,39 @@ pub async fn app_search(
                    ON p.rowid = profiles_fts.rowid",
                 );
                 people_values.push(fts_query.clone().into());
-                people_parts.push("profiles_fts MATCH ?1".to_string());
-            } else if use_people_like {
+                people_parts.push(format!("profiles_fts MATCH ?{}", people_values.len()));
+            } else if use_people_like && !text_terms.is_empty() {
                 people_values.push(like_pattern.clone().into());
-                people_parts.push(
-                    "(LOWER(p.category) LIKE ?1
-                      OR LOWER(p.intent_text) LIKE ?1)"
-                        .to_string(),
-                );
+                people_parts.push(format!(
+                    "(LOWER(p.category) LIKE ?{n}
+                      OR LOWER(p.intent_text) LIKE ?{n})",
+                    n = people_values.len()
+                ));
+            }
+
+            if let Some(rubric) = implied_rubric {
+                people_values.push(rubric.id.to_string().into());
+                people_parts.push(format!("p.category = ?{}", people_values.len()));
+            }
+
+            people_sql.push_str(
+                "
+                 JOIN users u
+                   ON u.id = p.user_id
+                  AND u.is_active = 1
+                 WHERE p.public_id <> ''",
+            );
+            people_sql.push_str(discoverable_profile_clause());
+
+            if let Some(rubric) = explicit_rubric {
+                people_values.push(rubric.id.to_string().into());
+                people_sql.push_str(&format!(" AND p.category = ?{}", people_values.len()));
+            }
+
+            if !people_parts.is_empty() {
+                people_sql.push_str(" AND (");
+                people_sql.push_str(&people_parts.join(" OR "));
+                people_sql.push(')');
             }
 
             if !location_matches.is_empty() {
@@ -512,22 +647,8 @@ pub async fn app_search(
                     "p.home_country_index",
                     "p.home_city_index",
                 );
-                people_parts.push(location_sql);
-            }
-
-            people_sql.push_str(
-                "
-                 JOIN users u
-                   ON u.id = p.user_id
-                  AND u.is_active = 1
-                 WHERE p.public_id <> ''",
-            );
-            people_sql.push_str(discoverable_profile_clause());
-
-            if !people_parts.is_empty() {
-                people_sql.push_str(" AND (");
-                people_sql.push_str(&people_parts.join(" OR "));
-                people_sql.push(')');
+                people_sql.push_str(" AND ");
+                people_sql.push_str(&location_sql);
             }
 
             people_sql.push_str(
@@ -568,6 +689,7 @@ pub async fn app_search(
     Html(templates::render_search(
         q,
         kind.unwrap_or(""),
+        explicit_rubric.map(|rubric| rubric.id).unwrap_or(""),
         resources,
         people,
         verify_user_session(&state, &headers).is_none(),
@@ -585,4 +707,28 @@ pub async fn app_country(Path((ci, si)): Path<(usize, usize)>) -> Html<String> {
 
 pub async fn app_city(Path((ci, si, zi)): Path<(usize, usize, usize)>) -> Html<String> {
     Html(templates::render_city(ci, si, zi))
+}
+
+#[cfg(test)]
+mod search_query_tests {
+    use super::*;
+
+    #[test]
+    fn city_query_still_finds_nice() {
+        let matches = collect_location_matches("Ницца");
+        assert!(!matches.is_empty());
+    }
+
+    #[test]
+    fn trade_plus_city_keeps_profession_and_pins_nice() {
+        let matches = collect_location_matches("сантехник в Ницце");
+        assert!(
+            !matches.is_empty(),
+            "город из фразы должен находиться по падежу"
+        );
+
+        let terms = search_text_terms("сантехник в Ницце", &matches);
+        assert_eq!(terms, vec!["сантехник".to_string()]);
+        assert!(crate::catalog::resolve("сантехник в Ницце").is_some());
+    }
 }

@@ -3,6 +3,32 @@ use rusqlite::{Connection, Result};
 /// Full-text index for public search. Profile search indexes only
 /// profession and intent, never name or username.
 pub fn init_search_fts(conn: &Connection) -> Result<()> {
+    ensure_resources_fts(conn)?;
+    ensure_profiles_fts_parameters_only(conn)?;
+
+    Ok(())
+}
+
+fn resources_fts_has_rubric(conn: &Connection) -> bool {
+    conn.prepare("SELECT rubric FROM resources_fts LIMIT 1")
+        .is_ok()
+}
+
+fn ensure_resources_fts(conn: &Connection) -> Result<()> {
+    let table_exists = conn.prepare("SELECT 1 FROM resources_fts LIMIT 1").is_ok();
+    let needs_rebuild = table_exists && !resources_fts_has_rubric(conn);
+
+    if needs_rebuild {
+        conn.execute_batch(
+            "
+            DROP TRIGGER IF EXISTS resources_fts_ai;
+            DROP TRIGGER IF EXISTS resources_fts_ad;
+            DROP TRIGGER IF EXISTS resources_fts_au;
+            DROP TABLE IF EXISTS resources_fts;
+            ",
+        )?;
+    }
+
     conn.execute_batch(
         "
         CREATE VIRTUAL TABLE IF NOT EXISTS resources_fts USING fts5(
@@ -10,6 +36,7 @@ pub fn init_search_fts(conn: &Connection) -> Result<()> {
             description,
             category,
             address,
+            rubric,
             tokenize = 'unicode61'
         );
 
@@ -17,10 +44,10 @@ pub fn init_search_fts(conn: &Connection) -> Result<()> {
         AFTER INSERT ON resources
         BEGIN
             INSERT INTO resources_fts(
-                rowid, title, description, category, address
+                rowid, title, description, category, address, rubric
             )
             VALUES (
-                new.id, new.title, new.description, new.category, new.address
+                new.id, new.title, new.description, new.category, new.address, new.rubric
             );
         END;
 
@@ -31,22 +58,24 @@ pub fn init_search_fts(conn: &Connection) -> Result<()> {
         END;
 
         CREATE TRIGGER IF NOT EXISTS resources_fts_au
-        AFTER UPDATE OF title, description, category, address ON resources
+        AFTER UPDATE OF title, description, category, address, rubric ON resources
         BEGIN
             DELETE FROM resources_fts WHERE rowid = old.id;
             INSERT INTO resources_fts(
-                rowid, title, description, category, address
+                rowid, title, description, category, address, rubric
             )
             VALUES (
-                new.id, new.title, new.description, new.category, new.address
+                new.id, new.title, new.description, new.category, new.address, new.rubric
             );
         END;
-
         ",
     )?;
 
-    backfill_resources_fts(conn)?;
-    ensure_profiles_fts_parameters_only(conn)?;
+    if needs_rebuild {
+        backfill_resources_fts_with_lexicon(conn)?;
+    } else {
+        backfill_resources_fts(conn)?;
+    }
 
     Ok(())
 }
@@ -137,11 +166,39 @@ fn backfill_resources_fts(conn: &Connection) -> Result<()> {
     let source: i64 = conn.query_row("SELECT COUNT(*) FROM resources", [], |row| row.get(0))?;
 
     if indexed == 0 && source > 0 {
+        backfill_resources_fts_with_lexicon(conn)?;
+    }
+
+    Ok(())
+}
+
+fn backfill_resources_fts_with_lexicon(conn: &Connection) -> Result<()> {
+    let mut stmt = conn.prepare(
+        "SELECT id, title, description, category, address, COALESCE(rubric, '')
+         FROM resources",
+    )?;
+    let rows: Vec<(i64, String, String, String, String, String)> = stmt
+        .query_map([], |row| {
+            Ok((
+                row.get(0)?,
+                row.get(1)?,
+                row.get(2)?,
+                row.get(3)?,
+                row.get(4)?,
+                row.get(5)?,
+            ))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    drop(stmt);
+
+    conn.execute("DELETE FROM resources_fts", [])?;
+
+    for (id, title, description, category, address, rubric) in rows {
+        let lexicon = crate::catalog::search_text_for(&rubric);
         conn.execute(
-            "INSERT INTO resources_fts(rowid, title, description, category, address)
-             SELECT id, title, description, category, address
-             FROM resources",
-            [],
+            "INSERT INTO resources_fts(rowid, title, description, category, address, rubric)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            rusqlite::params![id, title, description, category, address, lexicon],
         )?;
     }
 
@@ -241,6 +298,78 @@ pub fn ensure_profile_home_city_columns(conn: &Connection) -> Result<()> {
            )",
         [],
     )?;
+
+    Ok(())
+}
+
+pub fn ensure_resource_rubric_column(conn: &Connection) -> Result<()> {
+    let columns: Vec<String> = {
+        let mut stmt = conn.prepare("PRAGMA table_info(resources)")?;
+        let columns = stmt
+            .query_map([], |row| row.get::<_, String>(1))?
+            .collect::<Result<Vec<_>, _>>()?;
+        columns
+    };
+
+    if !columns.iter().any(|column| column == "rubric") {
+        let _ = conn.execute(
+            "ALTER TABLE resources ADD COLUMN rubric TEXT NOT NULL DEFAULT ''",
+            [],
+        );
+    }
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_resources_rubric
+         ON resources(rubric)",
+        [],
+    )?;
+
+    backfill_catalog_values(conn)?;
+
+    Ok(())
+}
+
+fn backfill_catalog_values(conn: &Connection) -> Result<()> {
+    let mut profile_stmt =
+        conn.prepare("SELECT rowid, category FROM profiles WHERE trim(category) <> ''")?;
+    let profiles: Vec<(i64, String)> = profile_stmt
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
+        .collect::<Result<Vec<_>, _>>()?;
+    drop(profile_stmt);
+
+    for (rowid, category) in profiles {
+        if crate::catalog::by_id(&category).is_some() {
+            continue;
+        }
+
+        if let Some(rubric) = crate::catalog::resolve(&category) {
+            conn.execute(
+                "UPDATE profiles SET category = ?1 WHERE rowid = ?2",
+                rusqlite::params![rubric.id, rowid],
+            )?;
+        }
+    }
+
+    let mut resource_stmt = conn.prepare(
+        "SELECT id, title, category
+         FROM resources
+         WHERE trim(rubric) = ''",
+    )?;
+    let resources: Vec<(i64, String, String)> = resource_stmt
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?
+        .collect::<Result<Vec<_>, _>>()?;
+    drop(resource_stmt);
+
+    for (id, title, category) in resources {
+        let guessed = crate::catalog::resolve(&title).or_else(|| crate::catalog::resolve(&category));
+
+        if let Some(rubric) = guessed {
+            conn.execute(
+                "UPDATE resources SET rubric = ?1 WHERE id = ?2",
+                rusqlite::params![rubric.id, id],
+            )?;
+        }
+    }
 
     Ok(())
 }

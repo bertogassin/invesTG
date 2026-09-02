@@ -1,7 +1,8 @@
 use super::common::{
-    back_hero, back_link, bottom_nav, contact_request_status_badge, empty_state_action,
-    empty_state_card, empty_state_card_with_actions, escape_html, guest_locked_section, icon,
-    page_shell, section_head, static_asset, topbar,
+    back_hero, back_link, bottom_nav, bottom_nav_with_badge, contact_request_status_badge,
+    empty_state_action, empty_state_card, empty_state_card_with_actions, escape_html,
+    guest_locked_section, icon, page_document, page_shell, section_head, simple_hero, static_asset,
+    topbar,
 };
 
 pub fn render_contact_requests(
@@ -72,7 +73,7 @@ pub fn render_contact_requests(
                             r#"
 <div class="rm-contact-actions">
     <form method="post" action="/app/contact-request/{id}/accept" class="ui-form">
-        <button type="submit" class="ui-button rm-contact-btn rm-contact-btn--accept">✓ Принять</button>
+        <button type="submit" class="ui-button rm-contact-btn rm-contact-btn--accept">Принять</button>
     </form>
     <form method="post" action="/app/contact-request/{id}/reject" class="ui-form">
         <button type="submit" class="ui-button rm-contact-btn rm-contact-btn--reject">✕ Отклонить</button>
@@ -83,7 +84,7 @@ pub fn render_contact_requests(
                         )
                     } else if status == "accepted" {
                         format!(
-                            r#"<a href="/app/chat/{sender_user_id}" class="rm-contact-open-chat">💬 Открыть чат</a>"#,
+                            r#"<a href="/app/chat/{sender_user_id}" class="rm-contact-open-chat">Открыть чат</a>"#,
                             sender_user_id = sender_user_id,
                         )
                     } else {
@@ -106,7 +107,7 @@ pub fn render_contact_requests(
             <div class="rm-contact-message">{message}</div>
             {profile_link}
             {actions}
-            <div class="card-meta rm-contact-meta">REQUEST #{request_id} · {created_at}</div>
+            <div class="card-meta rm-contact-meta">{created_at}</div>
         </div>
     </div>
 </article>
@@ -118,7 +119,6 @@ pub fn render_contact_requests(
                         message = safe_message,
                         profile_link = profile_link,
                         actions = actions,
-                        request_id = request_id,
                         created_at = created_at,
                     )
                 },
@@ -169,7 +169,7 @@ pub fn render_contact_requests(
             "Управление ранее полученными запросами.",
         ),
         &content_html,
-        &bottom_nav("profile"),
+        &bottom_nav("chats"),
     )
 }
 
@@ -399,15 +399,14 @@ pub fn render_messages(
     page_shell(
         "Сообщения · ResursMap",
         &topbar("Сообщения", "message-circle"),
-        &back_hero(
-            &back_link("/app/me", "Назад", "chevron-left"),
+        &simple_hero(
             "message-circle",
             "Внутренняя связь",
             "Сообщения",
             "Личные сообщения и активные диалоги.",
         ),
         &content_html,
-        &bottom_nav("profile"),
+        &bottom_nav_with_badge("chats", total_unread),
     )
 }
 
@@ -706,11 +705,7 @@ pub fn render_chat(
 
     let content = if !authenticated {
         guest_locked_section("Чат", "/app/messages")
-    } else if messages.is_empty()
-        && username.is_empty()
-        && first_name.is_empty()
-        && last_name.is_empty()
-    {
+    } else if other_user_id <= 0 || other_user_id == viewer_user_id {
         empty_state_card("Чат недоступен", "Диалог недоступен.")
     } else {
         let first_message_id = messages.first().map(|message| message.id).unwrap_or(0);
@@ -719,15 +714,42 @@ pub fn render_chat(
 
         let may_have_older = if messages.len() >= 100 { "1" } else { "0" };
 
+        let composer_locked = contact_request
+            .is_some_and(|request| request.status == "pending" || request.status == "rejected");
+
+        let waiting_as_sender = contact_request.is_some_and(|request| {
+            request.status == "pending" && request.sender_user_id == viewer_user_id
+        });
+
         let message_cards = if messages.is_empty() {
-            r#"
+            if waiting_as_sender {
+                r#"
+<div class="chat-empty-thread">
+    <div class="chat-empty-thread-icon" aria-hidden="true"></div>
+    <strong>Запрос отправлен</strong>
+    <p>Первое сообщение уже у собеседника. Ответ появится, когда он примет общение.</p>
+</div>
+"#
+                .to_string()
+            } else if composer_locked {
+                r#"
+<div class="chat-empty-thread">
+    <div class="chat-empty-thread-icon" aria-hidden="true"></div>
+    <strong>Диалог ещё не открыт</strong>
+    <p>Переписка станет доступна после решения по запросу.</p>
+</div>
+"#
+                .to_string()
+            } else {
+                r#"
 <div class="chat-empty-thread">
     <div class="chat-empty-thread-icon" aria-hidden="true"></div>
     <strong>Диалог открыт</strong>
     <p>Напишите первое сообщение — Enter для отправки.</p>
 </div>
 "#
-            .to_string()
+                .to_string()
+            }
         } else {
             let mut last_date_key = String::new();
 
@@ -760,7 +782,7 @@ pub fn render_chat(
                         id = request.id
                     )
                 } else if request.status == "pending" {
-                    r#"<aside class="chat-request-gate"><strong>Сообщение отправлено</strong><p>Ожидаем решения пользователя. Второе сообщение пока недоступно.</p></aside>"#.to_string()
+                    r#"<aside class="chat-request-gate"><strong>Запрос отправлен</strong><p>Первое сообщение уже видно собеседнику. Следующие сообщения будут доступны, когда он примет общение.</p></aside>"#.to_string()
                 } else if request.status == "rejected" {
                     r#"<aside class="chat-request-gate is-rejected"><strong>Запрос отклонён</strong><p>Продолжить этот диалог сейчас нельзя.</p></aside>"#.to_string()
                 } else {
@@ -769,15 +791,10 @@ pub fn render_chat(
             })
             .unwrap_or_default();
 
-        let composer_locked = contact_request
-            .is_some_and(|request| request.status == "pending" || request.status == "rejected");
-
-        let composer = if composer_locked {
-            String::new()
-        } else {
+        let composer = format!(
             r#"
 <form id="chat-form"
-      class="ui-form chat-composer">
+      class="ui-form chat-composer{locked_class}"{hidden_attr}>
 
     <div id="chat-reply-bar"
          class="chat-reply-bar"
@@ -810,17 +827,20 @@ pub fn render_chat(
     </div>
 
     <div class="chat-composer-main">
-        <textarea id="chat-input" name="message" rows="1" maxlength="2000" required autocomplete="off" enterkeyhint="send" aria-label="Текст сообщения" placeholder="Сообщение…" class="ui-textarea chat-input"></textarea>
+        <textarea id="chat-input" name="message" rows="1" maxlength="2000" required autocomplete="off" enterkeyhint="send" aria-label="Текст сообщения" placeholder="Сообщение…" class="ui-textarea chat-input"{disabled_attr}></textarea>
         <button id="chat-clear" type="button" class="chat-clear-button" aria-label="Очистить сообщение" hidden>×</button>
     </div>
     <input type="file" id="chat-image-input" accept="image/jpeg,image/png,image/webp" hidden>
-    <button id="chat-voice-btn" type="button" class="chat-voice-btn">Голос</button>
-    <button id="chat-image-btn" type="button" class="chat-image-btn">Фото</button>
-    <button id="chat-send" type="submit" class="ui-button chat-send-button">Отправить</button>
+    <button id="chat-voice-btn" type="button" class="chat-voice-btn"{disabled_attr}>Голос</button>
+    <button id="chat-image-btn" type="button" class="chat-image-btn"{disabled_attr}>Фото</button>
+    <button id="chat-send" type="submit" class="ui-button chat-send-button"{disabled_attr}>Отправить</button>
     <div class="chat-composer-footer"><span id="chat-send-state">Enter — отправить · Shift+Enter — новая строка</span><span id="chat-counter">0 / 2000</span></div>
 </form>
-"#.to_string()
-        };
+"#,
+            locked_class = if composer_locked { " is-locked" } else { "" },
+            hidden_attr = if composer_locked { " hidden" } else { "" },
+            disabled_attr = if composer_locked { " disabled" } else { "" },
+        );
 
         format!(
             r#"
@@ -1051,12 +1071,17 @@ pub fn render_chat(
         content = content,
     );
 
-    page_shell(
+    page_document(
         "Чат · ResursMap",
-        &topbar("Чат", "message-circle"),
+        r#"<script>document.documentElement.dataset.page="chat";</script>"#,
         "",
-        &content_html,
-        &bottom_nav("profile"),
+        &format!(
+            "{topbar}\n\n{content}",
+            topbar = topbar("Чат", "message-circle"),
+            content = content_html,
+        ),
+        &bottom_nav("chats"),
+        "",
     )
 }
 

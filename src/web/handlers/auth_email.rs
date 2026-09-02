@@ -611,7 +611,7 @@ pub async fn login_page(Query(query): Query<AuthNextQuery>) -> Html<String> {
             document_title: "Вход · ResursMap",
             heading: "Вход",
             subtitle:
-                "Карта работает без регистрации. Вход нужен для сообщений, избранного и публикаций.",
+                "Города и поиск работают без регистрации. Вход нужен для сообщений, избранного и публикаций.",
             body_html: &body_html,
             footer_html: &footer_html,
             script_html: &body_after,

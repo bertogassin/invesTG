@@ -420,7 +420,9 @@ pub async fn api_chat_send_image(
             crate::telegram_notify::notify_telegram_user(
                 state.bot_token.as_deref(),
                 telegram_id,
-                "📷 У вас новое фото в ResursMap!\n\nОткройте чат: https://resursmap.de/app/messages",
+                &format!(
+                    "📷 У вас новое фото в ResursMap!\n\nОткройте чат: https://resursmap.de/app/chat/{user_id}"
+                ),
             );
         }
     }
@@ -663,7 +665,9 @@ pub async fn api_chat_send_voice(
             crate::telegram_notify::notify_telegram_user(
                 state.bot_token.as_deref(),
                 telegram_id,
-                "🎤 У вас новое голосовое в ResursMap!\n\nОткройте чат: https://resursmap.de/app/messages",
+                &format!(
+                    "🎤 У вас новое голосовое в ResursMap!\n\nОткройте чат: https://resursmap.de/app/chat/{user_id}"
+                ),
             );
         }
     }

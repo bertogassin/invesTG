@@ -1,11 +1,61 @@
 use super::common::{
-    bottom_nav, empty_state_card, escape_html, guest_mode_hint, icon, intent_kind_chips,
+    bottom_nav, empty_state_card, escape_html, guest_mode_hint, icon, intent_kind_chips, kind_chip,
     navigation_card, page_document, page_shell, premium_badge_html, profession_label,
     resource_listing_label, resource_result_card, search_form_hero, search_people_cards,
     section_head, simple_hero, static_asset, topbar, verified_badge_html,
 };
 use crate::geography::world;
 use std::collections::BTreeMap;
+
+fn search_page_href(q: &str, kind: &str, rubric: Option<&str>) -> String {
+    let mut href = String::from("/app/search?");
+    let mut parts = Vec::new();
+    if !q.trim().is_empty() {
+        parts.push(format!("q={}", urlencoding::encode(q.trim())));
+    }
+    if !kind.trim().is_empty() {
+        parts.push(format!("kind={}", urlencoding::encode(kind.trim())));
+    }
+    if let Some(rubric) = rubric.filter(|value| !value.is_empty()) {
+        parts.push(format!("rubric={}", urlencoding::encode(rubric)));
+    }
+    href.push_str(&parts.join("&"));
+    if href.ends_with('?') {
+        href.pop();
+    }
+    href
+}
+
+fn search_rubric_chips(
+    q: &str,
+    kind: &str,
+    active: Option<&crate::catalog::Rubric>,
+) -> String {
+    let filter_kind = match kind {
+        "business" => Some(crate::catalog::RubricKind::Business),
+        "work" | "workers" => Some(crate::catalog::RubricKind::Work),
+        _ => active.map(|rubric| rubric.kind),
+    };
+    let Some(filter_kind) = filter_kind else {
+        return String::new();
+    };
+
+    let mut chips = String::from(r#"<nav class="rm-kind-chips" aria-label="Рубрика">"#);
+    chips.push_str(&kind_chip(
+        active.is_none(),
+        &search_page_href(q, kind, None),
+        "Все",
+    ));
+    for rubric in crate::catalog::by_kind(filter_kind) {
+        chips.push_str(&kind_chip(
+            active.is_some_and(|item| item.id == rubric.id),
+            &search_page_href(q, kind, Some(rubric.id)),
+            rubric.label,
+        ));
+    }
+    chips.push_str("</nav>");
+    chips
+}
 
 fn is_intent_category(key: &str) -> bool {
     matches!(
@@ -87,26 +137,20 @@ fn build_home_explore_index(
         }
     }
 
-    let mut professions: BTreeMap<String, i64> = BTreeMap::new();
-
-    for (category, count) in resource_categories {
-        let key = category.trim().to_string();
-
-        if key.is_empty() || is_intent_category(&key) {
-            continue;
-        }
-
-        *professions.entry(key).or_insert(0) += count;
-    }
-
-    for (category, count) in people_categories {
-        let key = category.trim().to_string();
+    let mut counts: BTreeMap<String, i64> = BTreeMap::new();
+    for (category, count) in resource_categories
+        .iter()
+        .chain(people_categories.iter())
+    {
+        let key = crate::catalog::resolve(category)
+            .map(|rubric| rubric.id.to_string())
+            .unwrap_or_else(|| category.trim().to_string());
 
         if key.is_empty() || is_intent_category(&key) {
             continue;
         }
 
-        *professions.entry(key).or_insert(0) += count;
+        *counts.entry(key).or_insert(0) += count;
     }
 
     push_explore_entry(
@@ -127,26 +171,37 @@ fn build_home_explore_index(
         &mut parts,
         "business",
         "Бизнес",
-        "Компании, услуги и специалисты",
+        "Компании и предложения",
         "/app/search?kind=business",
     );
 
-    for (category, count) in professions {
-        let label = profession_label(&category);
-        let subtitle = if count > 0 {
-            format!("Профессия · {count}")
-        } else {
-            "Профессия".to_string()
+    for rubric in crate::catalog::all() {
+        let count = counts.get(rubric.id).copied().unwrap_or(0);
+        let subtitle = match rubric.kind {
+            crate::catalog::RubricKind::Work => {
+                if count > 0 {
+                    format!("Работа · {count}")
+                } else {
+                    "Работа и работники".to_string()
+                }
+            }
+            crate::catalog::RubricKind::Business => {
+                if count > 0 {
+                    format!("Бизнес · {count}")
+                } else {
+                    "Бизнес".to_string()
+                }
+            }
         };
-        let href = format!("/app/search?q={}", urlencoding::encode(category.trim()));
+        let href = format!("/app/search?rubric={}", urlencoding::encode(rubric.id));
 
         parts.push(format!(
             "{{\"k\":{},\"l\":{},\"s\":{},\"h\":{},\"q\":{}}}",
             json_string_literal("profession"),
-            json_string_literal(&label),
+            json_string_literal(rubric.label),
             json_string_literal(&subtitle),
             json_string_literal(&href),
-            json_string_literal(&format!("{} {}", category, label)),
+            json_string_literal(&format!("{} {}", rubric.label, rubric.aliases.join(" "))),
         ));
     }
 
@@ -413,6 +468,35 @@ pub fn render_continents(
             font-size:9px;
         }
     }
+
+    html.light-theme .rm-stat,
+    body.light-theme .rm-stat {
+        background:#fff;
+        box-shadow:0 8px 20px rgba(26,29,33,.06);
+    }
+
+    html.light-theme .rm-home-explorer,
+    body.light-theme .rm-home-explorer {
+        background:#fff;
+    }
+
+    html.light-theme .rm-home-explorer-clear,
+    body.light-theme .rm-home-explorer-clear {
+        background:rgba(26,29,33,.06);
+        color:var(--text);
+    }
+
+    html.light-theme .rm-explore-hit,
+    body.light-theme .rm-explore-hit {
+        background:#fff;
+        border-color:rgba(26,29,33,.10);
+    }
+
+    html.light-theme .rm-guest-hint,
+    body.light-theme .rm-guest-hint {
+        background:rgba(165,118,31,.08);
+        border-color:rgba(165,118,31,.22);
+    }
 </style>"####;
 
     let body_before_main = r####""####;
@@ -428,7 +512,7 @@ pub fn render_continents(
         ResursMap
     </div>
 
-    <h1>Карта ресурсов</h1>
+    <h1>Города и профессии</h1>
 
     <p>Работа, работники и бизнес — найдите нужное рядом.</p>
 
@@ -440,7 +524,7 @@ pub fn render_continents(
                 Поиск
             </div>
             <div class="card-meta rm-home-explorer-copy">
-                Город, профессия, вакансия или компания
+                Выберите рубрику из списка или найдите город
             </div>
         </div>
 
@@ -511,7 +595,7 @@ pub fn render_continents(
     {cards}
 </div>
 "####,
-        topbar = topbar("Карта", "globe"),
+        topbar = topbar("Города", "globe"),
         hero = hero,
         cards = cards,
     );
@@ -569,7 +653,7 @@ pub fn render_continent(ci: usize) -> String {
 
         return page_shell(
             name,
-            &topbar("Карта", "globe"),
+            &topbar("Города", "globe"),
             &simple_hero(
                 "map",
                 "Регион",
@@ -621,12 +705,12 @@ pub fn render_country(ci: usize, si: usize) -> String {
 
             return page_shell(
                 country,
-                &topbar("Карта", "globe"),
+                &topbar("Города", "globe"),
                 &simple_hero(
                     "map-pin",
                     cname,
                     country,
-                    "Выберите город и откройте его карту ресурсов.",
+                    "Выберите город и откройте объявления.",
                 ),
                 &content,
                 &bottom_nav("map"),
@@ -655,6 +739,8 @@ pub fn render_city(ci: usize, si: usize, zi: usize) -> String {
 
 <div class="grid">
 
+    {all_card}
+
     {work_card}
 
     {workers_card}
@@ -664,6 +750,12 @@ pub fn render_city(ci: usize, si: usize, zi: usize) -> String {
 </div>
 "#,
                     section_head_sections = section_head_sections,
+                    all_card = navigation_card(
+                        &format!("/app/{}/{}/{}/all", ci, si, zi),
+                        "globe",
+                        "Все объявления",
+                        "Все публикации города",
+                    ),
                     work_card = navigation_card(
                         &format!("/app/{}/{}/{}/cat/work?type=offer", ci, si, zi),
                         "briefcase",
@@ -680,13 +772,13 @@ pub fn render_city(ci: usize, si: usize, zi: usize) -> String {
                         &format!("/app/{}/{}/{}/cat/business", ci, si, zi),
                         "building",
                         "Бизнес",
-                        "Компании и услуги",
+                        "Компании рядом",
                     ),
                 );
 
                 return page_shell(
                     city,
-                    &topbar("Карта", "globe"),
+                    &topbar("Города", "globe"),
                     &simple_hero(
                         "map-pin",
                         country,
@@ -710,6 +802,7 @@ pub fn render_city(ci: usize, si: usize, zi: usize) -> String {
 pub fn render_search(
     q: &str,
     kind: &str,
+    rubric: &str,
     resources: Vec<crate::web::view_models::SearchResourceRow>,
     people: Vec<crate::web::view_models::SearchPersonRow>,
     guest_mode: bool,
@@ -766,36 +859,20 @@ pub fn render_search(
     }
 
     let kind = kind.trim();
-    let q_query = if q.trim().is_empty() {
-        String::new()
-    } else {
-        format!("q={}", urlencoding::encode(q.trim()))
-    };
-    let search_href = |kind_value: &str| -> String {
-        let mut href = String::from("/app/search?");
-        if !q.trim().is_empty() {
-            href.push_str(&q_query);
-            href.push('&');
-        }
-        if !kind_value.is_empty() {
-            href.push_str("kind=");
-            href.push_str(&urlencoding::encode(kind_value));
-        } else if href.ends_with('&') {
-            href.pop();
-        }
-        if href.ends_with('?') {
-            href.pop();
-        }
-        href
+    let rubric = rubric.trim();
+    let active_rubric = crate::catalog::by_id(rubric);
+    let search_href = |kind_value: &str, rubric_value: Option<&str>| -> String {
+        search_page_href(q, kind_value, rubric_value)
     };
     let kind_chips = intent_kind_chips(
         kind,
         true,
-        &search_href(""),
-        &search_href("work"),
-        &search_href("workers"),
-        &search_href("business"),
+        &search_href("", active_rubric.map(|item| item.id)),
+        &search_href("work", active_rubric.map(|item| item.id)),
+        &search_href("workers", active_rubric.map(|item| item.id)),
+        &search_href("business", active_rubric.map(|item| item.id)),
     );
+    let rubric_chips = search_rubric_chips(q, kind, active_rubric);
 
     let people_count = people.len();
     let people_section = if people.is_empty() {
@@ -820,7 +897,8 @@ pub fn render_search(
 
     let result_count = resources.len();
 
-    let results = if q.trim().is_empty() && kind.is_empty() {
+    let has_criteria = !q.trim().is_empty() || !kind.is_empty() || active_rubric.is_some();
+    let results = if !has_criteria {
         String::new()
     } else if resources.is_empty() && people.is_empty() && location_results.is_empty() {
         empty_state_card(
@@ -828,11 +906,15 @@ pub fn render_search(
             &format!(
                 "По запросу «{}» пока ничего не найдено.",
                 escape_html(if q.trim().is_empty() {
-                    match kind {
-                        "work" => "работа",
-                        "workers" => "работники",
-                        "business" => "бизнес",
-                        _ => q,
+                    if let Some(rubric) = active_rubric {
+                        rubric.label
+                    } else {
+                        match kind {
+                            "work" => "работа",
+                            "workers" => "работники",
+                            "business" => "бизнес",
+                            _ => q,
+                        }
                     }
                 } else {
                     q
@@ -859,6 +941,7 @@ pub fn render_search(
                     si,
                     zi,
                     listing_type,
+                    rubric,
                 )| {
                     let location = world_data
                         .iter()
@@ -873,12 +956,21 @@ pub fn render_search(
                         .unwrap_or_else(|| "Местоположение не указано".to_string());
 
                     let category_line = {
-                        let label = profession_label(category);
+                        let rubric_label = profession_label(rubric);
+                        let base = if rubric_label.is_empty()
+                            || matches!(
+                                rubric_label.as_str(),
+                                "Работа" | "Бизнес" | "Услуги" | "Сообщество"
+                            ) {
+                            profession_label(category)
+                        } else {
+                            rubric_label
+                        };
                         match listing_type.as_str() {
                             "seeker" | "offer" => {
-                                format!("{} · {}", label, resource_listing_label(listing_type))
+                                format!("{} · {}", base, resource_listing_label(listing_type))
                             }
-                            _ => label,
+                            _ => base,
                         }
                     };
 
@@ -956,6 +1048,36 @@ pub fn render_search(
         )
     };
 
+    let suggestions = if !has_criteria {
+        let mut chips = String::from(
+            r#"<nav class="rm-kind-chips" id="rm-recent-searches" hidden aria-label="Недавние поиски"></nav>
+<nav class="rm-kind-chips" aria-label="Частые рубрики">"#,
+        );
+
+        for rubric in crate::catalog::all().iter().take(12) {
+            chips.push_str(&kind_chip(
+                false,
+                &search_page_href("", "", Some(rubric.id)),
+                rubric.label,
+            ));
+        }
+
+        chips.push_str("</nav>");
+
+        format!(
+            r#"
+<section class="card rm-search-suggest">
+    <div class="card-title">С чего начать</div>
+    <div class="card-meta">Выберите рубрику или откройте недавний поиск.</div>
+    {chips}
+</section>
+"#,
+            chips = chips,
+        )
+    } else {
+        String::new()
+    };
+
     let listings_block = if result_header.is_empty() && results.is_empty() {
         String::new()
     } else {
@@ -976,29 +1098,44 @@ pub fn render_search(
         r#"
 {location_section}
 
+{suggestions}
+
 {listings_block}
 
 {people_section}
 "#,
         location_section = location_section,
+        suggestions = suggestions,
         listings_block = listings_block,
         people_section = people_section,
     );
 
-    let hero_extra = format!("{guest_hint}{kind_chips}");
+    let hero_extra = format!("{guest_hint}{kind_chips}{rubric_chips}");
 
     page_shell(
         "Поиск · ResursMap",
         &topbar("Поиск", "search"),
         &search_form_hero(
             "Поиск",
-            match kind {
-                "work" => "Найти работу",
-                "workers" => "Найти работников",
-                "business" => "Найти бизнес",
+            match (kind, active_rubric) {
+                (_, Some(rubric)) => rubric.label,
+                ("work", _) => "Найти работу",
+                ("workers", _) => "Найти работников",
+                ("business", _) => "Найти бизнес",
                 _ => "Найти рядом",
             },
-            "Работа, работники, бизнес, город или профессия.",
+            if let Some(rubric) = active_rubric {
+                match rubric.kind {
+                    crate::catalog::RubricKind::Work => {
+                        "Вакансии и специалисты из единого справочника."
+                    }
+                    crate::catalog::RubricKind::Business => {
+                        "Компании и предложения из единого справочника."
+                    }
+                }
+            } else {
+                "Работа, работники, бизнес, город или профессия."
+            },
             q,
             "Например: электрик, Ницца, вакансия...",
             kind,
@@ -1020,6 +1157,11 @@ pub fn render_menu() -> String {
         r#"<section>
     {section_head_settings}
 
+    <div class="grid">
+        {profile_card}
+        {add_card}
+    </div>
+
     <section id="resursmap-install-panel"
              class="card rm-pwa-panel rm-pwa-panel--compact">
 
@@ -1037,48 +1179,68 @@ pub fn render_menu() -> String {
             <button id="resursmap-install-pwa"
                     type="button"
                     class="ui-button rm-pwa-install-btn">
-                ＋ Добавить
+                Добавить
             </button>
         </div>
     </section>
 
     <div class="card rm-settings-card">
-        <div class="card-title rm-settings-title">Звук и вибрация</div>
-
-        <div class="rm-settings-toggle-stack">
+        <div class="rm-menu-list">
             <button id="rm-menu-sound-toggle"
                     type="button"
-                    class="rm-settings-toggle-btn">
-                🔔 Звук включён
+                    class="rm-menu-row rm-settings-toggle-btn">
+                <span class="rm-menu-row-icon">{volume_icon}</span>
+                <span class="rm-menu-row-copy">
+                    <strong>Звук</strong>
+                    <small class="rm-menu-row-state">Включён</small>
+                </span>
             </button>
 
             <button id="rm-menu-haptics-toggle"
                     type="button"
-                    class="rm-settings-toggle-btn">
-                📳 Вибрация включена
+                    class="rm-menu-row rm-settings-toggle-btn">
+                <span class="rm-menu-row-icon">{phone_icon}</span>
+                <span class="rm-menu-row-copy">
+                    <strong>Вибрация</strong>
+                    <small class="rm-menu-row-state">Включена</small>
+                </span>
             </button>
+
+            <button class="rm-menu-row sound-test-btn rm-settings-sound-btn"
+                    type="button">
+                <span class="rm-menu-row-icon">{play_icon}</span>
+                <span class="rm-menu-row-copy">
+                    <strong>Проверить звук</strong>
+                    <small class="rm-menu-row-state">Короткий сигнал</small>
+                </span>
+            </button>
+
+            <button class="theme-toggle-btn rm-menu-row rm-settings-theme-btn" type="button">
+                <span class="rm-menu-row-icon">{sun_icon}</span>
+                <span class="rm-menu-row-copy">
+                    <strong>Тема</strong>
+                    <small class="theme-toggle-label">Светлая тема</small>
+                </span>
+            </button>
+
+            <div class="rm-menu-row" aria-hidden="true">
+                <span class="rm-menu-row-icon">{globe_icon}</span>
+                <span class="rm-menu-row-copy">
+                    <strong>Язык</strong>
+                    <small class="rm-menu-row-state">Русский</small>
+                </span>
+            </div>
         </div>
-
-        <button class="ui-button sound-test-btn rm-settings-sound-btn"
-                type="button">
-            ▶ Прослушать уведомление
-        </button>
-    </div>
-
-    <div class="card rm-settings-card rm-settings-card--spaced">
-        <div class="card-title rm-settings-title">Тема оформления</div>
-
-        <button class="theme-toggle-btn rm-settings-theme-btn" type="button">
-            ☀️ Светлая тема
-        </button>
-    </div>
-
-    <div class="card rm-settings-card rm-settings-card--spaced">
-        <div class="card-title rm-settings-title--sm">Язык</div>
-        <div class="card-meta">Русский</div>
     </div>
 </section>"#,
-        section_head_settings = section_head("Меню", "Настройки приложения", None),
+        section_head_settings = section_head("Меню", "Профиль, объявление и настройки", None),
+        profile_card = navigation_card("/app/me", "user", "Профиль", "Аккаунт и объявления"),
+        add_card = navigation_card("/app/add", "plus", "Добавить объявление", "В последнем городе"),
+        volume_icon = icon("volume"),
+        phone_icon = icon("smartphone"),
+        play_icon = icon("play"),
+        sun_icon = icon("sun"),
+        globe_icon = icon("globe"),
     );
 
     let main_html = format!(
@@ -1089,7 +1251,7 @@ pub fn render_menu() -> String {
 {content}"#,
         topbar = topbar("Меню", "menu"),
         hero = simple_hero(
-            "settings",
+            "sliders",
             "ResursMap",
             "Меню",
             "Тема, звук и ярлык на главном экране.",
@@ -1112,4 +1274,26 @@ pub fn render_menu() -> String {
         &bottom_nav("menu"),
         &body_after,
     )
+}
+
+#[cfg(test)]
+mod search_catalog_tests {
+    use super::*;
+
+    #[test]
+    fn search_page_shows_rubric_chips_for_active_profession() {
+        let html = render_search("", "", "security", Vec::new(), Vec::new(), false);
+
+        assert!(html.contains("aria-label=\"Рубрика\""));
+        assert!(html.contains("Охрана"));
+        assert!(html.contains("rubric=security"));
+        assert!(html.contains("Электрик"));
+    }
+
+    #[test]
+    fn empty_search_has_no_rubric_chips() {
+        let html = render_search("", "", "", Vec::new(), Vec::new(), false);
+
+        assert!(!html.contains("aria-label=\"Рубрика\""));
+    }
 }

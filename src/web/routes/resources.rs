@@ -1,6 +1,7 @@
 use super::super::handlers::{
     add_resource, add_resource_page, api_favorite_status, api_favorite_toggle, api_report_resource,
-    api_resource_vote, app_cat, confirm_promotion_payment, edit_resource, edit_resource_page,
+    api_resource_vote, app_cat, app_city_all, confirm_promotion_payment, edit_resource,
+    edit_resource_page,
     my_resources, promotion_payment_page, promotion_payment_return, request_resource_promotion,
     resource_profile, resource_promotion_page, retry_promotion_publish,
 };
@@ -35,6 +36,7 @@ pub(super) fn routes() -> Router<AppState> {
             "/app/resource/{id}/edit",
             get(edit_resource_page).post(edit_resource),
         )
+        .route("/app/{ci}/{si}/{zi}/all", get(app_city_all))
         .route("/app/{ci}/{si}/{zi}/cat/{k}", get(app_cat))
         .route(
             "/app/{ci}/{si}/{zi}/cat/{k}/add",

@@ -501,18 +501,14 @@
     background:
         linear-gradient(
             145deg,
-            rgba(214,183,122,.19),
+            var(--bubble-mine),
             rgba(214,183,122,.08)
         )!important;
 }
 .chat-message-row[data-mine="0"] .chat-bubble {
-    background:
-        linear-gradient(
-            145deg,
-            rgba(255,255,255,.065),
-            rgba(255,255,255,.025)
-        )!important;
-    border-color:rgba(255,255,255,.09)!important;
+    background: var(--bubble-peer, var(--card))!important;
+    border-color: var(--line)!important;
+    color: var(--text)!important;
 }
 .chat-message-body {
     position:relative;
@@ -1311,8 +1307,7 @@ body:has(#chat-form) main {
     contain:layout style;
 }
 .chat-bubble {
-    content-visibility:auto;
-    contain-intrinsic-size:auto 72px;
+    contain:layout style;
 }
 body.chat-overlay-open #chat-form.chat-composer {
     pointer-events:none;
@@ -2019,4 +2014,110 @@ body.chat-lightbox-open {
         scroll-behavior: auto !important;
         transition: none !important;
     }
+}
+
+html.light-theme .chat-shell,
+body.light-theme .chat-shell {
+    border-color: rgba(26, 29, 33, .10) !important;
+    box-shadow:
+        0 14px 34px rgba(26, 29, 33, .08),
+        inset 0 1px 0 rgba(255, 255, 255, .95) !important;
+}
+
+html.light-theme .chat-composer,
+body.light-theme .chat-composer {
+    background: #fff !important;
+    border-color: rgba(26, 29, 33, .12) !important;
+    box-shadow:
+        0 10px 28px rgba(26, 29, 33, .08),
+        inset 0 1px 0 rgba(255, 255, 255, .95);
+}
+
+html.light-theme #chat-input,
+body.light-theme #chat-input {
+    background: #fff !important;
+    color: var(--text) !important;
+    border-color: rgba(26, 29, 33, .14) !important;
+}
+
+html.light-theme .chat-message-row[data-mine="0"] .chat-bubble,
+html.light-theme .chat-message-row.is-theirs .chat-bubble,
+body.light-theme .chat-message-row[data-mine="0"] .chat-bubble,
+body.light-theme .chat-message-row.is-theirs .chat-bubble {
+    background: var(--bubble-peer) !important;
+    border-color: rgba(26, 29, 33, .10) !important;
+    color: var(--text) !important;
+    box-shadow:
+        0 8px 20px rgba(26, 29, 33, .06),
+        inset 0 1px 0 rgba(255, 255, 255, .9) !important;
+}
+
+html.light-theme .chat-message-row[data-mine="1"] .chat-bubble,
+html.light-theme .chat-message-row.is-mine .chat-bubble,
+body.light-theme .chat-message-row[data-mine="1"] .chat-bubble,
+body.light-theme .chat-message-row.is-mine .chat-bubble {
+    background:
+        linear-gradient(
+            145deg,
+            rgba(165, 118, 31, .16),
+            rgba(165, 118, 31, .08)
+        ) !important;
+    color: var(--text) !important;
+}
+
+html.light-theme .chat-message-row.is-mine .chat-message-meta,
+html.light-theme .chat-message-meta,
+body.light-theme .chat-message-row.is-mine .chat-message-meta,
+body.light-theme .chat-message-meta {
+    color: var(--muted) !important;
+    border-top-color: rgba(26, 29, 33, .08);
+}
+
+html.light-theme .chat-empty-thread,
+body.light-theme .chat-empty-thread {
+    background:
+        radial-gradient(circle at 50% 0%, rgba(165, 118, 31, .08), transparent 58%),
+        #fff;
+    border-color: rgba(165, 118, 31, .24);
+    color: var(--text);
+}
+
+html.light-theme .chat-dialog-card,
+body.light-theme .chat-dialog-card {
+    background: #fff !important;
+    border-color: rgba(26, 29, 33, .10) !important;
+    color: var(--text);
+}
+
+html.light-theme .chat-request-gate,
+body.light-theme .chat-request-gate {
+    background: #fff8ec;
+    border: 1px solid rgba(165, 118, 31, .22);
+    color: var(--text);
+}
+
+html.light-theme .chat-connection-state,
+html.light-theme .chat-peer-state,
+html.light-theme .chat-header-status,
+html.light-theme .chat-header-title,
+body.light-theme .chat-connection-state,
+body.light-theme .chat-peer-state,
+body.light-theme .chat-header-status,
+body.light-theme .chat-header-title {
+    color: var(--text);
+}
+
+html.light-theme .chat-sound-toggle,
+html.light-theme .chat-haptic-toggle,
+html.light-theme .chat-voice-btn,
+html.light-theme .chat-image-btn,
+html.light-theme .chat-secondary-button,
+body.light-theme .chat-sound-toggle,
+body.light-theme .chat-haptic-toggle,
+body.light-theme .chat-voice-btn,
+body.light-theme .chat-image-btn,
+body.light-theme .chat-secondary-button {
+    background: #fff;
+    color: var(--text);
+    border-color: rgba(26, 29, 33, .12);
 }

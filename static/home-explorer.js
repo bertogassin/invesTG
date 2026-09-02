@@ -29,24 +29,24 @@
 
     function iconForKind(kind) {
         if (kind === "continent") {
-            return "🌍";
+            return "Мир";
         }
         if (kind === "country") {
-            return "🏛";
+            return "Стр";
         }
         if (kind === "city") {
-            return "📍";
+            return "Гор";
         }
         if (kind === "work") {
-            return "💼";
+            return "Раб";
         }
         if (kind === "workers") {
-            return "👷";
+            return "Люд";
         }
         if (kind === "business") {
-            return "🏢";
+            return "Биз";
         }
-        return "👤";
+        return "Про";
     }
 
     ready(function () {

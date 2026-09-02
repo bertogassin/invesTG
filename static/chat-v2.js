@@ -863,6 +863,7 @@
                 );
 
                 error.status = response.status;
+                error.code = data.error || "request_failed";
                 error.retryAfter =
                     Number(data.retry_after || 0);
 
@@ -993,6 +994,41 @@
             return error.status >= 500;
         }
 
+        function sendErrorCopy(error) {
+            var code = error && (error.code || error.message)
+                ? String(error.code || error.message)
+                : "";
+
+            if (error && error.status === 401) {
+                return "Сессия истекла";
+            }
+            if (code === "verification_required") {
+                return "Подтвердите аккаунт, чтобы писать";
+            }
+            if (code === "request_pending") {
+                return "Ждём ответа на запрос";
+            }
+            if (code === "request_rejected") {
+                return "Запрос отклонён";
+            }
+            if (code === "conversation_not_open") {
+                return "Диалог ещё не открыт";
+            }
+            if (code === "user_blocked") {
+                return "Пользователь недоступен";
+            }
+            if (code === "user_not_found") {
+                return "Профиль не найден";
+            }
+            if (code === "rate_limited") {
+                return "Слишком часто · подождите";
+            }
+            if (error && error.status === 403) {
+                return "Отправка недоступна";
+            }
+            return "Не отправлено · нажмите !";
+        }
+
         function scheduleRetryWithDelay(item, delayMs) {
             clearItemRetryTimer(item.clientMessageId);
             item.state = "retrying";
@@ -1098,11 +1134,7 @@
                         item.state = "failed";
                         savePendingQueue();
                         renderPendingItem(item);
-                        if (error.status === 401) {
-                            sendState.textContent = "\u0421\u0435\u0441\u0441\u0438\u044f \u0438\u0441\u0442\u0435\u043a\u043b\u0430";
-                        } else {
-                            sendState.textContent = "\u041d\u0435 \u043e\u0442\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u043e \u00b7 \u043d\u0430\u0436\u043c\u0438\u0442\u0435 !";
-                        }
+                        sendState.textContent = sendErrorCopy(error);
                         setConnection("\u041e\u0448\u0438\u0431\u043a\u0430 \u043e\u0442\u043f\u0440\u0430\u0432\u043a\u0438", "is-error");
                         if (typeof window.playChatError === "function") {
                             window.playChatError();
@@ -2530,6 +2562,7 @@
                                 "request_failed"
                             );
                             error.status = response.status;
+                            error.code = data.error || "request_failed";
                             throw error;
                         }
 
@@ -3417,13 +3450,6 @@
         document.addEventListener(
             "resursmap:chat-realtime-sync",
             function () {
-                var lastPoll =
-                    Number(window.__resursmapChatLastPollAt || 0);
-
-                if (Date.now() - lastPoll < 900) {
-                    return;
-                }
-
                 refreshRecentDebounced();
             }
         );

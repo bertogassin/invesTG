@@ -13,7 +13,7 @@ use axum::{
 };
 use serde_json::json;
 
-type PublicProfileRow = (i64, String, String, String, String, i64, String, i64);
+type PublicProfileRow = (i64, String, String, String, String, i64, String, i64, String);
 type MeProfileRow = (
     String,
     String,
@@ -246,7 +246,8 @@ pub async fn app_me(State(state): State<AppState>, headers: HeaderMap) -> Html<S
             "SELECT COUNT(*)
              FROM user_notifications
              WHERE user_id = ?1
-               AND is_read = 0",
+               AND is_read = 0
+               AND kind <> 'chat_message'",
             rusqlite::params![user_id],
             |row| row.get(0),
         )
@@ -349,7 +350,8 @@ fn query_attention_counts(db: &rusqlite::Connection, user_id: i64) -> (i64, i64,
             "SELECT COUNT(*)
              FROM user_notifications
              WHERE user_id = ?1
-               AND is_read = 0",
+               AND is_read = 0
+               AND kind <> 'chat_message'",
             rusqlite::params![user_id],
             |row| row.get(0),
         )
@@ -457,7 +459,8 @@ pub async fn public_user_profile(
                 p.last_name,
                 p.open_contact,
                 p.intent_text,
-                p.intent_until
+                p.intent_until,
+                p.category
              FROM profiles AS p
              JOIN users AS u
                ON u.id = p.user_id
@@ -475,6 +478,7 @@ pub async fn public_user_profile(
                     row.get(5)?,
                     row.get(6)?,
                     row.get(7)?,
+                    row.get(8)?,
                 ))
             },
         )
@@ -489,6 +493,7 @@ pub async fn public_user_profile(
         _open_contact,
         intent_text,
         intent_until,
+        category,
     ) = match profile {
         Some(profile) => profile,
 
@@ -586,6 +591,7 @@ pub async fn public_user_profile(
             first_name: &first_name,
             last_name: &last_name,
             intent_text: &visible_intent,
+            category: &category,
             chat_user_id,
             resources,
         },
@@ -727,7 +733,7 @@ pub async fn api_profile_set(
     let (home_continent_index, home_country_index, home_city_index) =
         parse_home_city_value(home_city);
 
-    if !input_text_is_valid(category, 0, 80) {
+    if !category.is_empty() && crate::catalog::by_id(category).is_none() {
         return (
             StatusCode::BAD_REQUEST,
             Json(json!({

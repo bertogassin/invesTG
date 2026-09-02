@@ -15,9 +15,12 @@
                 ? window.chatSoundsAreEnabled()
                 : true;
 
-        button.textContent = enabled
-            ? "🔔 Звук включён"
-            : "🔕 Звук выключен";
+        var state = button.querySelector(".rm-menu-row-state");
+        if (state) {
+            state.textContent = enabled ? "Включён" : "Выключен";
+        } else {
+            button.textContent = enabled ? "Звук включён" : "Звук выключен";
+        }
         button.setAttribute("aria-pressed", enabled ? "true" : "false");
         button.classList.toggle("is-off", !enabled);
     }
@@ -28,9 +31,14 @@
                 ? window.chatHapticsAreEnabled()
                 : true;
 
-        button.textContent = enabled
-            ? "📳 Вибрация включена"
-            : "📴 Вибрация выключена";
+        var state = button.querySelector(".rm-menu-row-state");
+        if (state) {
+            state.textContent = enabled ? "Включена" : "Выключена";
+        } else {
+            button.textContent = enabled
+                ? "Вибрация включена"
+                : "Вибрация выключена";
+        }
         button.setAttribute("aria-pressed", enabled ? "true" : "false");
         button.classList.toggle("is-off", !enabled);
     }

@@ -1,5 +1,6 @@
 use std::env;
 
+mod catalog;
 mod db;
 mod geography;
 mod resource_publisher;

@@ -195,24 +195,7 @@ pub async fn chat_page(
         )
         .ok();
 
-    let conversation_id = match conversation_id {
-        Some(id) => id,
-
-        None => {
-            drop(db);
-
-            return Html(templates::render_chat(
-                true,
-                user_id,
-                other_user_id,
-                "",
-                "",
-                "",
-                vec![],
-                None,
-            ));
-        }
-    };
+    let conversation_id = conversation_id.unwrap_or(0);
 
     let other_profile: Option<(String, String, String)> = db
         .query_row(
@@ -253,7 +236,10 @@ pub async fn chat_page(
         )
         .ok();
 
-    let mut messages: Vec<crate::web::view_models::ChatMessageRow> = db
+    let mut messages: Vec<crate::web::view_models::ChatMessageRow> = if conversation_id <= 0 {
+        Vec::new()
+    } else {
+        db
         .prepare(
             "SELECT
                 messages.id,
@@ -333,7 +319,8 @@ pub async fn chat_page(
             })?
             .collect::<Result<Vec<_>, _>>()
         })
-        .unwrap_or_default();
+        .unwrap_or_default()
+    };
 
     let message_ids: Vec<i64> = messages.iter().map(|message| message.id).collect();
     let reactions_by_message = super::chat_api::reactions_for_view(&db, &message_ids, user_id);

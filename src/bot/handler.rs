@@ -234,7 +234,7 @@ pub async fn start_handler(bot: Bot, msg: Message) -> ResponseResult<()> {
         msg.chat.id,
         format!(
             "Привет! Я бот ResursMap.\n\n\
-             Карта ресурсов, людей и возможностей.\n\n\
+             Работа, люди и бизнес рядом.\n\n\
              Доступные команды:\n\
              /start — приветствие\n\
              /help — помощь\n\

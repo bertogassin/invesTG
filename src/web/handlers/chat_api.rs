@@ -250,6 +250,98 @@ fn conversation_id(
         .ok()
 }
 
+fn ensure_conversation_for_outgoing(
+    connection: &rusqlite::Connection,
+    current_user_id: i64,
+    other_user_id: i64,
+) -> Result<i64, &'static str> {
+    if let Some(existing_id) = conversation_id(connection, current_user_id, other_user_id) {
+        return Ok(existing_id);
+    }
+
+    let Some((user1_id, user2_id)) = normalized_pair(current_user_id, other_user_id) else {
+        return Err("conversation_not_open");
+    };
+
+    let other_is_active: i64 = connection
+        .query_row(
+            "SELECT EXISTS(
+                SELECT 1
+                FROM users
+                WHERE id = ?1
+                  AND is_active = 1
+            )",
+            rusqlite::params![other_user_id],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    if other_is_active != 1 {
+        return Err("user_not_found");
+    }
+
+    let now = crate::web::handlers::common::unix_now();
+
+    if connection
+        .execute(
+            "INSERT INTO contact_requests (
+                sender_user_id,
+                receiver_user_id,
+                message,
+                status,
+                created_at,
+                updated_at
+             )
+             VALUES (?1, ?2, '', 'pending', ?3, ?3)
+             ON CONFLICT(sender_user_id, receiver_user_id)
+             DO NOTHING",
+            rusqlite::params![current_user_id, other_user_id, now],
+        )
+        .is_err()
+    {
+        return Err("request_store_failed");
+    }
+
+    let _ = connection.execute(
+        "INSERT INTO user_notifications (
+            user_id,
+            resource_id,
+            kind,
+            title,
+            message,
+            is_read,
+            created_at
+         )
+         VALUES (
+            ?1, ?2,
+            'contact_request',
+            'Новый запрос на связь',
+            'Участник хочет связаться через ResursMap.',
+            0, ?3
+         )",
+        rusqlite::params![other_user_id, current_user_id, now],
+    );
+
+    if connection
+        .execute(
+            "INSERT OR IGNORE INTO conversations (
+                user1_id,
+                user2_id,
+                created_at,
+                updated_at
+             )
+             VALUES (?1, ?2, ?3, ?3)",
+            rusqlite::params![user1_id, user2_id, now],
+        )
+        .is_err()
+    {
+        return Err("conversation_create_failed");
+    }
+
+    conversation_id(connection, current_user_id, other_user_id)
+        .ok_or("conversation_lookup_failed")
+}
+
 pub(super) fn chat_contact_gate_error(
     connection: &rusqlite::Connection,
     current_user_id: i64,
@@ -442,7 +534,16 @@ pub async fn api_chat_messages(
     let conversation_id = match conversation_id(&connection, user_id, other_user_id) {
         Some(conversation_id) => conversation_id,
         None => {
-            return json_error(StatusCode::FORBIDDEN, "conversation_not_open");
+            return (
+                StatusCode::OK,
+                Json(json!({
+                    "ok": true,
+                    "messages": [],
+                    "has_more": false,
+                    "peer_read_through_id": 0
+                })),
+            )
+                .into_response();
         }
     };
 
@@ -861,10 +962,11 @@ pub async fn api_chat_send(
         return json_error(StatusCode::FORBIDDEN, error);
     }
 
-    let conversation_id = match conversation_id(&connection, user_id, other_user_id) {
-        Some(conversation_id) => conversation_id,
-        None => {
-            return json_error(StatusCode::FORBIDDEN, "conversation_not_open");
+    let conversation_id = match ensure_conversation_for_outgoing(&connection, user_id, other_user_id)
+    {
+        Ok(conversation_id) => conversation_id,
+        Err(error) => {
+            return json_error(StatusCode::FORBIDDEN, error);
         }
     };
 
@@ -1060,7 +1162,9 @@ pub async fn api_chat_send(
             crate::telegram_notify::notify_telegram_user(
                 state.bot_token.as_deref(),
                 telegram_id,
-                "📩 У вас новое сообщение в ResursMap!\n\nОткройте чат: https://resursmap.de/app/messages",
+                &format!(
+                    "📩 У вас новое сообщение в ResursMap!\n\nОткройте чат: https://resursmap.de/app/chat/{user_id}"
+                ),
             );
         }
     }
@@ -1316,12 +1420,6 @@ pub async fn api_chat_peer(
     };
 
     touch_profile_last_seen(&connection, user_id);
-
-    let conversation_open = conversation_id(&connection, user_id, other_user_id).is_some();
-
-    if !conversation_open {
-        return json_error(StatusCode::FORBIDDEN, "conversation_not_open");
-    }
 
     let peer_row: Option<(i64, i64)> = connection
         .query_row(

@@ -1,34 +1,114 @@
 use super::common::{
     back_hero, back_link, bottom_nav, empty_state_action, empty_state_card_with_actions,
     escape_html, guest_locked_section, icon, kind_chip, my_resource_moderation_badge,
-    page_document, page_shell, premium_badge_html, resource_card_link_class,
-    resource_detail_section_class, resource_listing_label, search_people_cards, section_head,
-    topbar, verified_badge_html,
+    navigation_card, page_document, page_shell, premium_badge_html, profession_label,
+    resource_card_link_class, resource_detail_section_class, resource_listing_label,
+    search_people_cards, section_head, topbar, verified_badge_html,
 };
 
-pub fn render_category(
+pub struct RenderCategoryParams<'a> {
+    pub ci: usize,
+    pub si: usize,
+    pub zi: usize,
+    pub category: &'a str,
+    pub listing_type: Option<&'a str>,
+    pub active_rubric: Option<&'a str>,
+    pub sort: &'a str,
+    pub resources: Vec<crate::web::view_models::CategoryResourceRow>,
+    pub people: Vec<crate::web::view_models::SearchPersonRow>,
+}
+
+fn category_list_href(
     ci: usize,
     si: usize,
     zi: usize,
     category: &str,
     listing_type: Option<&str>,
-    resources: Vec<crate::web::view_models::CategoryResourceRow>,
-    people: Vec<crate::web::view_models::SearchPersonRow>,
+    rubric: Option<&str>,
+    sort: &str,
 ) -> String {
+    let base = if category.eq_ignore_ascii_case("all") {
+        format!("/app/{ci}/{si}/{zi}/all")
+    } else {
+        format!(
+            "/app/{ci}/{si}/{zi}/cat/{}",
+            urlencoding::encode(category)
+        )
+    };
+    let mut parts = Vec::new();
+    match listing_type {
+        Some("seeker") => parts.push("type=seeker".to_string()),
+        Some("offer") => parts.push("type=offer".to_string()),
+        _ => {}
+    }
+    if let Some(rubric) = rubric {
+        parts.push(format!("rubric={}", urlencoding::encode(rubric)));
+    }
+    if sort == "new" {
+        parts.push("sort=new".to_string());
+    }
+    if parts.is_empty() {
+        base
+    } else {
+        format!("{base}?{}", parts.join("&"))
+    }
+}
+
+pub fn render_category(params: RenderCategoryParams<'_>) -> String {
+    let RenderCategoryParams {
+        ci,
+        si,
+        zi,
+        category,
+        listing_type,
+        active_rubric,
+        sort,
+        resources,
+        people,
+    } = params;
     let city_url = format!("/app/{}/{}/{}", ci, si, zi);
     let category_url = urlencoding::encode(category);
-
-    let add_url = format!("/app/{ci}/{si}/{zi}/cat/{category_url}/add");
+    let type_query = match listing_type {
+        Some("seeker") => "type=seeker",
+        Some("offer") => "type=offer",
+        _ => "",
+    };
+    let add_url = if category.eq_ignore_ascii_case("all") {
+        city_url.clone()
+    } else {
+        let mut href = format!("/app/{ci}/{si}/{zi}/cat/{category_url}/add");
+        let mut parts = Vec::new();
+        if !type_query.is_empty() {
+            parts.push(type_query.to_string());
+        }
+        if let Some(rubric) = active_rubric {
+            parts.push(format!("rubric={}", urlencoding::encode(rubric)));
+        }
+        if !parts.is_empty() {
+            href.push('?');
+            href.push_str(&parts.join("&"));
+        }
+        href
+    };
     let cards = if resources.is_empty() {
         if people.is_empty() {
             empty_state_card_with_actions(
                 "Пока пусто",
-                if listing_type == Some("seeker") {
+                if category.eq_ignore_ascii_case("all") {
+                    "В этом городе пока нет опубликованных объявлений."
+                } else if listing_type == Some("seeker") {
                     "Добавьте объявление или укажите профессию в профиле."
                 } else {
                     "Добавьте первое объявление в этом разделе."
                 },
-                &empty_state_action(&add_url, "Добавить"),
+                &empty_state_action(
+                    &add_url,
+                    if category.eq_ignore_ascii_case("all") {
+                        "К разделам"
+                    } else {
+                        "Добавить"
+                    },
+                ),
             )
         } else {
             String::new()
@@ -48,18 +128,34 @@ pub fn render_category(
                     verified,
                     premium,
                     row_listing_type,
+                    row_rubric,
                 )| {
                     let safe_title = escape_html(title);
                     let safe_description = escape_html(description);
                     let safe_contact = escape_html(contact);
                     let safe_address = escape_html(address);
-                    let listing_label = if listing_type.is_some() {
-                        String::new()
-                    } else {
-                        format!(
-                            r#"<div class="card-meta">{}</div>"#,
-                            resource_listing_label(row_listing_type)
-                        )
+                    let rubric_label = profession_label(row_rubric);
+                    let listing_label = {
+                        let mut parts = Vec::new();
+                        if listing_type.is_none() {
+                            parts.push(resource_listing_label(row_listing_type).to_string());
+                        }
+                        if !rubric_label.is_empty()
+                            && !matches!(
+                                rubric_label.as_str(),
+                                "Работа" | "Бизнес" | "Услуги" | "Сообщество"
+                            )
+                        {
+                            parts.push(rubric_label);
+                        }
+                        if parts.is_empty() {
+                            String::new()
+                        } else {
+                            format!(
+                                r#"<div class="card-meta">{}</div>"#,
+                                escape_html(&parts.join(" · "))
+                            )
+                        }
                     };
 
                     let verified_badge = if *verified != 0 {
@@ -103,15 +199,15 @@ pub fn render_category(
                             </div>
 
                             <div class="card-meta">
-                                ⭐ {rating:.1} · {votes} голосов
+                                Оценка {rating:.1} · {votes} голосов
                             </div>
 
                             <div class="card-meta">
-                                📍 {address}
+                                {address}
                             </div>
 
                             <div class="card-meta">
-                                📞 {contact}
+                                {contact}
                             </div>
 
                             <div class="rm-resource-verified-row">
@@ -167,18 +263,59 @@ pub fn render_category(
 </nav>"#,
             work = kind_chip(
                 listing_type == Some("offer"),
-                &format!("/app/{ci}/{si}/{zi}/cat/{category_url}?type=offer"),
+                &category_list_href(ci, si, zi, category, Some("offer"), active_rubric, sort),
                 "Работа",
             ),
             workers = kind_chip(
                 listing_type == Some("seeker"),
-                &format!("/app/{ci}/{si}/{zi}/cat/{category_url}?type=seeker"),
+                &category_list_href(ci, si, zi, category, Some("seeker"), active_rubric, sort),
                 "Работники",
             ),
         )
     } else {
         String::new()
     };
+
+    let rubric_chips = if category.eq_ignore_ascii_case("all") {
+        String::new()
+    } else {
+        let rubric_kind = if category.eq_ignore_ascii_case("work") {
+            crate::catalog::RubricKind::Work
+        } else {
+            crate::catalog::RubricKind::Business
+        };
+        let mut chips = String::from(r#"<nav class="rm-kind-chips" aria-label="Рубрика">"#);
+        chips.push_str(&kind_chip(
+            active_rubric.is_none(),
+            &category_list_href(ci, si, zi, category, listing_type, None, sort),
+            "Все",
+        ));
+        for rubric in crate::catalog::by_kind(rubric_kind) {
+            chips.push_str(&kind_chip(
+                active_rubric == Some(rubric.id),
+                &category_list_href(ci, si, zi, category, listing_type, Some(rubric.id), sort),
+                rubric.label,
+            ));
+        }
+        chips.push_str("</nav>");
+        chips
+    };
+
+    let sort_chips = format!(
+        r#"<nav class="rm-kind-chips" aria-label="Сортировка">
+    {rating}{newest}
+</nav>"#,
+        rating = kind_chip(
+            sort != "new",
+            &category_list_href(ci, si, zi, category, listing_type, active_rubric, "rating"),
+            "По рейтингу",
+        ),
+        newest = kind_chip(
+            sort == "new",
+            &category_list_href(ci, si, zi, category, listing_type, active_rubric, "new"),
+            "Новые",
+        ),
+    );
 
     let section_head_resources = if resources.is_empty() {
         String::new()
@@ -189,6 +326,10 @@ pub fn render_category(
     let content = format!(
         r####"{work_chips}
 
+{rubric_chips}
+
+{sort_chips}
+
 {section_head_resources}
 
 <div>
@@ -197,23 +338,33 @@ pub fn render_category(
 
 {people_section}"####,
         work_chips = work_chips,
+        rubric_chips = rubric_chips,
+        sort_chips = sort_chips,
         section_head_resources = section_head_resources,
         cards = cards,
         people_section = people_section,
     );
 
-    let heading = match (category.to_ascii_lowercase().as_str(), listing_type) {
-        ("work", Some("offer")) => "Работа",
-        ("work", Some("seeker")) => "Работники",
-        ("work", _) => "Работа",
-        ("business", _) => "Бизнес",
-        ("services", _) => "Услуги",
-        _ => category,
+    let heading = if let Some(rubric) = active_rubric.and_then(crate::catalog::by_id) {
+        rubric.label
+    } else {
+        match (category.to_ascii_lowercase().as_str(), listing_type) {
+            ("all", _) => "Все объявления",
+            ("work", Some("offer")) => "Работа",
+            ("work", Some("seeker")) => "Работники",
+            ("work", _) => "Работа",
+            ("business" | "services", _) => "Бизнес",
+            _ => category,
+        }
     };
-    let heading_copy = match listing_type {
-        Some("offer") => "Вакансии и предложения работы в городе.",
-        Some("seeker") => "Объявления и специалисты по профессии в городе.",
-        _ => "Объявления города в этом разделе.",
+    let heading_copy = if category.eq_ignore_ascii_case("all") {
+        "Все опубликованные объявления в городе."
+    } else {
+        match listing_type {
+            Some("offer") => "Вакансии и предложения работы в городе.",
+            Some("seeker") => "Объявления и специалисты по профессии в городе.",
+            _ => "Объявления города в этом разделе.",
+        }
     };
 
     page_shell(
@@ -256,6 +407,10 @@ pub struct RenderResourceProfileParams<'a> {
     pub city_index: i64,
     pub _created_at: i64,
     pub owner_public_id: &'a str,
+    pub rubric: &'a str,
+    pub owner_preview: bool,
+    pub moderation_status: &'a str,
+    pub is_active: i64,
 }
 
 pub fn render_resource_profile(params: RenderResourceProfileParams<'_>) -> String {
@@ -276,6 +431,10 @@ pub fn render_resource_profile(params: RenderResourceProfileParams<'_>) -> Strin
         city_index,
         _created_at,
         owner_public_id,
+        rubric,
+        owner_preview,
+        moderation_status,
+        is_active,
     } = params;
     let safe_description = escape_html(description);
     let safe_contact = escape_html(contact);
@@ -294,15 +453,51 @@ pub fn render_resource_profile(params: RenderResourceProfileParams<'_>) -> Strin
     };
 
     let listing_label = resource_listing_label(listing_type);
+    let rubric_label = if crate::catalog::by_id(rubric).is_some() {
+        profession_label(rubric)
+    } else {
+        profession_label(category)
+    };
     let category_url = urlencoding::encode(category);
     let type_query = match listing_type.trim() {
         "seeker" => "?type=seeker",
         "offer" => "?type=offer",
         _ => "",
     };
-    let back_url = format!(
-        "/app/{continent_index}/{country_index}/{city_index}/cat/{category_url}{type_query}"
-    );
+    let (back_url, back_label) = if owner_preview {
+        ("/app/my-resources".to_string(), "Мои ресурсы")
+    } else {
+        (
+            format!(
+                "/app/{continent_index}/{country_index}/{city_index}/cat/{category_url}{type_query}"
+            ),
+            "Вернуться к разделу",
+        )
+    };
+    let moderation_banner = if !owner_preview {
+        String::new()
+    } else if moderation_status == "rejected" {
+        r#"<section class="card rm-resource-moderation-banner">
+    <div class="card-title">Объявление отклонено</div>
+    <div class="card-meta">Исправьте текст и сохраните снова — оно уйдёт на повторную проверку.</div>
+    <a href="/app/resource/{id}/edit" class="ui-button rm-auth-button">Редактировать</a>
+</section>"#
+            .replace("{id}", &id.to_string())
+    } else if is_active == 0 {
+        String::from(
+            r#"<section class="card rm-resource-moderation-banner">
+    <div class="card-title">Объявление скрыто</div>
+    <div class="card-meta">Другие участники его не видят.</div>
+</section>"#,
+        )
+    } else {
+        String::from(
+            r#"<section class="card rm-resource-moderation-banner">
+    <div class="card-title">На проверке</div>
+    <div class="card-meta">Другие участники это объявление пока не видят. После одобрения оно появится в поиске и в городе.</div>
+</section>"#,
+        )
+    };
 
     let hero_description = format!(
         r#"<span class="rm-resource-hero-badges">
@@ -313,7 +508,7 @@ pub fn render_resource_profile(params: RenderResourceProfileParams<'_>) -> Strin
         <span class="rm-resource-listing-label">{listing_label}</span>
 
         <span id="rating-summary" class="rm-resource-rating-summary">
-            ⭐ <strong>{rating:.1}</strong> · {votes} голосов
+            Оценка <strong>{rating:.1}</strong> · {votes} голосов
         </span>"#,
         premium_badge = premium_badge,
         verified_badge = verified_badge,
@@ -321,6 +516,89 @@ pub fn render_resource_profile(params: RenderResourceProfileParams<'_>) -> Strin
         rating = rating,
         votes = votes,
     );
+    let public_actions_html = if owner_preview {
+        String::new()
+    } else {
+        r#"<button
+        id="favorite-button"
+        type="button"
+        class="ui-button rm-resource-favorite-btn">
+        В избранное
+    </button>
+
+    <button
+        type="button"
+        class="ui-button"
+        data-share
+        data-share-title="Объявление ResursMap"
+        data-share-status="share-status">
+        Поделиться
+    </button>
+    <div id="share-status" class="ui-status"></div>
+
+    <div id="favorite-status" class="ui-status rm-resource-favorite-status">
+    </div>
+
+    <button
+        id="report-button"
+        type="button"
+        class="ui-button rm-resource-report-btn">
+        Пожаловаться
+    </button>
+
+    <div id="report-panel" class="rm-resource-report-panel">
+
+        <div class="rm-resource-report-label">
+            Причина жалобы
+        </div>
+
+        <textarea
+            id="report-reason"
+            maxlength="500"
+            rows="4"
+            placeholder="Коротко опишите проблему..."
+            class="ui-textarea"></textarea>
+
+        <div class="rm-resource-report-actions">
+
+            <button
+                id="report-submit"
+                type="button"
+                class="ui-button rm-resource-report-submit">
+                Отправить жалобу
+            </button>
+
+            <button
+                id="report-cancel"
+                type="button"
+                class="ui-button rm-resource-report-cancel">
+                Отмена
+            </button>
+
+        </div>
+
+        <div id="report-status" class="ui-status rm-resource-report-status">
+        </div>
+
+    </div>
+
+    <div class="rm-resource-rating-block">
+        <div class="rm-resource-rating-kicker">
+            ОЦЕНИТЬ РЕСУРС
+        </div>
+
+        <div id="rating-stars" class="rm-resource-stars">
+            <button type="button" data-score="1" class="ui-button rm-resource-star-btn">☆</button>
+            <button type="button" data-score="2" class="ui-button rm-resource-star-btn">☆</button>
+            <button type="button" data-score="3" class="ui-button rm-resource-star-btn">☆</button>
+            <button type="button" data-score="4" class="ui-button rm-resource-star-btn">☆</button>
+            <button type="button" data-score="5" class="ui-button rm-resource-star-btn">☆</button>
+        </div>
+
+        <div id="vote-status" class="ui-status rm-resource-vote-status"></div>
+    </div>"#
+            .to_string()
+    };
 
     let detail_section_class = resource_detail_section_class(premium != 0);
 
@@ -388,75 +666,9 @@ pub fn render_resource_profile(params: RenderResourceProfileParams<'_>) -> Strin
     let safe_map_href = escape_html(&map_href);
 
     let main_html = format!(
-        r####"<section>
-<button
-        id="favorite-button"
-        type="button"
-        class="ui-button rm-resource-favorite-btn">
-        ♡ В избранное
-    </button>
-
-    <div id="favorite-status" class="ui-status rm-resource-favorite-status">
-    </div>
-
-    <button
-        id="report-button"
-        type="button"
-        class="ui-button rm-resource-report-btn">
-        ⚑ Пожаловаться
-    </button>
-
-    <div id="report-panel" class="rm-resource-report-panel">
-
-        <div class="rm-resource-report-label">
-            Причина жалобы
-        </div>
-
-        <textarea
-            id="report-reason"
-            maxlength="500"
-            rows="4"
-            placeholder="Коротко опишите проблему..."
-            class="ui-textarea"></textarea>
-
-        <div class="rm-resource-report-actions">
-
-            <button
-                id="report-submit"
-                type="button"
-                class="ui-button rm-resource-report-submit">
-                Отправить жалобу
-            </button>
-
-            <button
-                id="report-cancel"
-                type="button"
-                class="ui-button rm-resource-report-cancel">
-                Отмена
-            </button>
-
-        </div>
-
-        <div id="report-status" class="ui-status rm-resource-report-status">
-        </div>
-
-    </div>
-
-    <div class="rm-resource-rating-block">
-        <div class="rm-resource-rating-kicker">
-            ОЦЕНИТЬ РЕСУРС
-        </div>
-
-        <div id="rating-stars" class="rm-resource-stars">
-            <button type="button" data-score="1" class="ui-button rm-resource-star-btn">☆</button>
-            <button type="button" data-score="2" class="ui-button rm-resource-star-btn">☆</button>
-            <button type="button" data-score="3" class="ui-button rm-resource-star-btn">☆</button>
-            <button type="button" data-score="4" class="ui-button rm-resource-star-btn">☆</button>
-            <button type="button" data-score="5" class="ui-button rm-resource-star-btn">☆</button>
-        </div>
-
-        <div id="vote-status" class="ui-status rm-resource-vote-status"></div>
-    </div>
+        r####"{moderation_banner}
+<section>
+{public_actions}
 </section>
 
 <section class="{detail_section_class}">
@@ -480,24 +692,24 @@ pub fn render_resource_profile(params: RenderResourceProfileParams<'_>) -> Strin
     </div>
 
     <div class="card-meta rm-resource-contact-line">
-        📍 {address}
+        {address}
     </div>
 
     <div class="card-meta rm-resource-contact-line rm-resource-contact-line--last">
-        📞 {contact}
+        {contact}
     </div>
 
     <div class="rm-resource-contact-actions">
 
         <a href="{contact_href}" class="rm-resource-contact-btn rm-resource-contact-btn--gold">
-            📞 Связаться
+            Связаться
         </a>
 
         <a href="{map_href}"
            target="_blank"
            rel="noopener noreferrer"
            class="rm-resource-contact-btn rm-resource-contact-btn--neutral">
-            📍 На карте
+            На карте
         </a>
 
     </div>
@@ -515,6 +727,8 @@ pub fn render_resource_profile(params: RenderResourceProfileParams<'_>) -> Strin
     </div>
 
 </section>"####,
+        moderation_banner = moderation_banner,
+        public_actions = public_actions_html,
         description = safe_description,
         owner_profile_html = owner_profile_html,
         address = safe_address,
@@ -525,7 +739,10 @@ pub fn render_resource_profile(params: RenderResourceProfileParams<'_>) -> Strin
         id = id,
     );
 
-    let body_after = format!(
+    let body_after = if owner_preview {
+        String::new()
+    } else {
+        format!(
         r####"<script>
 (function () {{
     const resourceId = {id};
@@ -541,8 +758,8 @@ pub fn render_resource_profile(params: RenderResourceProfileParams<'_>) -> Strin
 
         favoriteButton.textContent =
             value
-                ? "♥ В избранном"
-                : "♡ В избранное";
+                ? "В избранном"
+                : "В избранное";
     }}
 
     async function loadFavorite() {{
@@ -784,7 +1001,7 @@ pub fn render_resource_profile(params: RenderResourceProfileParams<'_>) -> Strin
                 paint(score);
 
                 summary.innerHTML =
-                    `⭐ <strong>${{Number(data.rating).toFixed(1)}}</strong> · ${{data.votes}} голосов`;
+                    `Оценка <strong>${{Number(data.rating).toFixed(1)}}</strong> · ${{data.votes}} голосов`;
 
                 status.textContent = "✓ Ваша оценка сохранена";
             }} catch (_) {{
@@ -795,25 +1012,30 @@ pub fn render_resource_profile(params: RenderResourceProfileParams<'_>) -> Strin
 }})();
 </script>"####,
         id = id,
-    );
+    )
+    };
 
     page_document(
         &format!("{} · ResursMap", title),
-        "",
+        if owner_preview {
+            r#"<meta name="robots" content="noindex, nofollow">"#
+        } else {
+            ""
+        },
         "",
         &format!(
             "{topbar}\n\n{hero}\n\n{content}",
             topbar = topbar("Ресурс", "map"),
             hero = back_hero(
-                &back_link(&back_url, "Вернуться к разделу", "arrow-left"),
+                &back_link(&back_url, back_label, "arrow-left"),
                 "map-pin",
-                category,
+                &rubric_label,
                 title,
                 &hero_description,
             ),
             content = main_html,
         ),
-        &bottom_nav("map"),
+        &bottom_nav(if owner_preview { "menu" } else { "map" }),
         &body_after,
     )
 }
@@ -991,11 +1213,11 @@ pub fn render_resource_promotion(params: RenderResourcePromotionParams<'_>) -> S
         </div>
 
         <div class="rm-promo-preview-address">
-            📍 {address}
+            {address}
         </div>
 
         <div class="rm-promo-preview-footer">
-            ResursMap — люди, услуги и возможности рядом
+            ResursMap — работа, работники и бизнес рядом
         </div>
 
         <div class="rm-promo-preview-domain">
@@ -1260,7 +1482,11 @@ pub fn render_my_resources(
         empty_state_card_with_actions(
             "Нет опубликованных ресурсов",
             "Добавьте ресурс в выбранном городе и категории.",
-            &empty_state_action("/app", "Открыть карту"),
+            &format!(
+                "{}{}",
+                empty_state_action("/app/add", "Добавить объявление"),
+                empty_state_action("/app", "Открыть города"),
+            ),
         )
     } else {
         resources
@@ -1277,16 +1503,24 @@ pub fn render_my_resources(
                 moderation_status,
                 rejection_reason,
                 is_active,
-                listing_type
+                listing_type,
+                row_rubric,
             )| {
                 let safe_title = escape_html(title);
-                let safe_category = escape_html(category);
                 let safe_description = escape_html(description);
                 let safe_rejection_reason = escape_html(rejection_reason);
+                let rubric_label = profession_label(row_rubric);
+                let category_label = if !rubric_label.is_empty()
+                    && !matches!(rubric_label.as_str(), "Работа" | "Бизнес")
+                {
+                    rubric_label
+                } else {
+                    profession_label(category)
+                };
                 let category_line = format!(
                     "{} · {}",
                     resource_listing_label(listing_type),
-                    safe_category
+                    escape_html(&category_label)
                 );
 
                 let premium_badge = if *premium != 0 {
@@ -1356,7 +1590,7 @@ pub fn render_my_resources(
                                     </div>
 
                                     <div class="rm-my-resource-rating">
-                                        ⭐ {rating:.1} · {votes}
+                                        Оценка {rating:.1} · {votes}
                                     </div>
                                 </div>
 
@@ -1425,27 +1659,43 @@ pub fn render_my_resources(
             "user",
             "Управление",
             "Мои ресурсы",
-            "Ваши объявления, компании, услуги и другие ресурсы.",
+            "Ваши объявления по работе и бизнесу.",
         ),
         &content,
-        &bottom_nav("profile"),
+        &bottom_nav("menu"),
     )
 }
 
-pub fn render_edit_resource(
-    id: i64,
-    title: &str,
-    description: &str,
-    contact: &str,
-    address: &str,
-    category: &str,
-    listing_type: &str,
-) -> String {
+pub struct RenderEditResourceParams<'a> {
+    pub id: i64,
+    pub title: &'a str,
+    pub description: &'a str,
+    pub contact: &'a str,
+    pub address: &'a str,
+    pub category: &'a str,
+    pub listing_type: &'a str,
+    pub rubric: &'a str,
+}
+
+pub fn render_edit_resource(params: RenderEditResourceParams<'_>) -> String {
+    let RenderEditResourceParams {
+        id,
+        title,
+        description,
+        contact,
+        address,
+        category,
+        listing_type,
+        rubric,
+    } = params;
     let safe_title = escape_html(title);
     let safe_description = escape_html(description);
     let safe_contact = escape_html(contact);
     let safe_address = escape_html(address);
-    let listing_type_field = if category.eq_ignore_ascii_case("work") {
+    let listing_type_field = if crate::catalog::by_id(rubric)
+        .map(|item| item.kind == crate::catalog::RubricKind::Work)
+        .unwrap_or_else(|| category.eq_ignore_ascii_case("work"))
+    {
         let offer_selected = if listing_type != "seeker" {
             " selected"
         } else {
@@ -1462,7 +1712,7 @@ pub fn render_edit_resource(
     <label class="ui-field">
         <span class="ui-field-label">Тип объявления</span>
         <select name="listing_type" class="ui-input">
-            <option value="offer"{offer_selected}>Предложение работы / услуги</option>
+            <option value="offer"{offer_selected}>Предложение работы</option>
             <option value="seeker"{seeker_selected}>Ищу работу</option>
         </select>
     </label>
@@ -1471,10 +1721,20 @@ pub fn render_edit_resource(
     } else {
         String::new()
     };
+    let rubric_field = rubric_select_html(
+        rubric,
+        if category.eq_ignore_ascii_case("work") {
+            Some(crate::catalog::RubricKind::Work)
+        } else {
+            Some(crate::catalog::RubricKind::Business)
+        },
+    );
     let content = format!(
         r####"<form method="post"
       action="/app/resource/{id}/edit"
       class="ui-form ui-form-stack">
+
+    {rubric_field}
 
     {listing_type_field}
 
@@ -1527,6 +1787,7 @@ pub fn render_edit_resource(
 </form>"####,
         id = id,
         listing_type_field = listing_type_field,
+        rubric_field = rubric_field,
         title = safe_title,
         description = safe_description,
         contact = safe_contact,
@@ -1545,35 +1806,183 @@ pub fn render_edit_resource(
             "edit",
             "Редактирование",
             "Редактировать ресурс",
-            &format!("Категория: {}", category),
+            &format!("Рубрика: {}", profession_label(rubric)),
         ),
         &content,
-        &bottom_nav("profile"),
+        &bottom_nav("menu"),
     )
 }
 
-pub fn render_add_resource(ci: usize, si: usize, zi: usize, category: &str) -> String {
-    let back_url = format!("/app/{}/{}/{}", ci, si, zi);
-    let listing_type_field = if category.eq_ignore_ascii_case("work") {
+pub fn render_add_rubric_picker(
+    ci: usize,
+    si: usize,
+    zi: usize,
+    category: &str,
+    listing_type: Option<&str>,
+) -> String {
+    let category_url = urlencoding::encode(category);
+    let back_url = match listing_type {
+        Some("seeker") => format!("/app/{ci}/{si}/{zi}/cat/{category_url}?type=seeker"),
+        Some("offer") => format!("/app/{ci}/{si}/{zi}/cat/{category_url}?type=offer"),
+        _ => format!("/app/{ci}/{si}/{zi}/cat/{category_url}"),
+    };
+    let rubric_kind = if category.eq_ignore_ascii_case("work") {
+        crate::catalog::RubricKind::Work
+    } else {
+        crate::catalog::RubricKind::Business
+    };
+    let type_query = match listing_type {
+        Some("seeker") => "type=seeker&",
+        Some("offer") => "type=offer&",
+        _ => "",
+    };
+    let mut cards = String::new();
+    for rubric in crate::catalog::by_kind(rubric_kind) {
+        cards.push_str(&navigation_card(
+            &format!(
+                "/app/{ci}/{si}/{zi}/cat/{category_url}/add?{type_query}rubric={}",
+                urlencoding::encode(rubric.id)
+            ),
+            if rubric_kind == crate::catalog::RubricKind::Work {
+                "briefcase"
+            } else {
+                "building"
+            },
+            rubric.label,
+            "Выберите, затем заполните объявление",
+        ));
+    }
+
+    let heading = match listing_type {
+        Some("seeker") => "Кем вы хотите работать?",
+        Some("offer") => "Какая вакансия?",
+        _ => "Выберите рубрику",
+    };
+
+    page_shell(
+        "Выбор рубрики · ResursMap",
+        &topbar("Новое объявление", "globe"),
+        &back_hero(
+            &back_link(&back_url, "Назад", "chevron"),
+            "map",
+            "Сначала рубрика",
+            heading,
+            "Один список для поиска и публикации — без свободного ввода.",
+        ),
+        &format!(
+            r#"<div class="grid">{cards}</div>"#,
+            cards = cards
+        ),
+        &bottom_nav("map"),
+    )
+}
+
+fn rubric_select_html(selected: &str, kind: Option<crate::catalog::RubricKind>) -> String {
+    let mut options = String::from(r#"<option value="">Выберите из списка</option>"#);
+    let groups = match kind {
+        Some(crate::catalog::RubricKind::Work) => {
+            vec![(crate::catalog::RubricKind::Work, "Работа и работники")]
+        }
+        Some(crate::catalog::RubricKind::Business) => {
+            vec![(crate::catalog::RubricKind::Business, "Бизнес")]
+        }
+        None => vec![
+            (crate::catalog::RubricKind::Work, "Работа и работники"),
+            (crate::catalog::RubricKind::Business, "Бизнес"),
+        ],
+    };
+
+    for (group_kind, group_label) in groups {
+        options.push_str(&format!(
+            r#"<optgroup label="{}">"#,
+            escape_html(group_label)
+        ));
+        for rubric in crate::catalog::by_kind(group_kind) {
+            let selected_attr = if selected == rubric.id { " selected" } else { "" };
+            options.push_str(&format!(
+                r#"<option value="{id}"{selected_attr}>{label}</option>"#,
+                id = escape_html(rubric.id),
+                selected_attr = selected_attr,
+                label = escape_html(rubric.label),
+            ));
+        }
+        options.push_str("</optgroup>");
+    }
+
+    format!(
         r#"
     <label class="ui-field">
-        <span class="ui-field-label">Тип объявления</span>
-        <select name="listing_type" class="ui-input">
-            <option value="offer">Предложение работы / услуги</option>
-            <option value="seeker">Ищу работу</option>
+        <span class="ui-field-label">Рубрика</span>
+        <select name="rubric" required class="ui-input">
+            {options}
         </select>
     </label>
 "#
-    } else {
-        ""
+    )
+}
+
+pub struct AddResourceDraft<'a> {
+    pub title: &'a str,
+    pub description: &'a str,
+    pub contact: &'a str,
+    pub address: &'a str,
+}
+
+pub fn render_add_resource(
+    ci: usize,
+    si: usize,
+    zi: usize,
+    category: &str,
+    listing_type: Option<&str>,
+    rubric: &crate::catalog::Rubric,
+    draft: Option<AddResourceDraft<'_>>,
+    error: Option<&str>,
+) -> String {
+    let category_url = urlencoding::encode(category);
+    let picker_url = match listing_type {
+        Some("seeker") => format!("/app/{ci}/{si}/{zi}/cat/{category_url}/add?type=seeker"),
+        Some("offer") => format!("/app/{ci}/{si}/{zi}/cat/{category_url}/add?type=offer"),
+        _ => format!("/app/{ci}/{si}/{zi}/cat/{category_url}/add"),
+    };
+    let listing_hidden = match listing_type {
+        Some("seeker") => r#"<input type="hidden" name="listing_type" value="seeker">"#,
+        Some("offer") => r#"<input type="hidden" name="listing_type" value="offer">"#,
+        _ => "",
+    };
+    let heading = match listing_type {
+        Some("seeker") => "Ищу работу",
+        Some("offer") => "Предлагаю работу",
+        _ => "Новое объявление",
     };
 
+    let error_html = error
+        .filter(|value| !value.trim().is_empty())
+        .map(|value| {
+            format!(
+                r#"<p class="ui-status is-error" role="alert">{}</p>"#,
+                escape_html(value)
+            )
+        })
+        .unwrap_or_default();
+    let title_value = draft.map(|value| value.title).unwrap_or("");
+    let description_value = draft.map(|value| value.description).unwrap_or("");
+    let contact_value = draft.map(|value| value.contact).unwrap_or("");
+    let address_value = draft.map(|value| value.address).unwrap_or("");
+
     let content = format!(
-        r####"<form method="post"
-      action="/app/{}/{}/{}/cat/{}/add"
+        r####"{error_html}
+<form method="post"
+      action="/app/{ci}/{si}/{zi}/cat/{category_url}/add"
       class="ui-form ui-form-stack">
 
-    {listing_type_field}
+    {listing_hidden}
+    <input type="hidden" name="rubric" value="{rubric_id}">
+
+    <div class="ui-field">
+        <span class="ui-field-label">Рубрика</span>
+        <div class="card-title">{rubric_label}</div>
+        <a class="card-meta" href="{picker_url}">Изменить рубрику</a>
+    </div>
 
     <label class="ui-field">
         <span class="ui-field-label">Название</span>
@@ -1581,8 +1990,9 @@ pub fn render_add_resource(ci: usize, si: usize, zi: usize, category: &str) -> S
             name="title"
             required
             maxlength="120"
-            placeholder="Например: Охранная компания"
-            class="ui-input">
+            placeholder="Кратко, без лишнего"
+            class="ui-input"
+            value="{title_value}">
     </label>
 
     <label class="ui-field">
@@ -1592,17 +2002,19 @@ pub fn render_add_resource(ci: usize, si: usize, zi: usize, category: &str) -> S
             required
             maxlength="1000"
             rows="5"
-            placeholder="Расскажите о ресурсе..."
-            class="ui-textarea"></textarea>
+            placeholder="Условия, опыт, что предлагаете или ищете"
+            class="ui-textarea">{description_value}</textarea>
     </label>
 
     <label class="ui-field">
         <span class="ui-field-label">Телефон или Telegram</span>
         <input
             name="contact"
+            required
             maxlength="120"
             placeholder="+33... или @username"
-            class="ui-input">
+            class="ui-input"
+            value="{contact_value}">
     </label>
 
     <label class="ui-field">
@@ -1610,41 +2022,107 @@ pub fn render_add_resource(ci: usize, si: usize, zi: usize, category: &str) -> S
         <input
             name="address"
             maxlength="200"
-            placeholder="Город, улица..."
-            class="ui-input">
+            placeholder="Город, район, улица"
+            class="ui-input"
+            value="{address_value}">
     </label>
 
     <button type="submit" class="ui-button rm-auth-button">
-        ➕ Добавить ресурс
+        Опубликовать
     </button>
 
 </form>"####,
-        ci,
-        si,
-        zi,
-        category,
-        listing_type_field = listing_type_field,
-    );
-
-    let main_html = format!(
-        "{topbar}\n\n{hero}\n\n{content}",
-        topbar = topbar("Новый ресурс", "globe"),
-        hero = back_hero(
-            &back_link(&back_url, "Вернуться", "chevron"),
-            "plus",
-            "Добавление ресурса",
-            "Добавить ресурс",
-            &format!("Категория: {}", category),
-        ),
-        content = content,
+        error_html = error_html,
+        ci = ci,
+        si = si,
+        zi = zi,
+        category_url = category_url,
+        listing_hidden = listing_hidden,
+        rubric_id = escape_html(rubric.id),
+        rubric_label = escape_html(rubric.label),
+        picker_url = escape_html(&picker_url),
+        title_value = escape_html(title_value),
+        description_value = escape_html(description_value),
+        contact_value = escape_html(contact_value),
+        address_value = escape_html(address_value),
     );
 
     page_document(
-        "Добавить ресурс · ResursMap",
+        "Добавить объявление · ResursMap",
         "",
         "",
-        &main_html,
-        &bottom_nav("profile"),
+        &format!(
+            "{topbar}\n\n{hero}\n\n{content}",
+            topbar = topbar("Новое объявление", "globe"),
+            hero = back_hero(
+                &back_link(&picker_url, "К рубрикам", "chevron"),
+                "briefcase",
+                heading,
+                rubric.label,
+                "Рубрика уже выбрана. Осталось заполнить детали.",
+            ),
+            content = content,
+        ),
+        &bottom_nav("map"),
         "",
     )
+}
+
+#[cfg(test)]
+mod catalog_publish_tests {
+    use super::*;
+
+    #[test]
+    fn add_flow_starts_with_fixed_work_rubrics() {
+        let html = render_add_rubric_picker(0, 0, 0, "work", Some("offer"));
+
+        assert!(html.contains("Охрана"));
+        assert!(html.contains("rubric=security"));
+        assert!(html.contains("Какая вакансия?"));
+    }
+
+    #[test]
+    fn add_form_locks_selected_rubric() {
+        let rubric = crate::catalog::by_id("security").expect("security rubric");
+        let html = render_add_resource(0, 0, 0, "work", Some("offer"), rubric, None, None);
+
+        assert!(html.contains(r#"name="rubric""#));
+        assert!(html.contains("security"));
+        assert!(html.contains("Охрана"));
+        assert!(html.contains("Изменить рубрику"));
+    }
+
+    #[test]
+    fn owner_preview_explains_pending_and_hides_public_actions() {
+        let html = render_resource_profile(RenderResourceProfileParams {
+            id: 7,
+            title: "Охранник в Ницце",
+            description: "Ночная смена",
+            contact: "@owner",
+            address: "Nice",
+            rating: 0.0,
+            votes: 0,
+            premium: 0,
+            verified: 0,
+            category: "work",
+            listing_type: "seeker",
+            continent_index: 0,
+            country_index: 0,
+            city_index: 0,
+            _created_at: 0,
+            owner_public_id: "abc",
+            rubric: "security",
+            owner_preview: true,
+            moderation_status: "pending",
+            is_active: 1,
+        });
+
+        assert!(html.contains("На проверке"));
+        assert!(html.contains("Другие участники это объявление пока не видят"));
+        assert!(html.contains("/app/my-resources"));
+        assert!(!html.contains("id=\"favorite-button\""));
+        assert!(!html.contains("В избранное"));
+        assert!(!html.contains("Пожаловаться"));
+        assert!(html.contains("noindex"));
+    }
 }

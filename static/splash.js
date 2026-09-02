@@ -70,7 +70,7 @@
     ].join(';');
 
     var subtitle = document.createElement('div');
-    subtitle.textContent = 'Карта ресурсов';
+    subtitle.textContent = 'Работа, люди и бизнес';
     subtitle.style.cssText = [
         'font-size:11px',
         'font-weight:800',

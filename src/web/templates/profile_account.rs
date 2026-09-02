@@ -2,7 +2,7 @@ use super::common::{
     back_hero, back_link, bottom_nav, bottom_nav_with_badge, empty_state_action, empty_state_card,
     empty_state_card_with_actions, escape_html, guest_locked_section, guest_mode_panel, icon,
     moderator_level_badge, navigation_card, page_document, page_shell, premium_badge_html,
-    profile_resource_card, section_head, simple_hero, topbar, verified_badge_html,
+    profession_label, profile_resource_card, section_head, simple_hero, topbar, verified_badge_html,
 };
 
 pub struct RenderMeParams<'a> {
@@ -201,7 +201,41 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
     let safe_first_name = escape_html(first_name);
     let safe_last_name = escape_html(last_name);
     let safe_intent_text = escape_html(intent_text);
-    let safe_category = escape_html(category);
+    let selected_rubric = crate::catalog::resolve(category)
+        .map(|rubric| rubric.id)
+        .unwrap_or("");
+    let work_options = crate::catalog::by_kind(crate::catalog::RubricKind::Work)
+        .map(|rubric| {
+            let selected = if selected_rubric == rubric.id {
+                " selected"
+            } else {
+                ""
+            };
+            format!(
+                r#"                <option value="{id}"{selected}>{label}</option>"#,
+                id = escape_html(rubric.id),
+                selected = selected,
+                label = escape_html(rubric.label),
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let business_options = crate::catalog::by_kind(crate::catalog::RubricKind::Business)
+        .map(|rubric| {
+            let selected = if selected_rubric == rubric.id {
+                " selected"
+            } else {
+                ""
+            };
+            format!(
+                r#"                <option value="{id}"{selected}>{label}</option>"#,
+                id = escape_html(rubric.id),
+                selected = selected,
+                label = escape_html(rubric.label),
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
 
     let intent_status_text = if safe_intent_text.is_empty() {
         "Статус не указан".to_string()
@@ -395,11 +429,10 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
         let availability_class = "available";
         let availability_text = "Внутренние сообщения доступны";
 
-        let category_text = if safe_category.is_empty() {
-            "Направление не выбрано"
-        } else {
-            safe_category.as_str()
-        };
+        let category_display = crate::catalog::by_id(selected_rubric)
+            .map(|rubric| rubric.label)
+            .unwrap_or("Направление не выбрано");
+        let category_text = category_display;
 
         let admin_navigation = if moderator_level > 0 {
             format!(
@@ -713,6 +746,21 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
         transition:none;
     }}
 }}
+html.light-theme .rm-status-pill,
+body.light-theme .rm-status-pill {{
+    background:#fff;
+    border-color:rgba(26,29,33,.10);
+}}
+html.light-theme .rm-center-metric,
+body.light-theme .rm-center-metric {{
+    background:#fff;
+    border-color:rgba(26,29,33,.10);
+    box-shadow:0 8px 20px rgba(26,29,33,.05);
+}}
+html.light-theme .rm-command-icon,
+body.light-theme .rm-command-icon {{
+    background:rgba(165,118,31,.08);
+}}
 </style>
 
 <section class="rm-personal-center">
@@ -763,6 +811,22 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
 
     <div class="rm-command-grid">
         <a class="rm-command-card"
+           href="/app/add">
+            <span class="rm-command-icon">
+                {plus_icon}
+            </span>
+            <span class="rm-command-copy">
+                <strong>Добавить объявление</strong>
+                <small>
+                    Откроется последний город
+                </small>
+            </span>
+            <span class="rm-command-arrow">
+                {arrow}
+            </span>
+        </a>
+
+        <a class="rm-command-card"
            href="/app/my-resources">
             <span class="rm-command-icon">
                 {resources_icon}
@@ -775,23 +839,6 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
                     Отклонено: {rejected_count}
                 </small>
             </span>
-            <span class="rm-command-arrow">
-                {arrow}
-            </span>
-        </a>
-
-        <a class="rm-command-card"
-           href="/app/messages">
-            <span class="rm-command-icon">
-                {messages_icon}
-            </span>
-            <span class="rm-command-copy">
-                <strong>Сообщения</strong>
-                <small>
-                    Личные диалоги
-                </small>
-            </span>
-            {messages_badge}
             <span class="rm-command-arrow">
                 {arrow}
             </span>
@@ -855,7 +902,7 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
             <span class="rm-command-copy">
                 <strong>Найти возможности</strong>
                 <small>
-                    Люди, услуги, работа и сотрудничество
+                    Работа, работники и бизнес
                 </small>
             </span>
             <span class="rm-command-arrow">
@@ -879,13 +926,12 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
             favorites_count = favorites_count,
             attention_count = attention_count,
             resources_icon = icon("map"),
-            messages_icon = icon("message-circle"),
+            plus_icon = icon("plus"),
             contacts_icon = icon("users"),
             favorites_icon = icon("heart"),
             notifications_icon = icon("bell"),
             search_icon = icon("search"),
             arrow = icon("chevron"),
-            messages_badge = count_badge(unread_messages_count),
             contacts_badge = count_badge(pending_contact_requests_count),
             notifications_badge = count_badge(unread_notifications_count),
             admin_navigation = admin_navigation,
@@ -972,33 +1018,21 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
     <label class="rm-profile-field rm-profile-field--spaced">
 
         <div class="rm-profile-field-label">
-            Ваша профессия
+            Профессия или направление
         </div>
 
-        <input
+        <select
             id="profile-category"
-            type="text"
-            list="profile-profession-suggestions"
-            maxlength="80"
-            value="{safe_category}"
-            placeholder="Например: электрик, сантехник, дизайнер..."
-            autocomplete="off"
-         class="ui-input">
-
-        <datalist id="profile-profession-suggestions">
-            <option value="Электрик"></option>
-            <option value="Сантехник"></option>
-            <option value="Программист"></option>
-            <option value="Дизайнер"></option>
-            <option value="Водитель"></option>
-            <option value="Строитель"></option>
-            <option value="Повар"></option>
-            <option value="Врач"></option>
-            <option value="Учитель"></option>
-            <option value="Юрист"></option>
-            <option value="Бизнес"></option>
-            <option value="Услуги"></option>
-        </datalist>
+            class="ui-input"
+        >
+            <option value="">Не выбрано</option>
+            <optgroup label="Я работаю как">
+{work_options}
+            </optgroup>
+            <optgroup label="Мой бизнес">
+{business_options}
+            </optgroup>
+        </select>
 
     </label>
 
@@ -1052,7 +1086,8 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
         settings_icon = icon("settings"),
         intent_status_text = intent_status_text,
         safe_intent_text = safe_intent_text,
-        safe_category = safe_category,
+        work_options = work_options,
+        business_options = business_options,
         home_city_select =
             home_city_select_html(home_continent_index, home_country_index, home_city_index,),
     );
@@ -1062,10 +1097,10 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
 (function () {
     "use strict";
 
+    const DRAFT_KEY = "rm_profile_draft";
+
     const saveButton =
         document.getElementById("profile-save");
-
-
 
     const intent =
         document.getElementById("profile-intent");
@@ -1104,10 +1139,82 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
         return;
     }
 
+    function profileErrorText(code) {
+        switch (code) {
+            case "invalid_category":
+                return "Выберите профессию из списка.";
+            case "invalid_intent":
+                return "Текст статуса слишком длинный.";
+            case "invalid_duration":
+                return "Выберите срок показа статуса.";
+            case "login_required":
+                return "Войдите в аккаунт.";
+            case "rate_limited":
+                return "Слишком часто. Подождите немного.";
+            case "database_error":
+            case "database_unavailable":
+                return "Не удалось сохранить. Попробуйте позже.";
+            default:
+                return "Не удалось сохранить.";
+        }
+    }
+
+    function collectDraft() {
+        return {
+            intent: intent.value,
+            category: categoryInput.value,
+            home_city: homeCity ? homeCity.value : "",
+            duration: duration.value
+        };
+    }
+
+    function persistDraft() {
+        try {
+            localStorage.setItem(
+                DRAFT_KEY,
+                JSON.stringify(collectDraft())
+            );
+        } catch (_) {}
+    }
+
+    function restoreDraft() {
+        try {
+            const raw = localStorage.getItem(DRAFT_KEY);
+            if (!raw) {
+                return;
+            }
+
+            const draft = JSON.parse(raw);
+            if (typeof draft.intent === "string") {
+                intent.value = draft.intent;
+            }
+            if (typeof draft.category === "string") {
+                categoryInput.value = draft.category;
+            }
+            if (homeCity && typeof draft.home_city === "string") {
+                homeCity.value = draft.home_city;
+            }
+            if (typeof draft.duration === "string") {
+                duration.value = draft.duration;
+            }
+        } catch (_) {}
+    }
+
+    restoreDraft();
+
+    intent.addEventListener("input", persistDraft);
+    categoryInput.addEventListener("change", persistDraft);
+    duration.addEventListener("change", persistDraft);
+    if (homeCity) {
+        homeCity.addEventListener("change", persistDraft);
+    }
+    window.addEventListener("beforeunload", persistDraft);
+
     saveButton.addEventListener(
         "click",
         async function () {
             saveButton.disabled = true;
+            persistDraft();
 
             if (status) {
                 status.textContent = "Сохраняем...";
@@ -1123,7 +1230,7 @@ pub fn render_me(params: RenderMeParams<'_>) -> String {
                                 "application/json"
                         },
                         body: JSON.stringify({
-intent_text:
+                            intent_text:
                                 intent.value.trim(),
                             duration_days:
                                 Number(duration.value),
@@ -1139,7 +1246,7 @@ intent_text:
 
                 const data = await response.json();
 
-                if (response.status === 401) {
+                if (response.status === 401 || data.error === "login_required") {
                     if (status) {
                         status.textContent =
                             "Войдите в аккаунт.";
@@ -1151,11 +1258,15 @@ intent_text:
                 if (!response.ok || !data.ok) {
                     if (status) {
                         status.textContent =
-                            "Не удалось сохранить.";
+                            profileErrorText(data.error);
                     }
 
                     return;
                 }
+
+                try {
+                    localStorage.removeItem(DRAFT_KEY);
+                } catch (_) {}
 
                 if (current) {
                     current.textContent =
@@ -1193,15 +1304,12 @@ intent_text:
         content = content_html,
     );
 
-    let attention_count =
-        unread_messages_count + unread_notifications_count + pending_contact_requests_count;
-
     page_document(
         "Профиль · ResursMap",
         "",
         "",
         &main_html,
-        &bottom_nav_with_badge("profile", attention_count),
+        &bottom_nav_with_badge("menu", unread_messages_count),
         &body_after_html,
     )
 }
@@ -1230,18 +1338,18 @@ pub fn render_notifications(
 
                     let safe_message = escape_html(message);
 
-                    let (icon_text, card_class, icon_class) = match kind.as_str() {
-                        "resource_approved" => ("✓", "rm-notif-card--approved", "rm-notif-icon--approved"),
-                        "resource_rejected" => ("!", "rm-notif-card--rejected", "rm-notif-icon--rejected"),
-                        "promotion_published" => ("📢", "rm-notif-card--approved", "rm-notif-icon--approved"),
-                        "promotion_moderation" => ("⏳", "rm-notif-card--contact", "rm-notif-icon--contact"),
-                        "promotion_publish_failed" => ("⚠", "rm-notif-card--rejected", "rm-notif-icon--rejected"),
-                        "promotion_rejected" => ("×", "rm-notif-card--rejected", "rm-notif-icon--rejected"),
-                        "admin_assignment" => ("🛡", "rm-notif-card--contact", "rm-notif-icon--contact"),
-                        "chat_message" => ("💬", "rm-notif-card--chat", "rm-notif-icon--chat"),
-                        "contact_accepted" => ("✓", "rm-notif-card--contact", "rm-notif-icon--contact"),
-                        "contact_rejected" => ("×", "rm-notif-card--rejected", "rm-notif-icon--rejected"),
-                        _ => ("🔔", "", "rm-notif-icon--default"),
+                    let (icon_html, card_class, icon_class) = match kind.as_str() {
+                        "resource_approved" => (icon("check"), "rm-notif-card--approved", "rm-notif-icon--approved"),
+                        "resource_rejected" => (icon("x"), "rm-notif-card--rejected", "rm-notif-icon--rejected"),
+                        "promotion_published" => (icon("star"), "rm-notif-card--approved", "rm-notif-icon--approved"),
+                        "promotion_moderation" => (icon("clock"), "rm-notif-card--contact", "rm-notif-icon--contact"),
+                        "promotion_publish_failed" => (icon("alert-triangle"), "rm-notif-card--rejected", "rm-notif-icon--rejected"),
+                        "promotion_rejected" => (icon("x"), "rm-notif-card--rejected", "rm-notif-icon--rejected"),
+                        "admin_assignment" => (icon("shield"), "rm-notif-card--contact", "rm-notif-icon--contact"),
+                        "chat_message" => (icon("message-circle"), "rm-notif-card--chat", "rm-notif-icon--chat"),
+                        "contact_accepted" => (icon("check"), "rm-notif-card--contact", "rm-notif-icon--contact"),
+                        "contact_rejected" => (icon("x"), "rm-notif-card--rejected", "rm-notif-icon--rejected"),
+                        _ => (icon("bell"), "", "rm-notif-icon--default"),
                     };
 
                     let unread_badge = if *is_read == 0 {
@@ -1250,7 +1358,17 @@ pub fn render_notifications(
                         ""
                     };
 
-                    let open_link = if kind == "chat_message" || kind == "contact_accepted" {
+                    let open_link = if kind == "chat_message" {
+                        if let Some(id) = resource_id {
+                            format!(
+                                r#"<a href="/app/chat/{id}" class="rm-notif-action rm-notif-action--gold">Открыть чат</a>"#,
+                                id = id
+                            )
+                        } else {
+                            r#"<a href="/app/messages" class="rm-notif-action rm-notif-action--gold">Открыть сообщения</a>"#
+                                .to_string()
+                        }
+                    } else if kind == "contact_accepted" {
                         r#"<a href="/app/messages" class="rm-notif-action rm-notif-action--gold">Открыть сообщения</a>"#
                             .to_string()
                     } else if let Some(id) = resource_id {
@@ -1266,7 +1384,7 @@ pub fn render_notifications(
                         r#"
 <article class="card rm-notif-card {card_class}">
     <div class="rm-notif-layout">
-        <div class="rm-notif-icon {icon_class}">{icon_text}</div>
+        <div class="rm-notif-icon {icon_class}">{icon_html}</div>
         <div class="rm-notif-body">
             <div class="rm-notif-head">
                 <div class="card-title">{title}</div>
@@ -1280,7 +1398,7 @@ pub fn render_notifications(
 "#,
                         card_class = card_class,
                         icon_class = icon_class,
-                        icon_text = icon_text,
+                        icon_html = icon_html,
                         title = safe_title,
                         message = safe_message,
                         unread_badge = unread_badge,
@@ -1310,7 +1428,7 @@ pub fn render_notifications(
             "Статусы модерации и важные изменения ваших ресурсов.",
         ),
         &content,
-        &bottom_nav("profile"),
+        &bottom_nav("menu"),
     )
 }
 
@@ -1324,6 +1442,7 @@ pub struct RenderPublicUserProfileParams<'a> {
     pub first_name: &'a str,
     pub last_name: &'a str,
     pub intent_text: &'a str,
+    pub category: &'a str,
     pub chat_user_id: Option<i64>,
     pub resources: Vec<crate::web::view_models::PublicProfileResourceRow>,
 }
@@ -1335,19 +1454,33 @@ pub fn render_public_user_profile(params: RenderPublicUserProfileParams<'_>) -> 
         first_name,
         last_name,
         intent_text,
+        category,
         chat_user_id,
         resources,
     } = params;
+    let profession = {
+        let label = profession_label(category);
+        if label.is_empty()
+            || matches!(
+                label.as_str(),
+                "Работа" | "Бизнес" | "Услуги" | "Сообщество"
+            )
+        {
+            "Специалист".to_string()
+        } else {
+            label
+        }
+    };
     let hero_full_name = format!("{} {}", first_name.trim(), last_name.trim(),)
         .trim()
         .to_string();
 
-    let hero_display_name = if !hero_full_name.is_empty() {
+    let person_name = if !hero_full_name.is_empty() {
         hero_full_name
     } else if !username.trim().is_empty() {
         format!("@{}", username.trim())
     } else {
-        "Участник".to_string()
+        String::new()
     };
 
     let safe_username = escape_html(username);
@@ -1359,12 +1492,13 @@ pub fn render_public_user_profile(params: RenderPublicUserProfileParams<'_>) -> 
         .trim()
         .to_string();
 
-    let display_name = if !full_name.is_empty() {
+    let display_name = profession.clone();
+    let person_line = if !full_name.is_empty() {
         full_name
     } else if !safe_username.is_empty() {
         format!("@{}", safe_username)
     } else {
-        "Участник".to_string()
+        person_name
     };
 
     let contact_html = String::new();
@@ -1387,6 +1521,8 @@ pub fn render_public_user_profile(params: RenderPublicUserProfileParams<'_>) -> 
     <a href="/app/chat/{chat_user_id}" class="rm-public-chat-link">
         Открыть чат
     </a>
+    <button type="button" class="ui-button" data-share data-share-title="Профиль ResursMap" data-share-status="share-status">Поделиться</button>
+    <div id="share-status" class="ui-status"></div>
 
 </section>
 "#,
@@ -1442,6 +1578,9 @@ pub fn render_public_user_profile(params: RenderPublicUserProfileParams<'_>) -> 
         </div>
 
     </div>
+
+    <button type="button" class="ui-button" data-share data-share-title="Профиль ResursMap" data-share-status="share-status">Поделиться</button>
+    <div id="share-status" class="ui-status"></div>
 
 </section>
 "#
@@ -1532,6 +1671,10 @@ pub fn render_public_user_profile(params: RenderPublicUserProfileParams<'_>) -> 
             </div>
 
             <div class="card-meta rm-public-resource-meta">
+                {person_line}
+            </div>
+
+            <div class="card-meta rm-public-resource-meta">
                 {resource_count} ресурсов
             </div>
 
@@ -1557,6 +1700,11 @@ pub fn render_public_user_profile(params: RenderPublicUserProfileParams<'_>) -> 
 </section>"####,
         profile_icon = icon("user"),
         display_name = display_name,
+        person_line = if person_line.is_empty() {
+            String::new()
+        } else {
+            person_line.clone()
+        },
         resource_count = resource_count,
         contact_html = contact_html,
         intent_html = intent_html,
@@ -1764,23 +1912,27 @@ pub fn render_public_user_profile(params: RenderPublicUserProfileParams<'_>) -> 
         "",
         &format!(
             "{topbar}\n\n{hero}\n\n{content}",
-            topbar = topbar("Участник", "user"),
+            topbar = topbar("Профессия", "user"),
             hero = back_hero(
-                &back_link("javascript:history.back()", "Назад", "arrow-left",),
+                &back_link("/app/search", "Назад", "arrow-left",),
                 "user",
-                "Участник",
-                &hero_display_name,
-                "Профиль участника ResursMap.",
+                "Профессия",
+                &profession,
+                if person_line.is_empty() {
+                    "Объявления и статус по выбранной рубрике."
+                } else {
+                    person_line.as_str()
+                },
             ),
             content = main_html,
         ),
-        &bottom_nav("none"),
+        &bottom_nav("search"),
         &body_after,
     )
 }
 
 pub fn render_public_user_not_found() -> String {
-    let back_to_map = navigation_card("/app", "map", "Вернуться на карту", "");
+    let back_to_map = navigation_card("/app", "map", "Вернуться к городам", "");
 
     let content = format!(
         r#"<section>
@@ -1816,7 +1968,7 @@ pub fn render_favorites(
     } else if resources.is_empty() {
         empty_state_card_with_actions(
             "Избранное пока пустое",
-            "Откройте любой ресурс и нажмите ♡.",
+            "Откройте любое объявление и сохраните его в избранное.",
             &format!(
                 "{}{}",
                 empty_state_action("/app/search", "Найти ресурсы"),
@@ -1876,7 +2028,7 @@ pub fn render_favorites(
             "Всё, что вы отметили сердцем.",
         ),
         &content,
-        &bottom_nav("profile"),
+        &bottom_nav("menu"),
     )
 }
 
@@ -1916,7 +2068,6 @@ mod personal_center_tests {
 
         assert!(html.contains("Обзор"));
         assert!(html.contains("/app/my-resources"));
-        assert!(html.contains("/app/messages"));
         assert!(html.contains("/app/contact-requests"));
         assert!(html.contains("/app/favorites"));
         assert!(html.contains("/app/notifications"));
@@ -1940,6 +2091,27 @@ mod personal_center_tests {
         let html = render_me(unsafe_params);
 
         assert!(!html.contains("<script>alert(1)</script>"));
-        assert!(html.contains("&lt;script&gt;alert(1)&lt;/script&gt;"));
+        assert!(!html.contains("&lt;script&gt;alert(1)&lt;/script&gt;"));
+        assert!(html.contains("Направление не выбрано"));
+    }
+
+    #[test]
+    fn public_profile_leads_with_profession() {
+        let html = render_public_user_profile(RenderPublicUserProfileParams {
+            public_id: "abc",
+            username: "ivan",
+            first_name: "Иван",
+            last_name: "Петров",
+            intent_text: "",
+            category: "security",
+            chat_user_id: None,
+            resources: vec![],
+        });
+
+        let profession = html.find("Охрана").expect("profession");
+        let name = html.find("Иван").expect("name");
+        assert!(profession < name);
+        assert!(html.contains("Профессия"));
+        assert!(html.contains("noindex"));
     }
 }
