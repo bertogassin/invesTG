@@ -1,26 +1,23 @@
 use super::auth::verify_user_session;
-use super::chat::load_user_conversations;
-use super::common::{input_text_is_valid, rate_limit_retry_after, request_is_cross_site};
-use super::user_blocks::users_are_blocked;
+use super::common::rate_limit_retry_after;
 use crate::state::app_state::AppState;
 use axum::{
     extract::{Path, Query, State},
-    http::{header, HeaderMap, StatusCode},
+    http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     Json,
 };
+use rusqlite::{params, OptionalExtension, TransactionBehavior};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-
-const DEFAULT_PAGE_SIZE: i64 = 50;
-const MAX_PAGE_SIZE: i64 = 100;
+use std::collections::BTreeMap;
 
 #[derive(Debug, Deserialize)]
 pub struct ChatMessagesQuery {
-    before_id: Option<i64>,
     after_id: Option<i64>,
+    before_id: Option<i64>,
     limit: Option<i64>,
-    mark_read: Option<bool>,
+    mark_read: Option<String>,
     read_through_id: Option<i64>,
 }
 
@@ -36,37 +33,22 @@ pub struct ChatEditPayload {
     message: String,
 }
 
-fn message_can_be_edited(created_at: i64, deleted_at: i64, now: i64) -> bool {
-    deleted_at == 0
-        && created_at > 0
-        && now >= created_at
-        && now.saturating_sub(created_at) <= 86_400
+#[derive(Debug, Deserialize)]
+pub struct ChatReactionPayload {
+    emoji: String,
 }
 
-pub(crate) fn chat_media_attachment_url(
-    id: i64,
-    deleted_at: i64,
-    kind: &str,
-    path: &str,
-) -> String {
-    if deleted_at == 0 && !path.is_empty() && (kind == "image" || kind == "voice") {
-        format!("/api/chat/media/{id}")
-    } else {
-        String::new()
-    }
-}
-
-#[derive(Debug, Clone, Serialize)]
-struct MessageReaction {
+#[derive(Debug, Serialize, Clone)]
+pub struct ChatReaction {
     emoji: String,
     count: i64,
     mine: bool,
 }
 
-#[derive(Debug, Serialize)]
-struct ChatApiMessage {
+#[derive(Debug, Serialize, Clone)]
+pub struct ChatApiMessage {
     id: i64,
-    #[serde(serialize_with = "serialize_user_id")]
+    #[serde(serialize_with = "serialize_i64_as_string")]
     sender_user_id: i64,
     message: String,
     is_mine: bool,
@@ -74,399 +56,172 @@ struct ChatApiMessage {
     read_at: i64,
     created_at: i64,
     reply_to_message_id: Option<i64>,
-    #[serde(serialize_with = "serialize_optional_user_id")]
     reply_sender_user_id: Option<i64>,
     reply_message: String,
     edited_at: i64,
     deleted_at: i64,
-    #[serde(skip_serializing_if = "String::is_empty")]
     client_message_id: String,
-    #[serde(skip_serializing_if = "String::is_empty")]
     attachment_kind: String,
-    #[serde(skip_serializing_if = "String::is_empty")]
     attachment_mime: String,
     attachment_size: i64,
-    #[serde(skip_serializing_if = "String::is_empty")]
     attachment_url: String,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    reactions: Vec<MessageReaction>,
+    reactions: Vec<ChatReaction>,
 }
 
-fn serialize_user_id<S>(value: &i64, serializer: S) -> Result<S::Ok, S::Error>
+fn serialize_i64_as_string<S>(value: &i64, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: serde::Serializer,
 {
     serializer.serialize_str(&value.to_string())
 }
 
-fn serialize_optional_user_id<S>(value: &Option<i64>, serializer: S) -> Result<S::Ok, S::Error>
-where
-    S: serde::Serializer,
-{
-    match value {
-        Some(value) => serializer.serialize_some(&value.to_string()),
-        None => serializer.serialize_none(),
-    }
+fn json_error(status: StatusCode, error: &str) -> Response {
+    (status, Json(json!({"ok": false, "error": error}))).into_response()
 }
 
-const CHAT_REACTION_EMOJIS: &[&str] = &["❤️", "👍", "😂", "😮", "😢", "🙏"];
-
-fn reaction_emoji_is_allowed(value: &str) -> bool {
-    CHAT_REACTION_EMOJIS.contains(&value)
+fn request_is_cross_site(headers: &HeaderMap) -> bool {
+    headers
+        .get("sec-fetch-site")
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|v| v.eq_ignore_ascii_case("cross-site"))
 }
 
-fn attach_reactions(
-    connection: &rusqlite::Connection,
-    messages: &mut [ChatApiMessage],
-    viewer_user_id: i64,
-) {
-    if messages.is_empty() {
-        return;
-    }
-
-    let message_ids: Vec<i64> = messages.iter().map(|message| message.id).collect();
-    let reactions_by_message = load_message_reactions(connection, &message_ids, viewer_user_id);
-
-    for message in messages.iter_mut() {
-        if let Some(reactions) = reactions_by_message.get(&message.id) {
-            message.reactions = reactions.clone();
-        }
-    }
-}
-
-fn load_message_reactions(
-    connection: &rusqlite::Connection,
-    message_ids: &[i64],
-    viewer_user_id: i64,
-) -> std::collections::HashMap<i64, Vec<MessageReaction>> {
-    let mut reactions_by_message = std::collections::HashMap::new();
-
-    if message_ids.is_empty() {
-        return reactions_by_message;
-    }
-
-    let mut placeholders = Vec::with_capacity(message_ids.len());
-    let mut params: Vec<rusqlite::types::Value> = Vec::with_capacity(message_ids.len() + 1);
-    params.push(rusqlite::types::Value::from(viewer_user_id));
-
-    for (index, message_id) in message_ids.iter().enumerate() {
-        placeholders.push(format!("?{}", index + 2));
-        params.push(rusqlite::types::Value::from(*message_id));
-    }
-
-    let sql = format!(
-        "SELECT
-            message_id,
-            emoji,
-            COUNT(*) AS reaction_count,
-            SUM(CASE WHEN user_id = ?1 THEN 1 ELSE 0 END) AS mine_count
-         FROM message_reactions
-         WHERE message_id IN ({})
-         GROUP BY message_id, emoji
-         ORDER BY message_id ASC, reaction_count DESC, emoji ASC",
-        placeholders.join(", ")
-    );
-
-    let mut statement = match connection.prepare(&sql) {
-        Ok(statement) => statement,
-        Err(_) => return reactions_by_message,
-    };
-
-    let rows = match statement.query_map(rusqlite::params_from_iter(params), |row| {
-        Ok((
-            row.get::<_, i64>(0)?,
-            row.get::<_, String>(1)?,
-            row.get::<_, i64>(2)?,
-            row.get::<_, i64>(3)?,
-        ))
-    }) {
-        Ok(rows) => rows,
-        Err(_) => return reactions_by_message,
-    };
-
-    for row in rows.flatten() {
-        let (message_id, emoji, count, mine_count) = row;
-        reactions_by_message
-            .entry(message_id)
-            .or_default()
-            .push(MessageReaction {
-                emoji,
-                count,
-                mine: mine_count > 0,
-            });
-    }
-
-    reactions_by_message
-}
-
-pub fn reactions_for_view(
-    connection: &rusqlite::Connection,
-    message_ids: &[i64],
-    viewer_user_id: i64,
-) -> std::collections::HashMap<i64, Vec<crate::web::view_models::ChatReactionRow>> {
-    load_message_reactions(connection, message_ids, viewer_user_id)
-        .into_iter()
-        .map(|(message_id, reactions)| {
-            (
-                message_id,
-                reactions
-                    .into_iter()
-                    .map(|reaction| crate::web::view_models::ChatReactionRow {
-                        emoji: reaction.emoji,
-                        count: reaction.count,
-                        mine: reaction.mine,
-                    })
-                    .collect(),
-            )
-        })
-        .collect()
-}
-
-fn normalized_pair(current_user_id: i64, other_user_id: i64) -> Option<(i64, i64)> {
-    if current_user_id <= 0 || other_user_id <= 0 || current_user_id == other_user_id {
-        return None;
-    }
-
-    if current_user_id < other_user_id {
-        Some((current_user_id, other_user_id))
+fn normalized_pair(a: i64, b: i64) -> Option<(i64, i64)> {
+    if a <= 0 || b <= 0 || a == b {
+        None
+    } else if a < b {
+        Some((a, b))
     } else {
-        Some((other_user_id, current_user_id))
+        Some((b, a))
     }
 }
 
-fn normalized_limit(value: Option<i64>) -> i64 {
-    value.unwrap_or(DEFAULT_PAGE_SIZE).clamp(1, MAX_PAGE_SIZE)
-}
-
-fn message_is_valid(message: &str) -> bool {
-    input_text_is_valid(message, 1, 2000)
-}
-
-fn client_message_id_is_valid(value: &str) -> bool {
+fn valid_client_id(value: &str) -> bool {
     (16..=80).contains(&value.len())
         && value
             .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
+            .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+}
+
+fn query_truthy(value: Option<&str>) -> bool {
+    value.is_some_and(|value| {
+        matches!(
+            value.trim().to_ascii_lowercase().as_str(),
+            "1" | "true" | "yes" | "on"
+        )
+    })
 }
 
 fn conversation_id(
-    connection: &rusqlite::Connection,
-    current_user_id: i64,
-    other_user_id: i64,
-) -> Option<i64> {
-    let (user1_id, user2_id) = normalized_pair(current_user_id, other_user_id)?;
-
-    connection
-        .query_row(
-            "SELECT id
-             FROM conversations
-             WHERE user1_id = ?1
-               AND user2_id = ?2
-             LIMIT 1",
-            rusqlite::params![user1_id, user2_id],
-            |row| row.get(0),
-        )
-        .ok()
+    db: &rusqlite::Connection,
+    user_id: i64,
+    peer_id: i64,
+) -> rusqlite::Result<Option<i64>> {
+    let Some((u1, u2)) = normalized_pair(user_id, peer_id) else {
+        return Ok(None);
+    };
+    db.query_row(
+        "SELECT id FROM conversations WHERE user1_id=?1 AND user2_id=?2 LIMIT 1",
+        params![u1, u2],
+        |row| row.get(0),
+    )
+    .optional()
 }
 
-fn ensure_conversation_for_outgoing(
-    connection: &rusqlite::Connection,
-    current_user_id: i64,
-    other_user_id: i64,
+fn ensure_conversation(
+    db: &rusqlite::Connection,
+    user_id: i64,
+    peer_id: i64,
 ) -> Result<i64, &'static str> {
-    if let Some(existing_id) = conversation_id(connection, current_user_id, other_user_id) {
-        return Ok(existing_id);
+    if let Ok(Some(id)) = conversation_id(db, user_id, peer_id) {
+        return Ok(id);
     }
 
-    let Some((user1_id, user2_id)) = normalized_pair(current_user_id, other_user_id) else {
-        return Err("conversation_not_open");
+    let Some((u1, u2)) = normalized_pair(user_id, peer_id) else {
+        return Err("invalid_user");
     };
 
-    let other_is_active: i64 = connection
+    let peer_exists = db
         .query_row(
-            "SELECT EXISTS(
-                SELECT 1
-                FROM users
-                WHERE id = ?1
-                  AND is_active = 1
-            )",
-            rusqlite::params![other_user_id],
-            |row| row.get(0),
+            "SELECT EXISTS(SELECT 1 FROM users WHERE id=?1 AND is_active=1)",
+            params![peer_id],
+            |row| row.get::<_, i64>(0),
         )
         .unwrap_or(0);
 
-    if other_is_active != 1 {
+    if peer_exists != 1 {
         return Err("user_not_found");
     }
 
     let now = crate::web::handlers::common::unix_now();
+    db.execute(
+        "INSERT OR IGNORE INTO conversations(user1_id,user2_id,created_at,updated_at)
+         VALUES(?1,?2,?3,?3)",
+        params![u1, u2, now],
+    )
+    .map_err(|_| "conversation_create_failed")?;
 
-    if connection
-        .execute(
-            "INSERT INTO contact_requests (
-                sender_user_id,
-                receiver_user_id,
-                message,
-                status,
-                created_at,
-                updated_at
-             )
-             VALUES (?1, ?2, '', 'pending', ?3, ?3)
-             ON CONFLICT(sender_user_id, receiver_user_id)
-             DO NOTHING",
-            rusqlite::params![current_user_id, other_user_id, now],
-        )
-        .is_err()
-    {
-        return Err("request_store_failed");
-    }
-
-    let _ = connection.execute(
-        "INSERT INTO user_notifications (
-            user_id,
-            resource_id,
-            kind,
-            title,
-            message,
-            is_read,
-            created_at
-         )
-         VALUES (
-            ?1, ?2,
-            'contact_request',
-            'Новый запрос на связь',
-            'Участник хочет связаться через ResursMap.',
-            0, ?3
-         )",
-        rusqlite::params![other_user_id, current_user_id, now],
-    );
-
-    if connection
-        .execute(
-            "INSERT OR IGNORE INTO conversations (
-                user1_id,
-                user2_id,
-                created_at,
-                updated_at
-             )
-             VALUES (?1, ?2, ?3, ?3)",
-            rusqlite::params![user1_id, user2_id, now],
-        )
-        .is_err()
-    {
-        return Err("conversation_create_failed");
-    }
-
-    conversation_id(connection, current_user_id, other_user_id).ok_or("conversation_lookup_failed")
+    conversation_id(db, user_id, peer_id)
+        .ok()
+        .flatten()
+        .ok_or("conversation_lookup_failed")
 }
 
-pub(super) fn chat_contact_gate_error(
-    connection: &rusqlite::Connection,
-    current_user_id: i64,
-    other_user_id: i64,
-) -> Option<&'static str> {
-    let status: Option<String> = connection
-        .query_row(
-            "SELECT status
-             FROM contact_requests
-             WHERE (
-                 sender_user_id = ?1 AND receiver_user_id = ?2
-             ) OR (
-                 sender_user_id = ?2 AND receiver_user_id = ?1
-             )
-             ORDER BY id DESC
-             LIMIT 1",
-            rusqlite::params![current_user_id, other_user_id],
-            |row| row.get(0),
-        )
-        .ok();
-
-    match status.as_deref() {
-        Some("pending") => Some("request_pending"),
-        Some("rejected") => Some("request_rejected"),
-        _ => None,
-    }
-}
-
-pub(super) fn user_has_verified_identity(connection: &rusqlite::Connection, user_id: i64) -> bool {
-    connection
-        .query_row(
-            "SELECT EXISTS(
-                SELECT 1 FROM auth_identities
-                WHERE user_id = ?1 AND verified_at > 0
-            )",
-            rusqlite::params![user_id],
-            |row| row.get::<_, i64>(0),
-        )
-        .unwrap_or(0)
+fn blocked(db: &rusqlite::Connection, user_id: i64, peer_id: i64) -> bool {
+    db.query_row(
+        "SELECT EXISTS(
+            SELECT 1 FROM user_blocks
+            WHERE (blocker_user_id=?1 AND blocked_user_id=?2)
+               OR (blocker_user_id=?2 AND blocked_user_id=?1)
+        )",
+        params![user_id, peer_id],
+        |row| row.get::<_, i64>(0),
+    )
+    .unwrap_or(0)
         == 1
 }
 
-fn touch_profile_last_seen(connection: &rusqlite::Connection, user_id: i64) {
-    let now = crate::web::handlers::common::unix_now();
-
-    let _ = connection.execute(
-        "UPDATE profiles
-         SET last_seen_at = ?1
-         WHERE user_id = ?2",
-        rusqlite::params![now, user_id],
-    );
+fn attachment_url(id: i64, deleted_at: i64, kind: &str, path: &str) -> String {
+    if deleted_at > 0 || kind.is_empty() || path.is_empty() {
+        String::new()
+    } else {
+        format!("/api/chat/media/{}", id)
+    }
 }
 
-fn load_api_message_by_id(
-    connection: &rusqlite::Connection,
+fn load_message(
+    db: &rusqlite::Connection,
     conversation_id: i64,
     message_id: i64,
-    user_id: i64,
+    viewer_id: i64,
 ) -> Option<ChatApiMessage> {
-    let mut message = connection
+    let mut m = db
         .query_row(
-            "SELECT
-                messages.id,
-                messages.sender_user_id,
-                messages.message,
-                messages.delivered_at,
-                messages.read_at,
-                messages.created_at,
-                messages.reply_to_message_id,
-                (
-                    SELECT reply.sender_user_id
-                    FROM messages AS reply
-                    WHERE reply.id =
-                        messages.reply_to_message_id
-                      AND reply.conversation_id =
-                        messages.conversation_id
-                ),
-                COALESCE((
-                    SELECT CASE
-                        WHEN reply.deleted_at > 0
-                        THEN 'Сообщение удалено'
-                        ELSE reply.message
-                    END
-                    FROM messages AS reply
-                    WHERE reply.id =
-                        messages.reply_to_message_id
-                      AND reply.conversation_id =
-                        messages.conversation_id
-                ), ''),
-                messages.edited_at,
-                messages.deleted_at,
-                COALESCE(messages.client_message_id, ''),
-                COALESCE(messages.attachment_kind, ''),
-                COALESCE(messages.attachment_mime, ''),
-                COALESCE(messages.attachment_size, 0),
-                COALESCE(messages.attachment_path, '')
-             FROM messages
-             WHERE messages.id = ?1
-               AND messages.conversation_id = ?2
-             LIMIT 1",
-            rusqlite::params![message_id, conversation_id],
+            r#"SELECT
+                m.id,m.sender_user_id,m.message,m.delivered_at,m.read_at,m.created_at,
+                m.reply_to_message_id,
+                (SELECT r.sender_user_id FROM messages r
+                 WHERE r.id=m.reply_to_message_id AND r.conversation_id=m.conversation_id),
+                COALESCE((SELECT CASE WHEN r.deleted_at>0 THEN 'Сообщение удалено' ELSE r.message END
+                 FROM messages r WHERE r.id=m.reply_to_message_id AND r.conversation_id=m.conversation_id),''),
+                m.edited_at,m.deleted_at,COALESCE(m.client_message_id,''),
+                COALESCE(m.attachment_kind,''),COALESCE(m.attachment_mime,''),
+                COALESCE(m.attachment_size,0),COALESCE(m.attachment_path,'')
+            FROM messages m
+            WHERE m.id=?1 AND m.conversation_id=?2
+            LIMIT 1"#,
+            params![message_id, conversation_id],
             |row| {
+                let id: i64 = row.get(0)?;
+                let sender: i64 = row.get(1)?;
+                let deleted_at: i64 = row.get(10)?;
+                let kind: String = row.get(12)?;
+                let path: String = row.get(15)?;
                 Ok(ChatApiMessage {
-                    id: row.get(0)?,
-                    sender_user_id: row.get(1)?,
+                    id,
+                    sender_user_id: sender,
                     message: row.get(2)?,
-                    is_mine: row.get::<_, i64>(1)? == user_id,
+                    is_mine: sender == viewer_id,
                     delivered_at: row.get(3)?,
                     read_at: row.get(4)?,
                     created_at: row.get(5)?,
@@ -474,436 +229,235 @@ fn load_api_message_by_id(
                     reply_sender_user_id: row.get(7)?,
                     reply_message: row.get(8)?,
                     edited_at: row.get(9)?,
-                    deleted_at: row.get(10)?,
+                    deleted_at,
                     client_message_id: row.get(11)?,
-                    attachment_kind: {
-                        let kind: String = row.get(12)?;
-                        kind
-                    },
+                    attachment_kind: kind.clone(),
                     attachment_mime: row.get(13)?,
                     attachment_size: row.get(14)?,
-                    attachment_url: {
-                        let deleted_at: i64 = row.get(10)?;
-                        let kind: String = row.get(12)?;
-                        let path: String = row.get(15)?;
-                        let id: i64 = row.get(0)?;
-                        chat_media_attachment_url(id, deleted_at, &kind, &path)
-                    },
-                    reactions: Vec::new(),
+                    attachment_url: attachment_url(id, deleted_at, &kind, &path),
+                    reactions: vec![],
                 })
             },
         )
         .ok()?;
 
-    attach_reactions(connection, std::slice::from_mut(&mut message), user_id);
-
-    Some(message)
+    attach_reactions(db, std::slice::from_mut(&mut m), viewer_id);
+    Some(m)
 }
 
-fn json_error(status: StatusCode, error: &str) -> Response {
-    (
-        status,
-        Json(json!({
-            "ok": false,
-            "error": error
-        })),
-    )
-        .into_response()
+pub(super) fn reactions_for_view(
+    db: &rusqlite::Connection,
+    message_ids: &[i64],
+    viewer_id: i64,
+) -> BTreeMap<i64, Vec<ChatReaction>> {
+    let mut out = BTreeMap::new();
+    for id in message_ids {
+        let mut items = vec![];
+        if let Ok(mut stmt) = db.prepare(
+            "SELECT emoji,COUNT(*),MAX(CASE WHEN user_id=?2 THEN 1 ELSE 0 END)
+             FROM message_reactions
+             WHERE message_id=?1
+             GROUP BY emoji
+             ORDER BY COUNT(*) DESC, emoji ASC",
+        ) {
+            if let Ok(rows) = stmt.query_map(params![id, viewer_id], |row| {
+                Ok(ChatReaction {
+                    emoji: row.get(0)?,
+                    count: row.get(1)?,
+                    mine: row.get::<_, i64>(2)? == 1,
+                })
+            }) {
+                items.extend(rows.flatten());
+            }
+        }
+        out.insert(*id, items);
+    }
+    out
+}
+
+fn attach_reactions(db: &rusqlite::Connection, messages: &mut [ChatApiMessage], viewer_id: i64) {
+    let ids: Vec<i64> = messages.iter().map(|m| m.id).collect();
+    let map = reactions_for_view(db, &ids, viewer_id);
+    for m in messages {
+        m.reactions = map.get(&m.id).cloned().unwrap_or_default();
+    }
 }
 
 pub async fn api_chat_messages(
     State(state): State<AppState>,
-    Path(other_user_id): Path<i64>,
+    Path(peer_id): Path<i64>,
     headers: HeaderMap,
     Query(query): Query<ChatMessagesQuery>,
 ) -> Response {
-    let user_id = match verify_user_session(&state, &headers) {
-        Some(user_id) => user_id,
-        None => {
-            return json_error(StatusCode::UNAUTHORIZED, "login_required");
-        }
+    let Some(user_id) = verify_user_session(&state, &headers) else {
+        return json_error(StatusCode::UNAUTHORIZED, "login_required");
     };
-
-    if normalized_pair(user_id, other_user_id).is_none() {
+    if normalized_pair(user_id, peer_id).is_none() {
         return json_error(StatusCode::BAD_REQUEST, "invalid_user");
     }
-
     if query.before_id.is_some() && query.after_id.is_some() {
         return json_error(StatusCode::BAD_REQUEST, "conflicting_cursor");
     }
 
-    if query.before_id.is_some_and(|value| value <= 0)
-        || query.after_id.is_some_and(|value| value < 0)
-    {
-        return json_error(StatusCode::BAD_REQUEST, "invalid_cursor");
-    }
+    let mark_read = query_truthy(query.mark_read.as_deref());
 
-    let limit = normalized_limit(query.limit);
-
-    let connection = match state.db_pool.get() {
-        Ok(connection) => connection,
-        Err(_) => {
-            return json_error(StatusCode::SERVICE_UNAVAILABLE, "database_unavailable");
-        }
+    let db = match crate::db::pool::get_connection(&state.db_pool) {
+        Ok(db) => db,
+        Err(_) => return json_error(StatusCode::SERVICE_UNAVAILABLE, "database_unavailable"),
     };
 
-    touch_profile_last_seen(&connection, user_id);
-
-    let conversation_id = match conversation_id(&connection, user_id, other_user_id) {
-        Some(conversation_id) => conversation_id,
-        None => {
-            return (
-                StatusCode::OK,
-                Json(json!({
-                    "ok": true,
-                    "messages": [],
-                    "has_more": false,
-                    "peer_read_through_id": 0
-                })),
-            )
-                .into_response();
-        }
+    let Ok(Some(conversation_id)) = conversation_id(&db, user_id, peer_id) else {
+        return (
+            StatusCode::OK,
+            Json(json!({
+                "ok": true, "messages": [], "has_more": false, "peer_read_through_id": 0
+            })),
+        )
+            .into_response();
     };
 
-    let fetch_limit = limit.saturating_add(1);
+    let limit = query.limit.unwrap_or(100).clamp(1, 150);
+    let mut messages: Vec<ChatApiMessage> = vec![];
 
-    let rows_result = if let Some(before_id) = query.before_id {
-        connection
-            .prepare(
-                "SELECT
-                    id,
-                    sender_user_id,
-                    message,
-                    messages.delivered_at,
-                    messages.read_at,
-                    messages.created_at,
-                    messages.reply_to_message_id,
-                    (
-                        SELECT reply.sender_user_id
-                        FROM messages AS reply
-                        WHERE reply.id =
-                            messages.reply_to_message_id
-                          AND reply.conversation_id =
-                            messages.conversation_id
-                    ),
-                    COALESCE((
-                        SELECT CASE
-                            WHEN reply.deleted_at > 0
-                            THEN 'Сообщение удалено'
-                            ELSE reply.message
-                        END
-                        FROM messages AS reply
-                        WHERE reply.id =
-                            messages.reply_to_message_id
-                          AND reply.conversation_id =
-                            messages.conversation_id
-                    ), ''),
-                    messages.edited_at,
-                    messages.deleted_at,
-                    COALESCE(messages.client_message_id, ''),
-                COALESCE(messages.attachment_kind, ''),
-                COALESCE(messages.attachment_mime, ''),
-                COALESCE(messages.attachment_size, 0),
-                COALESCE(messages.attachment_path, '')
-                 FROM messages
-                 WHERE conversation_id = ?1
-                   AND id < ?2
-                 ORDER BY id DESC
-                 LIMIT ?3",
-            )
-            .and_then(|mut statement| {
-                statement
-                    .query_map(
-                        rusqlite::params![conversation_id, before_id, fetch_limit],
-                        |row| {
-                            Ok(ChatApiMessage {
-                                id: row.get(0)?,
-                                sender_user_id: row.get(1)?,
-                                message: row.get(2)?,
-                                is_mine: row.get::<_, i64>(1)? == user_id,
-                                delivered_at: row.get(3)?,
-                                read_at: row.get(4)?,
-                                created_at: row.get(5)?,
-                                reply_to_message_id: row.get(6)?,
-                                reply_sender_user_id: row.get(7)?,
-                                reply_message: row.get(8)?,
-                                edited_at: row.get(9)?,
-                                deleted_at: row.get(10)?,
-                                client_message_id: row.get(11)?,
-                                attachment_kind: {
-                                    let kind: String = row.get(12)?;
-                                    kind
-                                },
-                                attachment_mime: row.get(13)?,
-                                attachment_size: row.get(14)?,
-                                attachment_url: {
-                                    let deleted_at: i64 = row.get(10)?;
-                                    let kind: String = row.get(12)?;
-                                    let path: String = row.get(15)?;
-                                    let id: i64 = row.get(0)?;
-                                    chat_media_attachment_url(id, deleted_at, &kind, &path)
-                                },
-                                reactions: Vec::new(),
-                            })
-                        },
-                    )?
-                    .collect::<Result<Vec<_>, _>>()
-            })
-    } else if let Some(after_id) = query.after_id {
-        connection
-            .prepare(
-                "SELECT
-                    id,
-                    sender_user_id,
-                    message,
-                    messages.delivered_at,
-                    messages.read_at,
-                    messages.created_at,
-                    messages.reply_to_message_id,
-                    (
-                        SELECT reply.sender_user_id
-                        FROM messages AS reply
-                        WHERE reply.id =
-                            messages.reply_to_message_id
-                          AND reply.conversation_id =
-                            messages.conversation_id
-                    ),
-                    COALESCE((
-                        SELECT CASE
-                            WHEN reply.deleted_at > 0
-                            THEN 'Сообщение удалено'
-                            ELSE reply.message
-                        END
-                        FROM messages AS reply
-                        WHERE reply.id =
-                            messages.reply_to_message_id
-                          AND reply.conversation_id =
-                            messages.conversation_id
-                    ), ''),
-                    messages.edited_at,
-                    messages.deleted_at,
-                    COALESCE(messages.client_message_id, ''),
-                COALESCE(messages.attachment_kind, ''),
-                COALESCE(messages.attachment_mime, ''),
-                COALESCE(messages.attachment_size, 0),
-                COALESCE(messages.attachment_path, '')
-                 FROM messages
-                 WHERE conversation_id = ?1
-                   AND id > ?2
-                 ORDER BY id ASC
-                 LIMIT ?3",
-            )
-            .and_then(|mut statement| {
-                statement
-                    .query_map(
-                        rusqlite::params![conversation_id, after_id, fetch_limit],
-                        |row| {
-                            Ok(ChatApiMessage {
-                                id: row.get(0)?,
-                                sender_user_id: row.get(1)?,
-                                message: row.get(2)?,
-                                is_mine: row.get::<_, i64>(1)? == user_id,
-                                delivered_at: row.get(3)?,
-                                read_at: row.get(4)?,
-                                created_at: row.get(5)?,
-                                reply_to_message_id: row.get(6)?,
-                                reply_sender_user_id: row.get(7)?,
-                                reply_message: row.get(8)?,
-                                edited_at: row.get(9)?,
-                                deleted_at: row.get(10)?,
-                                client_message_id: row.get(11)?,
-                                attachment_kind: {
-                                    let kind: String = row.get(12)?;
-                                    kind
-                                },
-                                attachment_mime: row.get(13)?,
-                                attachment_size: row.get(14)?,
-                                attachment_url: {
-                                    let deleted_at: i64 = row.get(10)?;
-                                    let kind: String = row.get(12)?;
-                                    let path: String = row.get(15)?;
-                                    let id: i64 = row.get(0)?;
-                                    chat_media_attachment_url(id, deleted_at, &kind, &path)
-                                },
-                                reactions: Vec::new(),
-                            })
-                        },
-                    )?
-                    .collect::<Result<Vec<_>, _>>()
-            })
+    let sql_after = r#"SELECT
+        m.id,m.sender_user_id,m.message,m.delivered_at,m.read_at,m.created_at,
+        m.reply_to_message_id,
+        (SELECT r.sender_user_id FROM messages r WHERE r.id=m.reply_to_message_id AND r.conversation_id=m.conversation_id),
+        COALESCE((SELECT CASE WHEN r.deleted_at>0 THEN 'Сообщение удалено' ELSE r.message END
+          FROM messages r WHERE r.id=m.reply_to_message_id AND r.conversation_id=m.conversation_id),''),
+        m.edited_at,m.deleted_at,COALESCE(m.client_message_id,''),
+        COALESCE(m.attachment_kind,''),COALESCE(m.attachment_mime,''),
+        COALESCE(m.attachment_size,0),COALESCE(m.attachment_path,'')
+      FROM messages m
+      WHERE m.conversation_id=?1 AND m.id>?2
+      ORDER BY m.id ASC LIMIT ?3"#;
+
+    let sql_before = r#"SELECT
+        m.id,m.sender_user_id,m.message,m.delivered_at,m.read_at,m.created_at,
+        m.reply_to_message_id,
+        (SELECT r.sender_user_id FROM messages r WHERE r.id=m.reply_to_message_id AND r.conversation_id=m.conversation_id),
+        COALESCE((SELECT CASE WHEN r.deleted_at>0 THEN 'Сообщение удалено' ELSE r.message END
+          FROM messages r WHERE r.id=m.reply_to_message_id AND r.conversation_id=m.conversation_id),''),
+        m.edited_at,m.deleted_at,COALESCE(m.client_message_id,''),
+        COALESCE(m.attachment_kind,''),COALESCE(m.attachment_mime,''),
+        COALESCE(m.attachment_size,0),COALESCE(m.attachment_path,'')
+      FROM messages m
+      WHERE m.conversation_id=?1 AND m.id<?2
+      ORDER BY m.id DESC LIMIT ?3"#;
+
+    let initial_load = query.after_id.unwrap_or(0) <= 0 && query.before_id.is_none();
+    let cursor = query.after_id.or(query.before_id).unwrap_or(0);
+    let sql = if query.before_id.is_some() || initial_load {
+        sql_before
     } else {
-        connection
-            .prepare(
-                "SELECT
-                    id,
-                    sender_user_id,
-                    message,
-                    messages.delivered_at,
-                    messages.read_at,
-                    messages.created_at,
-                    messages.reply_to_message_id,
-                    (
-                        SELECT reply.sender_user_id
-                        FROM messages AS reply
-                        WHERE reply.id =
-                            messages.reply_to_message_id
-                          AND reply.conversation_id =
-                            messages.conversation_id
-                    ),
-                    COALESCE((
-                        SELECT CASE
-                            WHEN reply.deleted_at > 0
-                            THEN 'Сообщение удалено'
-                            ELSE reply.message
-                        END
-                        FROM messages AS reply
-                        WHERE reply.id =
-                            messages.reply_to_message_id
-                          AND reply.conversation_id =
-                            messages.conversation_id
-                    ), ''),
-                    messages.edited_at,
-                    messages.deleted_at,
-                    COALESCE(messages.client_message_id, ''),
-                COALESCE(messages.attachment_kind, ''),
-                COALESCE(messages.attachment_mime, ''),
-                COALESCE(messages.attachment_size, 0),
-                COALESCE(messages.attachment_path, '')
-                 FROM messages
-                 WHERE conversation_id = ?1
-                 ORDER BY id DESC
-                 LIMIT ?2",
-            )
-            .and_then(|mut statement| {
-                statement
-                    .query_map(rusqlite::params![conversation_id, fetch_limit], |row| {
-                        Ok(ChatApiMessage {
-                            id: row.get(0)?,
-                            sender_user_id: row.get(1)?,
-                            message: row.get(2)?,
-                            is_mine: row.get::<_, i64>(1)? == user_id,
-                            delivered_at: row.get(3)?,
-                            read_at: row.get(4)?,
-                            created_at: row.get(5)?,
-                            reply_to_message_id: row.get(6)?,
-                            reply_sender_user_id: row.get(7)?,
-                            reply_message: row.get(8)?,
-                            edited_at: row.get(9)?,
-                            deleted_at: row.get(10)?,
-                            client_message_id: row.get(11)?,
-                            attachment_kind: {
-                                let kind: String = row.get(12)?;
-                                kind
-                            },
-                            attachment_mime: row.get(13)?,
-                            attachment_size: row.get(14)?,
-                            attachment_url: {
-                                let deleted_at: i64 = row.get(10)?;
-                                let kind: String = row.get(12)?;
-                                let path: String = row.get(15)?;
-                                let id: i64 = row.get(0)?;
-                                chat_media_attachment_url(id, deleted_at, &kind, &path)
-                            },
-                            reactions: Vec::new(),
-                        })
-                    })?
-                    .collect::<Result<Vec<_>, _>>()
-            })
+        sql_after
     };
-
-    let mut messages = match rows_result {
-        Ok(messages) => messages,
-        Err(error) => {
-            eprintln!(
-                "chat message query failed for user {} and peer {}: {}",
-                user_id, other_user_id, error
-            );
-            return json_error(StatusCode::INTERNAL_SERVER_ERROR, "message_query_failed");
+    let effective_cursor = if query.before_id.is_some() || initial_load {
+        if cursor <= 0 {
+            i64::MAX
+        } else {
+            cursor
         }
+    } else {
+        cursor.max(0)
     };
 
-    let has_more = messages.len() as i64 > limit;
+    let rows_result = db.prepare(sql).and_then(|mut stmt| {
+        stmt.query_map(
+            params![conversation_id, effective_cursor, limit + 1],
+            |row| {
+                let id: i64 = row.get(0)?;
+                let sender: i64 = row.get(1)?;
+                let deleted_at: i64 = row.get(10)?;
+                let kind: String = row.get(12)?;
+                let path: String = row.get(15)?;
+                Ok(ChatApiMessage {
+                    id,
+                    sender_user_id: sender,
+                    message: row.get(2)?,
+                    is_mine: sender == user_id,
+                    delivered_at: row.get(3)?,
+                    read_at: row.get(4)?,
+                    created_at: row.get(5)?,
+                    reply_to_message_id: row.get(6)?,
+                    reply_sender_user_id: row.get(7)?,
+                    reply_message: row.get(8)?,
+                    edited_at: row.get(9)?,
+                    deleted_at,
+                    client_message_id: row.get(11)?,
+                    attachment_kind: kind.clone(),
+                    attachment_mime: row.get(13)?,
+                    attachment_size: row.get(14)?,
+                    attachment_url: attachment_url(id, deleted_at, &kind, &path),
+                    reactions: vec![],
+                })
+            },
+        )?
+        .collect::<Result<Vec<_>, _>>()
+    });
 
+    let mut loaded = match rows_result {
+        Ok(v) => v,
+        Err(_) => return json_error(StatusCode::INTERNAL_SERVER_ERROR, "message_query_failed"),
+    };
+
+    let has_more = loaded.len() as i64 > limit;
     if has_more {
-        messages.truncate(limit as usize);
+        loaded.truncate(limit as usize);
+    }
+    if query.before_id.is_some() || initial_load {
+        loaded.reverse();
     }
 
-    if query.after_id.is_none() {
-        messages.reverse();
-    }
+    let latest_visible = loaded.iter().map(|m| m.id).max().unwrap_or(0);
+    let now = crate::web::handlers::common::unix_now();
 
-    attach_reactions(&connection, &mut messages, user_id);
-
-    let latest_visible_id = messages.iter().map(|message| message.id).max().unwrap_or(0);
-
-    if latest_visible_id > 0 {
-        let now = crate::web::handlers::common::unix_now();
-
-        let _ = connection.execute(
-            "UPDATE messages
-             SET delivered_at = ?4
-             WHERE conversation_id = ?1
-               AND sender_user_id = ?2
-               AND id <= ?3
-               AND delivered_at = 0",
-            rusqlite::params![conversation_id, other_user_id, latest_visible_id, now],
+    if latest_visible > 0 {
+        let _ = db.execute(
+            "UPDATE messages SET delivered_at=?4
+             WHERE conversation_id=?1 AND sender_user_id=?2 AND id<=?3 AND delivered_at=0",
+            params![conversation_id, peer_id, latest_visible, now],
         );
     }
 
-    let should_mark_read = query.mark_read.unwrap_or(false);
-
-    if should_mark_read {
-        let read_through_id = query
+    if mark_read && latest_visible > 0 {
+        let read_through = query
             .read_through_id
-            .filter(|value| *value > 0)
-            .unwrap_or(latest_visible_id);
+            .filter(|v| *v > 0)
+            .map(|v| v.min(latest_visible))
+            .unwrap_or(latest_visible);
 
-        if read_through_id > 0 {
-            let now = crate::web::handlers::common::unix_now();
+        let _ = db.execute(
+            "UPDATE messages
+             SET is_read=1,
+                 delivered_at=CASE WHEN delivered_at=0 THEN ?4 ELSE delivered_at END,
+                 read_at=CASE WHEN read_at=0 THEN ?4 ELSE read_at END
+             WHERE conversation_id=?1 AND sender_user_id=?2 AND id<=?3 AND read_at=0",
+            params![conversation_id, peer_id, read_through, now],
+        );
+    }
 
-            let read_changed = connection
-                .execute(
-                    "UPDATE messages
-                     SET is_read = 1,
-                         delivered_at = CASE
-                             WHEN delivered_at = 0 THEN ?4
-                             ELSE delivered_at
-                         END,
-                         read_at = CASE
-                             WHEN read_at = 0 THEN ?4
-                             ELSE read_at
-                         END
-                     WHERE conversation_id = ?1
-                       AND sender_user_id = ?2
-                       AND id <= ?3
-                       AND read_at = 0",
-                    rusqlite::params![conversation_id, other_user_id, read_through_id, now],
-                )
-                .unwrap_or(0);
-
-            if read_changed > 0 {
-                state.publish_chat_event(
-                    "message.read",
-                    conversation_id,
-                    read_through_id,
-                    user_id,
-                    other_user_id,
-                );
-            }
+    for m in &mut loaded {
+        if !m.is_mine && m.delivered_at == 0 {
+            m.delivered_at = now;
+        }
+        if !m.is_mine && mark_read && m.read_at == 0 {
+            m.read_at = now;
         }
     }
 
-    let peer_read_through_id: i64 = connection
+    attach_reactions(&db, &mut loaded, user_id);
+
+    let peer_read_through_id = db
         .query_row(
-            "SELECT COALESCE(MAX(id), 0)
-             FROM messages
-             WHERE conversation_id = ?1
-               AND sender_user_id = ?2
-               AND read_at > 0",
-            rusqlite::params![conversation_id, user_id],
-            |row| row.get(0),
+            "SELECT COALESCE(MAX(id),0) FROM messages
+             WHERE conversation_id=?1 AND sender_user_id=?2 AND read_at>0",
+            params![conversation_id, user_id],
+            |row| row.get::<_, i64>(0),
         )
         .unwrap_or(0);
+
+    messages.append(&mut loaded);
 
     (
         StatusCode::OK,
@@ -919,761 +473,393 @@ pub async fn api_chat_messages(
 
 pub async fn api_chat_send(
     State(state): State<AppState>,
-    Path(other_user_id): Path<i64>,
+    Path(peer_id): Path<i64>,
     headers: HeaderMap,
     Json(payload): Json<ChatSendPayload>,
 ) -> Response {
     if request_is_cross_site(&headers) {
         return json_error(StatusCode::FORBIDDEN, "cross_site_request_rejected");
     }
-
-    let user_id = match verify_user_session(&state, &headers) {
-        Some(user_id) => user_id,
-        None => {
-            return json_error(StatusCode::UNAUTHORIZED, "login_required");
-        }
+    let Some(user_id) = verify_user_session(&state, &headers) else {
+        return json_error(StatusCode::UNAUTHORIZED, "login_required");
     };
-
-    if normalized_pair(user_id, other_user_id).is_none() {
+    if normalized_pair(user_id, peer_id).is_none() {
         return json_error(StatusCode::BAD_REQUEST, "invalid_user");
     }
-
-    let message = payload.message.trim();
-
-    let client_message_id = payload.client_message_id.as_deref().unwrap_or("").trim();
-
-    if !client_message_id.is_empty() && !client_message_id_is_valid(client_message_id) {
-        return json_error(StatusCode::BAD_REQUEST, "invalid_client_message_id");
-    }
-
-    if !message_is_valid(message) {
-        return json_error(StatusCode::BAD_REQUEST, "invalid_message");
-    }
-
-    if let Some(retry_after) =
-        rate_limit_retry_after(&state, user_id, "chat_api_send", 30, 60).await
-    {
+    if let Some(retry_after) = rate_limit_retry_after(&state, user_id, "chat_send", 30, 60).await {
         return (
             StatusCode::TOO_MANY_REQUESTS,
-            [(header::RETRY_AFTER, retry_after.to_string())],
-            Json(json!({
-                "ok": false,
-                "error": "rate_limited",
-                "retry_after": retry_after
-            })),
+            Json(json!({"ok": false, "error": "rate_limited", "retry_after": retry_after})),
         )
             .into_response();
     }
 
-    let mut connection = match state.db_pool.get() {
-        Ok(connection) => connection,
-        Err(_) => {
-            return json_error(StatusCode::SERVICE_UNAVAILABLE, "database_unavailable");
-        }
-    };
+    let text = payload.message.trim().to_string();
+    if text.is_empty() || text.chars().count() > 2000 {
+        return json_error(StatusCode::BAD_REQUEST, "invalid_message");
+    }
 
-    if users_are_blocked(&connection, user_id, other_user_id) {
+    let client_id = payload.client_message_id.unwrap_or_default();
+    if !client_id.is_empty() && !valid_client_id(&client_id) {
+        return json_error(StatusCode::BAD_REQUEST, "invalid_client_message_id");
+    }
+
+    let mut db = match crate::db::pool::get_connection(&state.db_pool) {
+        Ok(db) => db,
+        Err(_) => return json_error(StatusCode::SERVICE_UNAVAILABLE, "database_unavailable"),
+    };
+    if blocked(&db, user_id, peer_id) {
         return json_error(StatusCode::FORBIDDEN, "user_blocked");
     }
 
-    if !user_has_verified_identity(&connection, user_id) {
-        return json_error(StatusCode::FORBIDDEN, "verification_required");
-    }
+    let conversation_id = match ensure_conversation(&db, user_id, peer_id) {
+        Ok(id) => id,
+        Err(e) => return json_error(StatusCode::BAD_REQUEST, e),
+    };
 
-    if let Some(error) = chat_contact_gate_error(&connection, user_id, other_user_id) {
-        return json_error(StatusCode::FORBIDDEN, error);
-    }
-
-    let conversation_id =
-        match ensure_conversation_for_outgoing(&connection, user_id, other_user_id) {
-            Ok(conversation_id) => conversation_id,
-            Err(error) => {
-                return json_error(StatusCode::FORBIDDEN, error);
-            }
-        };
-
-    if !client_message_id.is_empty() {
-        let existing_id: Option<i64> = connection
+    if !client_id.is_empty() {
+        if let Ok(Some(existing)) = db
             .query_row(
-                "SELECT id
-                 FROM messages
-                 WHERE sender_user_id = ?1
-                   AND client_message_id = ?2
-                 LIMIT 1",
-                rusqlite::params![user_id, client_message_id],
-                |row| row.get(0),
+                "SELECT id FROM messages WHERE sender_user_id=?1 AND client_message_id=?2 LIMIT 1",
+                params![user_id, client_id],
+                |row| row.get::<_, i64>(0),
             )
-            .ok();
-
-        if let Some(existing_id) = existing_id {
-            if let Some(message) =
-                load_api_message_by_id(&connection, conversation_id, existing_id, user_id)
-            {
+            .optional()
+        {
+            if let Some(message) = load_message(&db, conversation_id, existing, user_id) {
                 return (
                     StatusCode::OK,
-                    Json(json!({
-                        "ok": true,
-                        "duplicate": true,
-                        "message": message
-                    })),
+                    Json(json!({"ok": true, "duplicate": true, "message": message})),
                 )
                     .into_response();
             }
         }
     }
 
-    let reply_to_message_id = match payload.reply_to_message_id {
-        Some(reply_id) if reply_id > 0 => {
-            let exists: i64 = connection
-                .query_row(
-                    "SELECT COUNT(*)
-                         FROM messages
-                         WHERE id = ?1
-                           AND conversation_id = ?2
-                           AND deleted_at = 0",
-                    rusqlite::params![reply_id, conversation_id],
-                    |row| row.get(0),
-                )
-                .unwrap_or(0);
-
-            if exists != 1 {
-                return json_error(StatusCode::BAD_REQUEST, "invalid_reply");
-            }
-
-            Some(reply_id)
-        }
-        Some(_) => {
+    if let Some(reply_id) = payload.reply_to_message_id {
+        let valid = db
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM messages WHERE id=?1 AND conversation_id=?2)",
+                params![reply_id, conversation_id],
+                |row| row.get::<_, i64>(0),
+            )
+            .unwrap_or(0);
+        if valid != 1 {
             return json_error(StatusCode::BAD_REQUEST, "invalid_reply");
         }
-        None => None,
-    };
+    }
 
     let now = crate::web::handlers::common::unix_now();
+    let tx = match db.transaction_with_behavior(TransactionBehavior::Immediate) {
+        Ok(tx) => tx,
+        Err(_) => return json_error(StatusCode::SERVICE_UNAVAILABLE, "database_busy"),
+    };
 
-    let transaction =
-        match connection.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate) {
-            Ok(transaction) => transaction,
-            Err(_) => {
-                return json_error(StatusCode::CONFLICT, "chat_busy");
-            }
-        };
-
-    if transaction
+    if tx
         .execute(
-            "INSERT INTO messages (
-                conversation_id,
-                sender_user_id,
-                message,
-                is_read,
-                delivered_at,
-                read_at,
-                created_at,
-                reply_to_message_id,
-                client_message_id
-             )
-             VALUES (
-                ?1, ?2, ?3, 0, 0, 0, ?4, ?5, ?6
-             )",
-            rusqlite::params![
+            "INSERT INTO messages(
+                conversation_id,sender_user_id,message,is_read,
+                delivered_at,read_at,created_at,reply_to_message_id,client_message_id
+             ) VALUES(?1,?2,?3,0,0,0,?4,?5,?6)",
+            params![
                 conversation_id,
                 user_id,
-                message,
+                text,
                 now,
-                reply_to_message_id,
-                client_message_id
+                payload.reply_to_message_id,
+                client_id
             ],
         )
-        .unwrap_or(0)
-        != 1
+        .is_err()
     {
         return json_error(StatusCode::INTERNAL_SERVER_ERROR, "message_store_failed");
     }
 
-    let message_id = transaction.last_insert_rowid();
-
-    if transaction
-        .execute(
-            "UPDATE conversations
-             SET updated_at = ?2
-             WHERE id = ?1",
-            rusqlite::params![conversation_id, now],
-        )
-        .unwrap_or(0)
-        != 1
-    {
-        return json_error(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "conversation_update_failed",
-        );
-    }
-
-    let existing_notification = transaction
-        .execute(
-            "UPDATE user_notifications
-             SET created_at = ?2
-             WHERE user_id = ?1
-               AND kind = 'chat_message'
-               AND is_read = 0
-               AND (resource_id = ?3 OR resource_id IS NULL)",
-            rusqlite::params![other_user_id, now, user_id],
-        )
-        .unwrap_or(0);
-
-    let should_notify_telegram = existing_notification == 0;
-
-    if should_notify_telegram
-        && transaction
-            .execute(
-                "INSERT INTO user_notifications (
-                    user_id,
-                    resource_id,
-                    kind,
-                    title,
-                    message,
-                    is_read,
-                    created_at
-                 )
-                 VALUES (
-                    ?1, ?2, 'chat_message',
-                    'Новое сообщение',
-                    'У вас новое сообщение в ResursMap.',
-                    0, ?3
-                 )",
-                rusqlite::params![other_user_id, user_id, now],
-            )
-            .unwrap_or(0)
-            != 1
-    {
-        return json_error(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "notification_store_failed",
-        );
-    }
-
-    if transaction.commit().is_err() {
-        return json_error(StatusCode::INTERNAL_SERVER_ERROR, "transaction_failed");
-    }
-
-    state.publish_chat_event(
-        "message.created",
-        conversation_id,
-        message_id,
-        user_id,
-        other_user_id,
+    let message_id = tx.last_insert_rowid();
+    let _ = tx.execute(
+        "UPDATE conversations SET updated_at=?2 WHERE id=?1",
+        params![conversation_id, now],
     );
-
-    let telegram_id: Option<i64> = if should_notify_telegram {
-        connection
-            .query_row(
-                "SELECT telegram_id
-                 FROM users
-                 WHERE id = ?1
-                   AND is_active = 1",
-                rusqlite::params![other_user_id],
-                |row| row.get(0),
-            )
-            .ok()
-    } else {
-        None
-    };
-
-    drop(connection);
-
-    if let Some(telegram_id) = telegram_id {
-        if telegram_id > 0 {
-            crate::telegram_notify::notify_telegram_user(
-                state.bot_token.as_deref(),
-                telegram_id,
-                &format!(
-                    "📩 У вас новое сообщение в ResursMap!\n\nОткройте чат: https://resursmap.de/app/chat/{user_id}"
-                ),
-            );
-        }
+    if tx.commit().is_err() {
+        return json_error(StatusCode::INTERNAL_SERVER_ERROR, "message_commit_failed");
     }
+
+    let Some(message) = load_message(&db, conversation_id, message_id, user_id) else {
+        return json_error(StatusCode::INTERNAL_SERVER_ERROR, "message_load_failed");
+    };
 
     (
         StatusCode::CREATED,
-        Json(json!({
-            "ok": true,
-            "message": {
-                "id": message_id,
-                "sender_user_id": user_id.to_string(),
-                "message": message,
-                "is_mine": true,
-                "delivered_at": 0,
-                "read_at": 0,
-                "created_at": now,
-                "reply_to_message_id": reply_to_message_id,
-                "reply_sender_user_id": null,
-                "reply_message": "",
-                "edited_at": 0,
-                "deleted_at": 0,
-                "client_message_id": client_message_id
-            }
-        })),
+        Json(json!({"ok": true, "message": message})),
     )
         .into_response()
 }
 
-pub async fn api_chat_edit(
-    State(state): State<AppState>,
-    Path((other_user_id, message_id)): Path<(i64, i64)>,
-    headers: HeaderMap,
-    Json(payload): Json<ChatEditPayload>,
-) -> Response {
-    if request_is_cross_site(&headers) {
-        return json_error(StatusCode::FORBIDDEN, "cross_site_request_rejected");
-    }
-
-    let user_id = match verify_user_session(&state, &headers) {
-        Some(user_id) => user_id,
-        None => {
-            return json_error(StatusCode::UNAUTHORIZED, "login_required");
-        }
+pub async fn api_chat_conversations(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    let Some(user_id) = verify_user_session(&state, &headers) else {
+        return json_error(StatusCode::UNAUTHORIZED, "login_required");
+    };
+    let db = match crate::db::pool::get_connection(&state.db_pool) {
+        Ok(db) => db,
+        Err(_) => return json_error(StatusCode::SERVICE_UNAVAILABLE, "database_unavailable"),
     };
 
-    if normalized_pair(user_id, other_user_id).is_none() || message_id <= 0 {
-        return json_error(StatusCode::BAD_REQUEST, "invalid_request");
-    }
-
-    let message = payload.message.trim();
-
-    if !message_is_valid(message) {
-        return json_error(StatusCode::BAD_REQUEST, "invalid_message");
-    }
-
-    if let Some(retry_after) = rate_limit_retry_after(&state, user_id, "chat_edit", 20, 60).await {
-        return (
-            StatusCode::TOO_MANY_REQUESTS,
-            [(header::RETRY_AFTER, retry_after.to_string())],
-            Json(json!({
-                "ok": false,
-                "error": "rate_limited",
-                "retry_after": retry_after
-            })),
+    let rows = db
+        .prepare(
+            r#"SELECT
+                c.id,
+                CASE WHEN c.user1_id=?1 THEN c.user2_id ELSE c.user1_id END,
+                COALESCE(p.username,''),COALESCE(p.first_name,''),COALESCE(p.last_name,''),
+                COALESCE((SELECT CASE
+                    WHEN m.deleted_at>0 THEN 'Сообщение удалено'
+                    WHEN m.attachment_kind='image' THEN '📷 Фото'
+                    WHEN m.attachment_kind='voice' THEN '🎤 Голосовое сообщение'
+                    ELSE m.message END
+                  FROM messages m WHERE m.conversation_id=c.id ORDER BY m.id DESC LIMIT 1),''),
+                COALESCE((SELECT COUNT(*) FROM messages m
+                  WHERE m.conversation_id=c.id AND m.sender_user_id<>?1 AND m.read_at=0),0),
+                c.updated_at
+             FROM conversations c
+             LEFT JOIN profiles p ON p.user_id=CASE WHEN c.user1_id=?1 THEN c.user2_id ELSE c.user1_id END
+             WHERE c.user1_id=?1 OR c.user2_id=?1
+             ORDER BY c.updated_at DESC,c.id DESC LIMIT 250"#,
         )
-            .into_response();
-    }
-
-    let connection = match state.db_pool.get() {
-        Ok(connection) => connection,
-        Err(_) => {
-            return json_error(StatusCode::SERVICE_UNAVAILABLE, "database_unavailable");
-        }
-    };
-
-    let conversation_id = match conversation_id(&connection, user_id, other_user_id) {
-        Some(value) => value,
-        None => {
-            return json_error(StatusCode::FORBIDDEN, "conversation_not_open");
-        }
-    };
-
-    let row: Option<(i64, i64)> = connection
-        .query_row(
-            "SELECT created_at, deleted_at
-             FROM messages
-             WHERE id = ?1
-               AND conversation_id = ?2
-               AND sender_user_id = ?3",
-            rusqlite::params![message_id, conversation_id, user_id],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        )
-        .ok();
-
-    let Some((created_at, deleted_at)) = row else {
-        return json_error(StatusCode::NOT_FOUND, "message_not_found");
-    };
-
-    let now = crate::web::handlers::common::unix_now();
-
-    if !message_can_be_edited(created_at, deleted_at, now) {
-        return json_error(StatusCode::CONFLICT, "message_not_editable");
-    }
-
-    let changed = connection
-        .execute(
-            "UPDATE messages
-             SET message = ?1,
-                 edited_at = ?2
-             WHERE id = ?3
-               AND conversation_id = ?4
-               AND sender_user_id = ?5
-               AND deleted_at = 0",
-            rusqlite::params![message, now, message_id, conversation_id, user_id],
-        )
-        .unwrap_or(0);
-
-    if changed != 1 {
-        return json_error(StatusCode::CONFLICT, "message_changed");
-    }
-
-    state.publish_chat_event(
-        "message.edited",
-        conversation_id,
-        message_id,
-        user_id,
-        other_user_id,
-    );
+        .and_then(|mut stmt| {
+            stmt.query_map(params![user_id], |row| {
+                Ok(json!({
+                    "id": row.get::<_, i64>(0)?,
+                    "peer_user_id": row.get::<_, i64>(1)?.to_string(),
+                    "username": row.get::<_, String>(2)?,
+                    "first_name": row.get::<_, String>(3)?,
+                    "last_name": row.get::<_, String>(4)?,
+                    "last_message": row.get::<_, String>(5)?,
+                    "unread_count": row.get::<_, i64>(6)?,
+                    "updated_at": row.get::<_, i64>(7)?,
+                }))
+            })?
+            .collect::<Result<Vec<_>, _>>()
+        })
+        .unwrap_or_default();
 
     (
         StatusCode::OK,
-        Json(json!({
-            "ok": true,
-            "message_id": message_id,
-            "message": message,
-            "edited_at": now
-        })),
-    )
-        .into_response()
-}
-
-pub async fn api_chat_delete(
-    State(state): State<AppState>,
-    Path((other_user_id, message_id)): Path<(i64, i64)>,
-    headers: HeaderMap,
-) -> Response {
-    if request_is_cross_site(&headers) {
-        return json_error(StatusCode::FORBIDDEN, "cross_site_request_rejected");
-    }
-
-    let user_id = match verify_user_session(&state, &headers) {
-        Some(user_id) => user_id,
-        None => {
-            return json_error(StatusCode::UNAUTHORIZED, "login_required");
-        }
-    };
-
-    if normalized_pair(user_id, other_user_id).is_none() || message_id <= 0 {
-        return json_error(StatusCode::BAD_REQUEST, "invalid_request");
-    }
-
-    if let Some(retry_after) = rate_limit_retry_after(&state, user_id, "chat_delete", 20, 60).await
-    {
-        return (
-            StatusCode::TOO_MANY_REQUESTS,
-            [(header::RETRY_AFTER, retry_after.to_string())],
-            Json(json!({
-                "ok": false,
-                "error": "rate_limited",
-                "retry_after": retry_after
-            })),
-        )
-            .into_response();
-    }
-
-    let connection = match state.db_pool.get() {
-        Ok(connection) => connection,
-        Err(_) => {
-            return json_error(StatusCode::SERVICE_UNAVAILABLE, "database_unavailable");
-        }
-    };
-
-    let conversation_id = match conversation_id(&connection, user_id, other_user_id) {
-        Some(value) => value,
-        None => {
-            return json_error(StatusCode::FORBIDDEN, "conversation_not_open");
-        }
-    };
-
-    let now = crate::web::handlers::common::unix_now();
-
-    let changed = connection
-        .execute(
-            "UPDATE messages
-             SET message = '',
-                 deleted_at = ?1,
-                 edited_at = 0
-             WHERE id = ?2
-               AND conversation_id = ?3
-               AND sender_user_id = ?4
-               AND deleted_at = 0",
-            rusqlite::params![now, message_id, conversation_id, user_id],
-        )
-        .unwrap_or(0);
-
-    if changed != 1 {
-        return json_error(StatusCode::NOT_FOUND, "message_not_found");
-    }
-
-    state.publish_chat_event(
-        "message.deleted",
-        conversation_id,
-        message_id,
-        user_id,
-        other_user_id,
-    );
-
-    (
-        StatusCode::OK,
-        Json(json!({
-            "ok": true,
-            "message_id": message_id,
-            "deleted_at": now
-        })),
+        Json(json!({"ok": true, "conversations": rows})),
     )
         .into_response()
 }
 
 pub async fn api_chat_peer(
     State(state): State<AppState>,
-    Path(other_user_id): Path<i64>,
+    Path(peer_id): Path<i64>,
+    headers: HeaderMap,
+) -> Response {
+    let Some(user_id) = verify_user_session(&state, &headers) else {
+        return json_error(StatusCode::UNAUTHORIZED, "login_required");
+    };
+    if normalized_pair(user_id, peer_id).is_none() {
+        return json_error(StatusCode::BAD_REQUEST, "invalid_user");
+    }
+    let db = match crate::db::pool::get_connection(&state.db_pool) {
+        Ok(db) => db,
+        Err(_) => return json_error(StatusCode::SERVICE_UNAVAILABLE, "database_unavailable"),
+    };
+
+    let peer = db
+        .query_row(
+            "SELECT COALESCE(username,''),COALESCE(first_name,''),COALESCE(last_name,''),COALESCE(last_seen_at,0)
+             FROM profiles WHERE user_id=?1 LIMIT 1",
+            params![peer_id],
+            |row| {
+                Ok(json!({
+                    "user_id": peer_id.to_string(),
+                    "username": row.get::<_, String>(0)?,
+                    "first_name": row.get::<_, String>(1)?,
+                    "last_name": row.get::<_, String>(2)?,
+                    "last_seen_at": row.get::<_, i64>(3)?,
+                }))
+            },
+        )
+        .unwrap_or_else(|_| json!({"user_id": peer_id.to_string(), "last_seen_at": 0}));
+
+    (StatusCode::OK, Json(json!({"ok": true, "peer": peer}))).into_response()
+}
+
+pub async fn api_chat_edit(
+    State(state): State<AppState>,
+    Path((peer_id, message_id)): Path<(i64, i64)>,
+    headers: HeaderMap,
+    Json(payload): Json<ChatEditPayload>,
+) -> Response {
+    if request_is_cross_site(&headers) {
+        return json_error(StatusCode::FORBIDDEN, "cross_site_request_rejected");
+    }
+    let Some(user_id) = verify_user_session(&state, &headers) else {
+        return json_error(StatusCode::UNAUTHORIZED, "login_required");
+    };
+    let text = payload.message.trim();
+    if text.is_empty() || text.chars().count() > 2000 {
+        return json_error(StatusCode::BAD_REQUEST, "invalid_message");
+    }
+
+    let db = match crate::db::pool::get_connection(&state.db_pool) {
+        Ok(db) => db,
+        Err(_) => return json_error(StatusCode::SERVICE_UNAVAILABLE, "database_unavailable"),
+    };
+    let Ok(Some(conversation_id)) = conversation_id(&db, user_id, peer_id) else {
+        return json_error(StatusCode::NOT_FOUND, "conversation_not_found");
+    };
+    let now = crate::web::handlers::common::unix_now();
+    let changed = db
+        .execute(
+            "UPDATE messages SET message=?4,edited_at=?5
+             WHERE id=?1 AND conversation_id=?2 AND sender_user_id=?3
+               AND deleted_at=0 AND attachment_kind=''",
+            params![message_id, conversation_id, user_id, text, now],
+        )
+        .unwrap_or(0);
+    if changed == 0 {
+        return json_error(StatusCode::FORBIDDEN, "message_not_editable");
+    }
+    let Some(message) = load_message(&db, conversation_id, message_id, user_id) else {
+        return json_error(StatusCode::NOT_FOUND, "message_not_found");
+    };
+    (
+        StatusCode::OK,
+        Json(json!({"ok": true, "message": message})),
+    )
+        .into_response()
+}
+
+pub async fn api_chat_delete(
+    State(state): State<AppState>,
+    Path((peer_id, message_id)): Path<(i64, i64)>,
     headers: HeaderMap,
 ) -> Response {
     if request_is_cross_site(&headers) {
         return json_error(StatusCode::FORBIDDEN, "cross_site_request_rejected");
     }
-
-    let user_id = match verify_user_session(&state, &headers) {
-        Some(user_id) => user_id,
-        None => {
-            return json_error(StatusCode::UNAUTHORIZED, "login_required");
-        }
+    let Some(user_id) = verify_user_session(&state, &headers) else {
+        return json_error(StatusCode::UNAUTHORIZED, "login_required");
     };
-
-    if normalized_pair(user_id, other_user_id).is_none() {
-        return json_error(StatusCode::BAD_REQUEST, "invalid_user");
-    }
-
-    let connection = match state.db_pool.get() {
-        Ok(connection) => connection,
-        Err(_) => {
-            return json_error(StatusCode::SERVICE_UNAVAILABLE, "database_unavailable");
-        }
-    };
-
-    touch_profile_last_seen(&connection, user_id);
-
-    let peer_row: Option<(i64, i64)> = connection
-        .query_row(
-            "SELECT
-                COALESCE(last_seen_at, 0),
-                COALESCE(open_contact, 0)
-             FROM profiles
-             WHERE user_id = ?1
-             LIMIT 1",
-            rusqlite::params![other_user_id],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        )
-        .ok();
-
-    let (last_seen_at, open_contact) = peer_row.unwrap_or((0, 0));
-    let now = crate::web::handlers::common::unix_now();
-    let online = last_seen_at > 0 && now.saturating_sub(last_seen_at) < 300;
-
-    (
-        StatusCode::OK,
-        Json(json!({
-            "ok": true,
-            "peer_user_id": other_user_id.to_string(),
-            "online": online,
-            "last_seen_at": last_seen_at,
-            "open_contact": open_contact == 1
-        })),
-    )
-        .into_response()
-}
-
-pub async fn api_chat_conversations(State(state): State<AppState>, headers: HeaderMap) -> Response {
-    let user_id = match verify_user_session(&state, &headers) {
-        Some(user_id) => user_id,
-        None => {
-            return (
-                StatusCode::UNAUTHORIZED,
-                Json(json!({
-                    "ok": false,
-                    "error": "login_required"
-                })),
-            )
-                .into_response();
-        }
-    };
-
     let db = match crate::db::pool::get_connection(&state.db_pool) {
         Ok(db) => db,
-        Err(_) => {
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(json!({
-                    "ok": false,
-                    "error": "database_unavailable"
-                })),
-            )
-                .into_response();
-        }
+        Err(_) => return json_error(StatusCode::SERVICE_UNAVAILABLE, "database_unavailable"),
     };
-
-    super::chat::mark_user_messages_delivered(&db, user_id);
-    let conversations = load_user_conversations(&db, user_id);
-    let total_unread: i64 = conversations.iter().map(|row| row.unread_count).sum();
-
-    let items: Vec<serde_json::Value> = conversations
-        .iter()
-        .map(|conversation| {
-            let display_name = crate::web::templates::conversation_display_name(
-                conversation.other_user_id,
-                &conversation.username,
-                &conversation.first_name,
-                &conversation.last_name,
-            );
-            let last_message = if conversation.last_message.is_empty() {
-                "Новый диалог".to_string()
-            } else {
-                conversation.last_message.clone()
-            };
-            let last_time = if conversation.last_message.is_empty() {
-                String::new()
-            } else {
-                crate::web::templates::format_inbox_time(conversation.updated_at)
-            };
-
-            json!({
-                "other_user_id": conversation.other_user_id.to_string(),
-                "display_name": display_name,
-                "username": conversation.username,
-                "last_message": last_message,
-                "last_time": last_time,
-                "unread_count": conversation.unread_count,
-                "updated_at": conversation.updated_at,
-            })
-        })
-        .collect();
-
+    let Ok(Some(conversation_id)) = conversation_id(&db, user_id, peer_id) else {
+        return json_error(StatusCode::NOT_FOUND, "conversation_not_found");
+    };
+    let attachment_path: String = db
+        .query_row(
+            "SELECT COALESCE(attachment_path,'') FROM messages
+             WHERE id=?1 AND conversation_id=?2 AND sender_user_id=?3 AND deleted_at=0",
+            params![message_id, conversation_id, user_id],
+            |row| row.get(0),
+        )
+        .unwrap_or_default();
+    let now = crate::web::handlers::common::unix_now();
+    let changed = db
+        .execute(
+            "UPDATE messages
+             SET message='',deleted_at=?4,attachment_kind='',attachment_mime='',attachment_size=0,attachment_path=''
+             WHERE id=?1 AND conversation_id=?2 AND sender_user_id=?3 AND deleted_at=0",
+            params![message_id, conversation_id, user_id, now],
+        )
+        .unwrap_or(0);
+    if changed == 0 {
+        return json_error(StatusCode::FORBIDDEN, "message_not_deletable");
+    }
+    if !attachment_path.is_empty() {
+        let media_root = std::path::Path::new("data/chat-media-next");
+        if let (Ok(root), Ok(file)) = (
+            std::fs::canonicalize(media_root),
+            std::fs::canonicalize(std::path::Path::new(&attachment_path)),
+        ) {
+            if file.starts_with(&root) {
+                let _ = std::fs::remove_file(file);
+            }
+        }
+    }
+    let _ = db.execute(
+        "DELETE FROM message_reactions WHERE message_id=?1",
+        params![message_id],
+    );
+    let Some(message) = load_message(&db, conversation_id, message_id, user_id) else {
+        return json_error(StatusCode::NOT_FOUND, "message_not_found");
+    };
     (
         StatusCode::OK,
-        Json(json!({
-            "ok": true,
-            "total_unread": total_unread,
-            "conversations": items,
-        })),
+        Json(json!({"ok": true, "message": message})),
     )
         .into_response()
-}
-
-#[derive(Debug, Deserialize)]
-pub struct ChatReactPayload {
-    emoji: String,
 }
 
 pub async fn api_chat_react(
     State(state): State<AppState>,
-    Path((other_user_id, message_id)): Path<(i64, i64)>,
+    Path((peer_id, message_id)): Path<(i64, i64)>,
     headers: HeaderMap,
-    Json(payload): Json<ChatReactPayload>,
+    Json(payload): Json<ChatReactionPayload>,
 ) -> Response {
     if request_is_cross_site(&headers) {
         return json_error(StatusCode::FORBIDDEN, "cross_site_request_rejected");
     }
-
-    let user_id = match verify_user_session(&state, &headers) {
-        Some(user_id) => user_id,
-        None => {
-            return json_error(StatusCode::UNAUTHORIZED, "login_required");
-        }
+    let Some(user_id) = verify_user_session(&state, &headers) else {
+        return json_error(StatusCode::UNAUTHORIZED, "login_required");
     };
-
-    if normalized_pair(user_id, other_user_id).is_none() || message_id <= 0 {
-        return json_error(StatusCode::BAD_REQUEST, "invalid_request");
-    }
-
     let emoji = payload.emoji.trim();
-
-    if !reaction_emoji_is_allowed(emoji) {
+    const ALLOWED: &[&str] = &["👍", "❤️", "😂", "🔥", "👏", "🙏", "✅", "🤝"];
+    if !ALLOWED.contains(&emoji) {
         return json_error(StatusCode::BAD_REQUEST, "invalid_reaction");
     }
 
-    let connection = match state.db_pool.get() {
-        Ok(connection) => connection,
-        Err(_) => {
-            return json_error(StatusCode::SERVICE_UNAVAILABLE, "database_unavailable");
-        }
+    let db = match crate::db::pool::get_connection(&state.db_pool) {
+        Ok(db) => db,
+        Err(_) => return json_error(StatusCode::SERVICE_UNAVAILABLE, "database_unavailable"),
     };
-
-    if users_are_blocked(&connection, user_id, other_user_id) {
-        return json_error(StatusCode::FORBIDDEN, "user_blocked");
-    }
-
-    let conversation_id = match conversation_id(&connection, user_id, other_user_id) {
-        Some(conversation_id) => conversation_id,
-        None => {
-            return json_error(StatusCode::FORBIDDEN, "conversation_not_open");
-        }
+    let Ok(Some(conversation_id)) = conversation_id(&db, user_id, peer_id) else {
+        return json_error(StatusCode::NOT_FOUND, "conversation_not_found");
     };
-
-    let message_exists: i64 = connection
+    let exists = db
         .query_row(
-            "SELECT COUNT(*)
-             FROM messages
-             WHERE id = ?1
-               AND conversation_id = ?2
-               AND deleted_at = 0",
-            rusqlite::params![message_id, conversation_id],
-            |row| row.get(0),
+            "SELECT EXISTS(SELECT 1 FROM messages WHERE id=?1 AND conversation_id=?2 AND deleted_at=0)",
+            params![message_id, conversation_id],
+            |row| row.get::<_, i64>(0),
         )
         .unwrap_or(0);
-
-    if message_exists == 0 {
+    if exists != 1 {
         return json_error(StatusCode::NOT_FOUND, "message_not_found");
     }
 
-    let existing_emoji: Option<String> = connection
+    let current: Option<String> = db
         .query_row(
-            "SELECT emoji
-             FROM message_reactions
-             WHERE message_id = ?1
-               AND user_id = ?2
-             LIMIT 1",
-            rusqlite::params![message_id, user_id],
+            "SELECT emoji FROM message_reactions WHERE message_id=?1 AND user_id=?2",
+            params![message_id, user_id],
             |row| row.get(0),
         )
-        .ok();
+        .optional()
+        .ok()
+        .flatten();
 
-    if existing_emoji.as_deref() == Some(emoji) {
-        let _ = connection.execute(
-            "DELETE FROM message_reactions
-             WHERE message_id = ?1
-               AND user_id = ?2",
-            rusqlite::params![message_id, user_id],
+    if current.as_deref() == Some(emoji) {
+        let _ = db.execute(
+            "DELETE FROM message_reactions WHERE message_id=?1 AND user_id=?2",
+            params![message_id, user_id],
         );
     } else {
         let now = crate::web::handlers::common::unix_now();
-        let changed = connection
-            .execute(
-                "INSERT INTO message_reactions (message_id, user_id, emoji, created_at)
-                 VALUES (?1, ?2, ?3, ?4)
-                 ON CONFLICT(message_id, user_id)
-                 DO UPDATE SET emoji = excluded.emoji,
-                               created_at = excluded.created_at",
-                rusqlite::params![message_id, user_id, emoji, now],
-            )
-            .unwrap_or(0);
-
-        if changed == 0 {
-            return json_error(StatusCode::INTERNAL_SERVER_ERROR, "reaction_save_failed");
-        }
+        let _ = db.execute(
+            "INSERT INTO message_reactions(message_id,user_id,emoji,created_at)
+             VALUES(?1,?2,?3,?4)
+             ON CONFLICT(message_id,user_id) DO UPDATE SET emoji=excluded.emoji,created_at=excluded.created_at",
+            params![message_id, user_id, emoji, now],
+        );
     }
 
-    let Some(message) = load_api_message_by_id(&connection, conversation_id, message_id, user_id)
-    else {
-        return json_error(StatusCode::INTERNAL_SERVER_ERROR, "message_reload_failed");
+    let Some(message) = load_message(&db, conversation_id, message_id, user_id) else {
+        return json_error(StatusCode::NOT_FOUND, "message_not_found");
     };
-
-    state.publish_chat_event(
-        "message.reacted",
-        conversation_id,
-        message_id,
-        user_id,
-        other_user_id,
-    );
-
     (
         StatusCode::OK,
-        Json(json!({
-            "ok": true,
-            "message_id": message_id,
-            "reactions": message.reactions,
-            "message": message
-        })),
+        Json(json!({"ok": true, "message": message})),
     )
         .into_response()
 }
@@ -1683,114 +869,26 @@ mod tests {
     use super::*;
 
     #[test]
-    fn chat_pair_is_normalized() {
-        assert_eq!(normalized_pair(7, 3), Some((3, 7)));
-        assert_eq!(normalized_pair(3, 7), Some((3, 7)));
-        assert_eq!(normalized_pair(3, 3), None);
-        assert_eq!(normalized_pair(0, 3), None);
+    fn pair_is_stable() {
+        assert_eq!(normalized_pair(9, 7), Some((7, 9)));
+        assert_eq!(normalized_pair(7, 9), Some((7, 9)));
+        assert_eq!(normalized_pair(7, 7), None);
     }
 
     #[test]
-    fn chat_page_size_is_bounded() {
-        assert_eq!(normalized_limit(None), 50);
-        assert_eq!(normalized_limit(Some(0)), 1);
-        assert_eq!(normalized_limit(Some(10)), 10);
-        assert_eq!(normalized_limit(Some(999)), 100);
+    fn client_ids_are_restricted() {
+        assert!(valid_client_id("1234567890abcdef"));
+        assert!(!valid_client_id("short"));
+        assert!(!valid_client_id("1234567890abcde!"));
     }
 
     #[test]
-    fn chat_api_user_ids_serialize_without_javascript_rounding() {
-        let message = ChatApiMessage {
-            id: 159,
-            sender_user_id: 4_000_000_000_000_000_007,
-            message: "Есть".to_string(),
-            is_mine: false,
-            delivered_at: 0,
-            read_at: 0,
-            created_at: 1,
-            reply_to_message_id: Some(158),
-            reply_sender_user_id: Some(4_000_000_000_000_000_009),
-            reply_message: "Ответ".to_string(),
-            edited_at: 0,
-            deleted_at: 0,
-            client_message_id: String::new(),
-            attachment_kind: String::new(),
-            attachment_mime: String::new(),
-            attachment_size: 0,
-            attachment_url: String::new(),
-            reactions: Vec::new(),
-        };
-
-        let value = serde_json::to_value(message).expect("serialize chat API message");
-
-        assert_eq!(value["sender_user_id"], "4000000000000000007");
-        assert_eq!(value["reply_sender_user_id"], "4000000000000000009");
-
-        let conversation = serde_json::json!({
-            "other_user_id":
-                4_000_000_000_000_000_007_i64.to_string()
-        });
-
-        assert_eq!(conversation["other_user_id"], "4000000000000000007");
-    }
-
-    #[test]
-    fn chat_message_policy_is_enforced() {
-        assert!(message_is_valid("Привет"));
-        assert!(!message_is_valid(""));
-        assert!(!message_is_valid("Строка\u{0000}с управлением"));
-
-        let long_message = "я".repeat(2001);
-
-        assert!(!message_is_valid(&long_message));
-    }
-
-    #[test]
-    fn chat_edit_window_is_enforced() {
-        assert!(message_can_be_edited(1_000, 0, 1_000 + 86_400));
-        assert!(!message_can_be_edited(1_000, 0, 1_000 + 86_401));
-        assert!(!message_can_be_edited(1_000, 2_000, 1_001));
-    }
-
-    #[test]
-    fn chat_reaction_emoji_is_whitelisted() {
-        assert!(reaction_emoji_is_allowed("❤️"));
-        assert!(reaction_emoji_is_allowed("👍"));
-        assert!(!reaction_emoji_is_allowed("💣"));
-        assert!(!reaction_emoji_is_allowed("<script>"));
-    }
-
-    #[test]
-    fn client_message_identity_is_strict() {
-        assert!(client_message_id_is_valid(
-            "018f7f43-9f52-7d20-a612-4f006c663f10"
-        ));
-        assert!(client_message_id_is_valid("fallback_1234567890"));
-        assert!(!client_message_id_is_valid(""));
-        assert!(!client_message_id_is_valid("short"));
-        assert!(!client_message_id_is_valid("identity with spaces"));
-    }
-
-    #[test]
-    fn lifecycle_cursor_rules_are_stable() {
-        let payload = ChatSendPayload {
-            message: "Ответ".to_string(),
-            reply_to_message_id: Some(42),
-            client_message_id: None,
-        };
-
-        assert_eq!(payload.reply_to_message_id, Some(42));
-
-        let query = ChatMessagesQuery {
-            before_id: Some(10),
-            after_id: None,
-            limit: Some(50),
-            mark_read: None,
-            read_through_id: None,
-        };
-
-        assert_eq!(query.before_id, Some(10));
-        assert_eq!(query.after_id, None);
-        assert_eq!(normalized_limit(query.limit), 50);
+    fn mark_read_query_accepts_browser_values() {
+        assert!(query_truthy(Some("1")));
+        assert!(query_truthy(Some("true")));
+        assert!(query_truthy(Some("TRUE")));
+        assert!(!query_truthy(Some("0")));
+        assert!(!query_truthy(Some("false")));
+        assert!(!query_truthy(None));
     }
 }

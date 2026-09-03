@@ -1,738 +1,402 @@
 use super::auth::verify_user_session;
-use super::chat_api::{chat_contact_gate_error, user_has_verified_identity};
-use super::common::{input_text_is_valid, rate_limit_retry_after, request_is_cross_site, unix_now};
-use super::user_blocks::users_are_blocked;
+use super::common::rate_limit_retry_after;
 use crate::state::app_state::AppState;
 use axum::{
     body::Body,
     extract::{Multipart, Path, State},
-    http::{header, HeaderMap, HeaderValue, StatusCode},
-    response::{IntoResponse, Response},
+    http::{header, HeaderMap, Response, StatusCode},
+    response::IntoResponse,
     Json,
 };
-use serde::Serialize;
+use rusqlite::{params, OptionalExtension};
 use serde_json::json;
-use std::fs;
 use std::path::{Path as FsPath, PathBuf};
 
 const MAX_IMAGE_BYTES: usize = 8 * 1024 * 1024;
-const MAX_VOICE_BYTES: usize = 512 * 1024;
+const MAX_VOICE_BYTES: usize = 12 * 1024 * 1024;
 
-#[derive(Debug, Serialize)]
-struct MediaChatMessage {
-    id: i64,
-    sender_user_id: i64,
-    message: String,
-    is_mine: bool,
-    delivered_at: i64,
-    read_at: i64,
-    created_at: i64,
-    reply_to_message_id: Option<i64>,
-    reply_sender_user_id: Option<i64>,
-    reply_message: String,
-    edited_at: i64,
-    deleted_at: i64,
-    #[serde(skip_serializing_if = "String::is_empty")]
-    client_message_id: String,
-    #[serde(skip_serializing_if = "String::is_empty")]
-    attachment_kind: String,
-    #[serde(skip_serializing_if = "String::is_empty")]
-    attachment_mime: String,
-    attachment_size: i64,
-    #[serde(skip_serializing_if = "String::is_empty")]
-    attachment_url: String,
-}
-
-fn json_error(status: StatusCode, error: &str) -> Response {
+fn json_error(status: StatusCode, error: &str) -> axum::response::Response {
     (status, Json(json!({"ok": false, "error": error}))).into_response()
 }
 
-fn normalized_pair(a: i64, b: i64) -> Option<(i64, i64)> {
+fn pair(a: i64, b: i64) -> Option<(i64, i64)> {
     if a <= 0 || b <= 0 || a == b {
-        return None;
-    }
-    if a < b {
+        None
+    } else if a < b {
         Some((a, b))
     } else {
         Some((b, a))
     }
 }
 
-fn conversation_id(conn: &rusqlite::Connection, a: i64, b: i64) -> Option<i64> {
-    let (u1, u2) = normalized_pair(a, b)?;
-    conn.query_row(
-        "SELECT id FROM conversations WHERE user1_id = ?1 AND user2_id = ?2 LIMIT 1",
-        rusqlite::params![u1, u2],
-        |row| row.get(0),
+fn blocked(db: &rusqlite::Connection, user_id: i64, peer_id: i64) -> bool {
+    db.query_row(
+        "SELECT EXISTS(
+            SELECT 1 FROM user_blocks
+            WHERE (blocker_user_id=?1 AND blocked_user_id=?2)
+               OR (blocker_user_id=?2 AND blocked_user_id=?1)
+        )",
+        params![user_id, peer_id],
+        |row| row.get::<_, i64>(0),
+    )
+    .unwrap_or(0)
+        == 1
+}
+
+fn extension_for_mime(mime: &str) -> Option<&'static str> {
+    match mime {
+        "image/jpeg" => Some("jpg"),
+        "image/png" => Some("png"),
+        "image/webp" => Some("webp"),
+        "audio/webm" => Some("webm"),
+        "audio/ogg" => Some("ogg"),
+        "audio/mp4" => Some("m4a"),
+        "audio/mpeg" => Some("mp3"),
+        _ => None,
+    }
+}
+
+fn ensure_conversation(db: &rusqlite::Connection, user_id: i64, peer_id: i64) -> Option<i64> {
+    let (u1, u2) = pair(user_id, peer_id)?;
+    let existing = db
+        .query_row(
+            "SELECT id FROM conversations WHERE user1_id=?1 AND user2_id=?2 LIMIT 1",
+            params![u1, u2],
+            |row| row.get::<_, i64>(0),
+        )
+        .optional()
+        .ok()
+        .flatten();
+    if existing.is_some() {
+        return existing;
+    }
+    let peer_exists = db
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM users WHERE id=?1 AND is_active=1)",
+            params![peer_id],
+            |row| row.get::<_, i64>(0),
+        )
+        .unwrap_or(0);
+    if peer_exists != 1 {
+        return None;
+    }
+    let now = crate::web::handlers::common::unix_now();
+    let _ = db.execute(
+        "INSERT OR IGNORE INTO conversations(user1_id,user2_id,created_at,updated_at)
+         VALUES(?1,?2,?3,?3)",
+        params![u1, u2, now],
+    );
+    db.query_row(
+        "SELECT id FROM conversations WHERE user1_id=?1 AND user2_id=?2 LIMIT 1",
+        params![u1, u2],
+        |row| row.get::<_, i64>(0),
     )
     .ok()
 }
 
-fn client_message_id_is_valid(value: &str) -> bool {
-    (16..=80).contains(&value.len())
+fn clean_client_id(value: &str) -> Option<String> {
+    let value = value.trim();
+    if (16..=80).contains(&value.len())
         && value
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+    {
+        Some(value.to_string())
+    } else {
+        None
+    }
 }
 
 fn media_root() -> PathBuf {
-    PathBuf::from("data/chat-media")
+    PathBuf::from("data/chat-media-next")
 }
 
-fn detect_image(bytes: &[u8]) -> Option<(&'static str, &'static str)> {
-    if bytes.len() >= 3 && bytes[0] == 0xff && bytes[1] == 0xd8 && bytes[2] == 0xff {
-        return Some(("image", "image/jpeg"));
-    }
-    if bytes.len() >= 8
-        && bytes[0] == 0x89
-        && bytes[1] == 0x50
-        && bytes[2] == 0x4e
-        && bytes[3] == 0x47
+async fn parse_upload(
+    mut multipart: Multipart,
+    wanted_field: &str,
+    max_bytes: usize,
+) -> Result<(Vec<u8>, String, String, Option<i64>, String), &'static str> {
+    let mut bytes = Vec::new();
+    let mut mime = String::new();
+    let mut caption = String::new();
+    let mut reply_to = None;
+    let mut client_id = String::new();
+
+    while let Some(field) = multipart
+        .next_field()
+        .await
+        .map_err(|_| "invalid_multipart")?
     {
-        return Some(("image", "image/png"));
+        let name = field.name().unwrap_or("").to_string();
+        if name == wanted_field {
+            mime = field
+                .content_type()
+                .unwrap_or("application/octet-stream")
+                .to_string();
+            bytes = field
+                .bytes()
+                .await
+                .map_err(|_| "upload_read_failed")?
+                .to_vec();
+            if bytes.len() > max_bytes {
+                return Err("file_too_large");
+            }
+        } else if name == "caption" {
+            caption = field.text().await.unwrap_or_default();
+        } else if name == "reply_to_message_id" {
+            reply_to = field
+                .text()
+                .await
+                .ok()
+                .and_then(|v| v.trim().parse::<i64>().ok());
+        } else if name == "client_message_id" {
+            client_id = field.text().await.unwrap_or_default();
+        }
     }
-    if bytes.len() >= 12 && &bytes[0..4] == b"RIFF" && &bytes[8..12] == b"WEBP" {
-        return Some(("image", "image/webp"));
+
+    if bytes.is_empty() {
+        return Err("file_required");
     }
-    None
+    if caption.chars().count() > 2000 {
+        return Err("caption_too_long");
+    }
+    let Some(client_id) = clean_client_id(&client_id) else {
+        return Err("invalid_client_message_id");
+    };
+    Ok((bytes, mime, caption.trim().to_string(), reply_to, client_id))
 }
 
-fn detect_audio(bytes: &[u8]) -> Option<(&'static str, &'static str)> {
-    if bytes.len() >= 4 && &bytes[0..4] == b"OggS" {
-        return Some(("voice", "audio/ogg"));
+async fn save_attachment(
+    state: AppState,
+    headers: HeaderMap,
+    peer_id: i64,
+    multipart: Multipart,
+    field_name: &str,
+    kind: &str,
+    allowed_mimes: &[&str],
+    max_bytes: usize,
+) -> axum::response::Response {
+    let Some(user_id) = verify_user_session(&state, &headers) else {
+        return json_error(StatusCode::UNAUTHORIZED, "login_required");
+    };
+    if pair(user_id, peer_id).is_none() {
+        return json_error(StatusCode::BAD_REQUEST, "invalid_user");
     }
-    if bytes.len() >= 4
-        && bytes[0] == 0x1a
-        && bytes[1] == 0x45
-        && bytes[2] == 0xdf
-        && bytes[3] == 0xa3
+    if let Some(retry_after) =
+        rate_limit_retry_after(&state, user_id, "chat_media_send", 12, 60).await
     {
-        return Some(("voice", "audio/webm"));
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(json!({"ok": false, "error": "rate_limited", "retry_after": retry_after})),
+        )
+            .into_response();
     }
-    if bytes.len() >= 12 && &bytes[4..8] == b"ftyp" {
-        return Some(("voice", "audio/mp4"));
+
+    let (bytes, mime, caption, reply_to, client_id) =
+        match parse_upload(multipart, field_name, max_bytes).await {
+            Ok(v) => v,
+            Err(e) => return json_error(StatusCode::BAD_REQUEST, e),
+        };
+
+    if !allowed_mimes.contains(&mime.as_str()) {
+        return json_error(StatusCode::UNSUPPORTED_MEDIA_TYPE, "unsupported_media_type");
     }
-    None
-}
 
-fn extension_for_mime(mime: &str) -> &'static str {
-    match mime {
-        "image/jpeg" => "jpg",
-        "image/png" => "png",
-        "image/webp" => "webp",
-        "audio/ogg" => "ogg",
-        "audio/webm" => "webm",
-        "audio/mp4" => "m4a",
-        _ => "bin",
+    let db = match crate::db::pool::get_connection(&state.db_pool) {
+        Ok(db) => db,
+        Err(_) => return json_error(StatusCode::SERVICE_UNAVAILABLE, "database_unavailable"),
+    };
+    if blocked(&db, user_id, peer_id) {
+        return json_error(StatusCode::FORBIDDEN, "user_blocked");
     }
-}
 
-fn random_file_stem() -> String {
-    let mut bytes = [0u8; 16];
-    let _ = getrandom::getrandom(&mut bytes);
-    bytes.iter().map(|b| format!("{:02x}", b)).collect()
-}
+    let Some(conversation_id) = ensure_conversation(&db, user_id, peer_id) else {
+        return json_error(StatusCode::BAD_REQUEST, "conversation_unavailable");
+    };
 
-fn load_message(
-    conn: &rusqlite::Connection,
-    conversation_id: i64,
-    message_id: i64,
-    user_id: i64,
-) -> Option<MediaChatMessage> {
-    conn.query_row(
-        "SELECT messages.id, messages.sender_user_id, messages.message,
-                messages.delivered_at, messages.read_at, messages.created_at,
-                messages.reply_to_message_id,
-                (SELECT reply.sender_user_id FROM messages AS reply
-                  WHERE reply.id = messages.reply_to_message_id AND reply.conversation_id = messages.conversation_id),
-                COALESCE((SELECT CASE WHEN reply.deleted_at > 0 THEN 'Сообщение удалено' ELSE reply.message END
-                          FROM messages AS reply
-                          WHERE reply.id = messages.reply_to_message_id AND reply.conversation_id = messages.conversation_id), ''),
-                messages.edited_at, messages.deleted_at,
-                COALESCE(messages.client_message_id, ''),
-                COALESCE(messages.attachment_kind, ''),
-                COALESCE(messages.attachment_mime, ''),
-                COALESCE(messages.attachment_size, 0),
-                COALESCE(messages.attachment_path, '')
-         FROM messages WHERE messages.id = ?1 AND messages.conversation_id = ?2 LIMIT 1",
-        rusqlite::params![message_id, conversation_id],
-        |row| {
-            let id: i64 = row.get(0)?;
-            let sender: i64 = row.get(1)?;
-            let deleted_at: i64 = row.get(10)?;
-            let kind: String = row.get(12)?;
-            let path: String = row.get(15)?;
-            let attachment_url = if deleted_at == 0
-                && (kind == "image" || kind == "voice")
-                && !path.is_empty()
-            {
-                format!("/api/chat/media/{id}")
-            } else { String::new() };
-            Ok(MediaChatMessage {
-                id, sender_user_id: sender, message: row.get(2)?, is_mine: sender == user_id,
-                delivered_at: row.get(3)?, read_at: row.get(4)?, created_at: row.get(5)?,
-                reply_to_message_id: row.get(6)?, reply_sender_user_id: row.get(7)?,
-                reply_message: row.get(8)?, edited_at: row.get(9)?, deleted_at,
-                client_message_id: row.get(11)?, attachment_kind: kind,
-                attachment_mime: row.get(13)?, attachment_size: row.get(14)?, attachment_url,
-            })
-        },
-    ).ok()
+    if let Ok(Some(existing)) = db
+        .query_row(
+            "SELECT id FROM messages WHERE sender_user_id=?1 AND client_message_id=?2 LIMIT 1",
+            params![user_id, client_id],
+            |row| row.get::<_, i64>(0),
+        )
+        .optional()
+    {
+        return (
+            StatusCode::OK,
+            Json(json!({"ok": true, "duplicate": true, "message_id": existing})),
+        )
+            .into_response();
+    }
+
+    if let Some(reply_id) = reply_to {
+        let valid = db
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM messages WHERE id=?1 AND conversation_id=?2)",
+                params![reply_id, conversation_id],
+                |row| row.get::<_, i64>(0),
+            )
+            .unwrap_or(0);
+        if valid != 1 {
+            return json_error(StatusCode::BAD_REQUEST, "invalid_reply");
+        }
+    }
+
+    let now = crate::web::handlers::common::unix_now();
+
+    if db
+        .execute(
+            "INSERT INTO messages(
+               conversation_id,sender_user_id,message,is_read,delivered_at,read_at,created_at,
+               reply_to_message_id,client_message_id,attachment_kind,attachment_mime,attachment_size,attachment_path
+             ) VALUES(?1,?2,?3,0,0,0,?4,?5,?6,?7,?8,?9,'')",
+            params![
+                conversation_id,user_id,caption,now,reply_to,client_id,kind,mime,bytes.len() as i64
+            ],
+        )
+        .is_err()
+    {
+        return json_error(StatusCode::INTERNAL_SERVER_ERROR, "message_store_failed");
+    }
+
+    let message_id = db.last_insert_rowid();
+    let root = media_root();
+    if std::fs::create_dir_all(&root).is_err() {
+        let _ = db.execute("DELETE FROM messages WHERE id=?1", params![message_id]);
+        return json_error(StatusCode::INTERNAL_SERVER_ERROR, "media_directory_failed");
+    }
+
+    let Some(extension) = extension_for_mime(&mime) else {
+        let _ = db.execute("DELETE FROM messages WHERE id=?1", params![message_id]);
+        return json_error(StatusCode::UNSUPPORTED_MEDIA_TYPE, "unsupported_media_type");
+    };
+    let file_name = format!("{}.{}", message_id, extension);
+    let file_path = root.join(&file_name);
+    if std::fs::write(&file_path, &bytes).is_err() {
+        let _ = db.execute("DELETE FROM messages WHERE id=?1", params![message_id]);
+        return json_error(StatusCode::INTERNAL_SERVER_ERROR, "media_write_failed");
+    }
+
+    let relative_path = file_path.to_string_lossy().to_string();
+    let _ = db.execute(
+        "UPDATE messages SET attachment_path=?2 WHERE id=?1",
+        params![message_id, relative_path],
+    );
+    let _ = db.execute(
+        "UPDATE conversations SET updated_at=?2 WHERE id=?1",
+        params![conversation_id, now],
+    );
+
+    (
+        StatusCode::CREATED,
+        Json(json!({"ok": true, "message_id": message_id})),
+    )
+        .into_response()
 }
 
 pub async fn api_chat_send_image(
     State(state): State<AppState>,
-    Path(other_user_id): Path<i64>,
+    Path(peer_id): Path<i64>,
     headers: HeaderMap,
-    mut multipart: Multipart,
-) -> Response {
-    if request_is_cross_site(&headers) {
-        return json_error(StatusCode::FORBIDDEN, "cross_site_request_rejected");
-    }
-    let user_id = match verify_user_session(&state, &headers) {
-        Some(v) => v,
-        None => return json_error(StatusCode::UNAUTHORIZED, "login_required"),
-    };
-    if normalized_pair(user_id, other_user_id).is_none() {
-        return json_error(StatusCode::BAD_REQUEST, "invalid_user");
-    }
-    if let Some(retry_after) =
-        rate_limit_retry_after(&state, user_id, "chat_api_send_image", 20, 60).await
-    {
-        return (
-            StatusCode::TOO_MANY_REQUESTS,
-            [(header::RETRY_AFTER, retry_after.to_string())],
-            Json(json!({"ok": false, "error": "rate_limited", "retry_after": retry_after})),
-        )
-            .into_response();
-    }
-
-    let mut caption = String::new();
-    let mut client_message_id = String::new();
-    let mut reply_to_message_id: Option<i64> = None;
-    let mut file_bytes: Option<Vec<u8>> = None;
-
-    while let Ok(Some(field)) = multipart.next_field().await {
-        let name = field.name().unwrap_or("").to_string();
-        match name.as_str() {
-            "caption" | "message" => {
-                if let Ok(t) = field.text().await {
-                    caption = t.trim().to_string();
-                }
-            }
-            "client_message_id" => {
-                if let Ok(t) = field.text().await {
-                    client_message_id = t.trim().to_string();
-                }
-            }
-            "reply_to_message_id" => {
-                if let Ok(t) = field.text().await {
-                    if let Ok(id) = t.trim().parse::<i64>() {
-                        if id > 0 {
-                            reply_to_message_id = Some(id);
-                        }
-                    }
-                }
-            }
-            "image" | "file" => {
-                if let Ok(b) = field.bytes().await {
-                    file_bytes = Some(b.to_vec());
-                }
-            }
-            _ => {}
-        }
-    }
-
-    let file_bytes = match file_bytes {
-        Some(b) if !b.is_empty() => b,
-        _ => return json_error(StatusCode::BAD_REQUEST, "image_required"),
-    };
-    if file_bytes.len() > MAX_IMAGE_BYTES {
-        return json_error(StatusCode::BAD_REQUEST, "image_too_large");
-    }
-    let (kind, mime) = match detect_image(&file_bytes) {
-        Some(p) => p,
-        None => return json_error(StatusCode::BAD_REQUEST, "unsupported_image"),
-    };
-    if !client_message_id.is_empty() && !client_message_id_is_valid(&client_message_id) {
-        return json_error(StatusCode::BAD_REQUEST, "invalid_client_message_id");
-    }
-    if !caption.is_empty() && !input_text_is_valid(&caption, 1, 2000) {
-        return json_error(StatusCode::BAD_REQUEST, "invalid_message");
-    }
-
-    let mut connection = match state.db_pool.get() {
-        Ok(c) => c,
-        Err(_) => return json_error(StatusCode::SERVICE_UNAVAILABLE, "database_unavailable"),
-    };
-    if users_are_blocked(&connection, user_id, other_user_id) {
-        return json_error(StatusCode::FORBIDDEN, "user_blocked");
-    }
-    if !user_has_verified_identity(&connection, user_id) {
-        return json_error(StatusCode::FORBIDDEN, "verification_required");
-    }
-    if let Some(error) = chat_contact_gate_error(&connection, user_id, other_user_id) {
-        return json_error(StatusCode::FORBIDDEN, error);
-    }
-    let conversation_id = match conversation_id(&connection, user_id, other_user_id) {
-        Some(id) => id,
-        None => return json_error(StatusCode::FORBIDDEN, "conversation_not_open"),
-    };
-
-    if !client_message_id.is_empty() {
-        if let Ok(existing_id) = connection.query_row(
-            "SELECT id FROM messages WHERE sender_user_id = ?1 AND client_message_id = ?2 LIMIT 1",
-            rusqlite::params![user_id, client_message_id],
-            |row| row.get::<_, i64>(0),
-        ) {
-            if let Some(message) = load_message(&connection, conversation_id, existing_id, user_id)
-            {
-                return (
-                    StatusCode::OK,
-                    Json(json!({"ok": true, "duplicate": true, "message": message})),
-                )
-                    .into_response();
-            }
-        }
-    }
-
-    if let Some(reply_id) = reply_to_message_id {
-        let exists: i64 = connection.query_row(
-            "SELECT COUNT(*) FROM messages WHERE id = ?1 AND conversation_id = ?2 AND deleted_at = 0",
-            rusqlite::params![reply_id, conversation_id],
-            |row| row.get(0),
-        ).unwrap_or(0);
-        if exists != 1 {
-            return json_error(StatusCode::BAD_REQUEST, "invalid_reply");
-        }
-    }
-
-    let relative = format!(
-        "{}/{}.{}",
-        conversation_id,
-        random_file_stem(),
-        extension_for_mime(mime)
-    );
-    let absolute = media_root().join(&relative);
-    if let Some(parent) = absolute.parent() {
-        if fs::create_dir_all(parent).is_err() {
-            return json_error(StatusCode::INTERNAL_SERVER_ERROR, "media_store_failed");
-        }
-    }
-    match fs::File::create(&absolute) {
-        Ok(mut file) => {
-            use std::io::Write;
-            if file.write_all(&file_bytes).is_err() {
-                let _ = fs::remove_file(&absolute);
-                return json_error(StatusCode::INTERNAL_SERVER_ERROR, "media_store_failed");
-            }
-        }
-        Err(_) => return json_error(StatusCode::INTERNAL_SERVER_ERROR, "media_store_failed"),
-    }
-
-    let now = unix_now();
-    let transaction =
-        match connection.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate) {
-            Ok(tx) => tx,
-            Err(_) => {
-                let _ = fs::remove_file(&absolute);
-                return json_error(StatusCode::CONFLICT, "chat_busy");
-            }
-        };
-
-    if transaction.execute(
-        "INSERT INTO messages (
-            conversation_id, sender_user_id, message, is_read, delivered_at, read_at, created_at,
-            reply_to_message_id, client_message_id, attachment_kind, attachment_mime, attachment_size, attachment_path
-         ) VALUES (?1,?2,?3,0,0,0,?4,?5,?6,?7,?8,?9,?10)",
-        rusqlite::params![
-            conversation_id, user_id, caption, now, reply_to_message_id, client_message_id,
-            kind, mime, file_bytes.len() as i64, relative
-        ],
-    ).unwrap_or(0) != 1 {
-        let _ = fs::remove_file(&absolute);
-        return json_error(StatusCode::INTERNAL_SERVER_ERROR, "message_store_failed");
-    }
-    let message_id = transaction.last_insert_rowid();
-    let _ = transaction.execute(
-        "UPDATE conversations SET updated_at = ?2 WHERE id = ?1",
-        rusqlite::params![conversation_id, now],
-    );
-    if transaction.commit().is_err() {
-        let _ = fs::remove_file(&absolute);
-        return json_error(StatusCode::INTERNAL_SERVER_ERROR, "message_store_failed");
-    }
-
-    let message = match load_message(&connection, conversation_id, message_id, user_id) {
-        Some(m) => m,
-        None => return json_error(StatusCode::INTERNAL_SERVER_ERROR, "message_load_failed"),
-    };
-    state.publish_chat_event(
-        "message.created",
-        conversation_id,
-        message_id,
-        user_id,
-        other_user_id,
-    );
-
-    let should_notify_telegram = connection
-        .execute(
-            "INSERT INTO user_notifications (
-                user_id,
-                resource_id,
-                kind,
-                title,
-                message,
-                is_read,
-                created_at
-             )
-             SELECT ?1, ?2, 'chat_message', 'Новое сообщение',
-                    'У вас новое сообщение в ResursMap.', 0, ?3
-             WHERE NOT EXISTS (
-                SELECT 1
-                FROM user_notifications
-                WHERE user_id = ?1
-                  AND kind = 'chat_message'
-                  AND is_read = 0
-             )",
-            rusqlite::params![other_user_id, user_id, now],
-        )
-        .unwrap_or(0)
-        == 1;
-
-    let telegram_id: Option<i64> = if should_notify_telegram {
-        connection
-            .query_row(
-                "SELECT telegram_id
-                 FROM users
-                 WHERE id = ?1
-                   AND is_active = 1",
-                rusqlite::params![other_user_id],
-                |row| row.get(0),
-            )
-            .ok()
-    } else {
-        None
-    };
-
-    if let Some(telegram_id) = telegram_id {
-        if telegram_id > 0 {
-            crate::telegram_notify::notify_telegram_user(
-                state.bot_token.as_deref(),
-                telegram_id,
-                &format!(
-                    "📷 У вас новое фото в ResursMap!\n\nОткройте чат: https://resursmap.de/app/chat/{user_id}"
-                ),
-            );
-        }
-    }
-
-    (
-        StatusCode::OK,
-        Json(json!({"ok": true, "message": message})),
+    multipart: Multipart,
+) -> axum::response::Response {
+    save_attachment(
+        state,
+        headers,
+        peer_id,
+        multipart,
+        "image",
+        "image",
+        &["image/jpeg", "image/png", "image/webp"],
+        MAX_IMAGE_BYTES,
     )
-        .into_response()
+    .await
 }
 
 pub async fn api_chat_send_voice(
     State(state): State<AppState>,
-    Path(other_user_id): Path<i64>,
+    Path(peer_id): Path<i64>,
     headers: HeaderMap,
-    mut multipart: Multipart,
-) -> Response {
-    if request_is_cross_site(&headers) {
-        return json_error(StatusCode::FORBIDDEN, "cross_site_request_rejected");
-    }
-    let user_id = match verify_user_session(&state, &headers) {
-        Some(v) => v,
-        None => return json_error(StatusCode::UNAUTHORIZED, "login_required"),
-    };
-    if normalized_pair(user_id, other_user_id).is_none() {
-        return json_error(StatusCode::BAD_REQUEST, "invalid_user");
-    }
-    if let Some(retry_after) =
-        rate_limit_retry_after(&state, user_id, "chat_api_send_voice", 12, 60).await
-    {
-        return (
-            StatusCode::TOO_MANY_REQUESTS,
-            [(header::RETRY_AFTER, retry_after.to_string())],
-            Json(json!({"ok": false, "error": "rate_limited", "retry_after": retry_after})),
-        )
-            .into_response();
-    }
-
-    let mut client_message_id = String::new();
-    let mut reply_to_message_id: Option<i64> = None;
-    let mut file_bytes: Option<Vec<u8>> = None;
-
-    while let Ok(Some(field)) = multipart.next_field().await {
-        let name = field.name().unwrap_or("").to_string();
-        match name.as_str() {
-            "client_message_id" => {
-                if let Ok(t) = field.text().await {
-                    client_message_id = t.trim().to_string();
-                }
-            }
-            "reply_to_message_id" => {
-                if let Ok(t) = field.text().await {
-                    if let Ok(id) = t.trim().parse::<i64>() {
-                        if id > 0 {
-                            reply_to_message_id = Some(id);
-                        }
-                    }
-                }
-            }
-            "voice" | "audio" | "file" => {
-                if let Ok(b) = field.bytes().await {
-                    file_bytes = Some(b.to_vec());
-                }
-            }
-            _ => {}
-        }
-    }
-
-    let file_bytes = match file_bytes {
-        Some(b) if !b.is_empty() => b,
-        _ => return json_error(StatusCode::BAD_REQUEST, "voice_required"),
-    };
-    if file_bytes.len() > MAX_VOICE_BYTES {
-        return json_error(StatusCode::BAD_REQUEST, "voice_too_large");
-    }
-    let (kind, mime) = match detect_audio(&file_bytes) {
-        Some(p) => p,
-        None => return json_error(StatusCode::BAD_REQUEST, "unsupported_voice"),
-    };
-    if !client_message_id.is_empty() && !client_message_id_is_valid(&client_message_id) {
-        return json_error(StatusCode::BAD_REQUEST, "invalid_client_message_id");
-    }
-
-    let mut connection = match state.db_pool.get() {
-        Ok(c) => c,
-        Err(_) => return json_error(StatusCode::SERVICE_UNAVAILABLE, "database_unavailable"),
-    };
-    if users_are_blocked(&connection, user_id, other_user_id) {
-        return json_error(StatusCode::FORBIDDEN, "user_blocked");
-    }
-    if !user_has_verified_identity(&connection, user_id) {
-        return json_error(StatusCode::FORBIDDEN, "verification_required");
-    }
-    if let Some(error) = chat_contact_gate_error(&connection, user_id, other_user_id) {
-        return json_error(StatusCode::FORBIDDEN, error);
-    }
-    let conversation_id = match conversation_id(&connection, user_id, other_user_id) {
-        Some(id) => id,
-        None => return json_error(StatusCode::FORBIDDEN, "conversation_not_open"),
-    };
-
-    if !client_message_id.is_empty() {
-        if let Ok(existing_id) = connection.query_row(
-            "SELECT id FROM messages WHERE sender_user_id = ?1 AND client_message_id = ?2 LIMIT 1",
-            rusqlite::params![user_id, client_message_id],
-            |row| row.get::<_, i64>(0),
-        ) {
-            if let Some(message) = load_message(&connection, conversation_id, existing_id, user_id)
-            {
-                return (
-                    StatusCode::OK,
-                    Json(json!({"ok": true, "duplicate": true, "message": message})),
-                )
-                    .into_response();
-            }
-        }
-    }
-
-    if let Some(reply_id) = reply_to_message_id {
-        let exists: i64 = connection.query_row(
-            "SELECT COUNT(*) FROM messages WHERE id = ?1 AND conversation_id = ?2 AND deleted_at = 0",
-            rusqlite::params![reply_id, conversation_id],
-            |row| row.get(0),
-        ).unwrap_or(0);
-        if exists != 1 {
-            return json_error(StatusCode::BAD_REQUEST, "invalid_reply");
-        }
-    }
-
-    let relative = format!(
-        "{}/{}.{}",
-        conversation_id,
-        random_file_stem(),
-        extension_for_mime(mime)
-    );
-    let absolute = media_root().join(&relative);
-    if let Some(parent) = absolute.parent() {
-        if fs::create_dir_all(parent).is_err() {
-            return json_error(StatusCode::INTERNAL_SERVER_ERROR, "media_store_failed");
-        }
-    }
-    match fs::File::create(&absolute) {
-        Ok(mut file) => {
-            use std::io::Write;
-            if file.write_all(&file_bytes).is_err() {
-                let _ = fs::remove_file(&absolute);
-                return json_error(StatusCode::INTERNAL_SERVER_ERROR, "media_store_failed");
-            }
-        }
-        Err(_) => return json_error(StatusCode::INTERNAL_SERVER_ERROR, "media_store_failed"),
-    }
-
-    let now = unix_now();
-    let transaction =
-        match connection.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate) {
-            Ok(tx) => tx,
-            Err(_) => {
-                let _ = fs::remove_file(&absolute);
-                return json_error(StatusCode::CONFLICT, "chat_busy");
-            }
-        };
-
-    if transaction.execute(
-        "INSERT INTO messages (
-            conversation_id, sender_user_id, message, is_read, delivered_at, read_at, created_at,
-            reply_to_message_id, client_message_id, attachment_kind, attachment_mime, attachment_size, attachment_path
-         ) VALUES (?1,?2,'',0,0,0,?3,?4,?5,?6,?7,?8,?9)",
-        rusqlite::params![
-            conversation_id, user_id, now, reply_to_message_id, client_message_id,
-            kind, mime, file_bytes.len() as i64, relative
-        ],
-    ).unwrap_or(0) != 1 {
-        let _ = fs::remove_file(&absolute);
-        return json_error(StatusCode::INTERNAL_SERVER_ERROR, "message_store_failed");
-    }
-    let message_id = transaction.last_insert_rowid();
-    let _ = transaction.execute(
-        "UPDATE conversations SET updated_at = ?2 WHERE id = ?1",
-        rusqlite::params![conversation_id, now],
-    );
-    if transaction.commit().is_err() {
-        let _ = fs::remove_file(&absolute);
-        return json_error(StatusCode::INTERNAL_SERVER_ERROR, "message_store_failed");
-    }
-
-    let message = match load_message(&connection, conversation_id, message_id, user_id) {
-        Some(m) => m,
-        None => return json_error(StatusCode::INTERNAL_SERVER_ERROR, "message_load_failed"),
-    };
-    state.publish_chat_event(
-        "message.created",
-        conversation_id,
-        message_id,
-        user_id,
-        other_user_id,
-    );
-
-    let should_notify_telegram = connection
-        .execute(
-            "INSERT INTO user_notifications (
-                user_id,
-                resource_id,
-                kind,
-                title,
-                message,
-                is_read,
-                created_at
-             )
-             SELECT ?1, ?2, 'chat_message', 'Новое сообщение',
-                    'У вас новое сообщение в ResursMap.', 0, ?3
-             WHERE NOT EXISTS (
-                SELECT 1
-                FROM user_notifications
-                WHERE user_id = ?1
-                  AND kind = 'chat_message'
-                  AND is_read = 0
-             )",
-            rusqlite::params![other_user_id, user_id, now],
-        )
-        .unwrap_or(0)
-        == 1;
-
-    let telegram_id: Option<i64> = if should_notify_telegram {
-        connection
-            .query_row(
-                "SELECT telegram_id
-                 FROM users
-                 WHERE id = ?1
-                   AND is_active = 1",
-                rusqlite::params![other_user_id],
-                |row| row.get(0),
-            )
-            .ok()
-    } else {
-        None
-    };
-
-    if let Some(telegram_id) = telegram_id {
-        if telegram_id > 0 {
-            crate::telegram_notify::notify_telegram_user(
-                state.bot_token.as_deref(),
-                telegram_id,
-                &format!(
-                    "🎤 У вас новое голосовое в ResursMap!\n\nОткройте чат: https://resursmap.de/app/chat/{user_id}"
-                ),
-            );
-        }
-    }
-
-    (
-        StatusCode::OK,
-        Json(json!({"ok": true, "message": message})),
+    multipart: Multipart,
+) -> axum::response::Response {
+    save_attachment(
+        state,
+        headers,
+        peer_id,
+        multipart,
+        "voice",
+        "voice",
+        &["audio/webm", "audio/ogg", "audio/mp4", "audio/mpeg"],
+        MAX_VOICE_BYTES,
     )
-        .into_response()
+    .await
 }
 
 pub async fn api_chat_media(
     State(state): State<AppState>,
     Path(message_id): Path<i64>,
     headers: HeaderMap,
-) -> Response {
-    let user_id = match verify_user_session(&state, &headers) {
-        Some(v) => v,
-        None => return json_error(StatusCode::UNAUTHORIZED, "login_required"),
+) -> axum::response::Response {
+    let Some(user_id) = verify_user_session(&state, &headers) else {
+        return StatusCode::UNAUTHORIZED.into_response();
     };
-    let connection = match state.db_pool.get() {
-        Ok(c) => c,
-        Err(_) => return json_error(StatusCode::SERVICE_UNAVAILABLE, "database_unavailable"),
+
+    let db = match crate::db::pool::get_connection(&state.db_pool) {
+        Ok(db) => db,
+        Err(_) => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
     };
-    let row: Result<(i64, String, String), _> = connection.query_row(
-        "SELECT m.deleted_at, m.attachment_path, m.attachment_mime
-         FROM messages m JOIN conversations c ON c.id = m.conversation_id
-         WHERE m.id = ?1 AND (c.user1_id = ?2 OR c.user2_id = ?2) LIMIT 1",
-        rusqlite::params![message_id, user_id],
-        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
-    );
-    let (deleted_at, relative, mime) = match row {
-        Ok(r) => r,
-        Err(_) => return json_error(StatusCode::NOT_FOUND, "media_not_found"),
+
+    let row = db
+        .query_row(
+            r#"SELECT
+                m.attachment_path,m.attachment_mime,m.deleted_at,
+                c.user1_id,c.user2_id
+              FROM messages m
+              JOIN conversations c ON c.id=m.conversation_id
+              WHERE m.id=?1
+              LIMIT 1"#,
+            params![message_id],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, i64>(2)?,
+                    row.get::<_, i64>(3)?,
+                    row.get::<_, i64>(4)?,
+                ))
+            },
+        )
+        .ok();
+
+    let Some((path, mime, deleted_at, u1, u2)) = row else {
+        return StatusCode::NOT_FOUND.into_response();
     };
-    if deleted_at > 0
-        || relative.trim().is_empty()
-        || relative.contains("..")
-        || FsPath::new(&relative).is_absolute()
-    {
-        return json_error(StatusCode::NOT_FOUND, "media_not_found");
+    if deleted_at > 0 || (user_id != u1 && user_id != u2) || path.is_empty() {
+        return StatusCode::NOT_FOUND.into_response();
     }
-    let bytes = match fs::read(media_root().join(&relative)) {
-        Ok(b) => b,
-        Err(_) => return json_error(StatusCode::NOT_FOUND, "media_not_found"),
+
+    let canonical_root = match std::fs::canonicalize(media_root()) {
+        Ok(v) => v,
+        Err(_) => return StatusCode::NOT_FOUND.into_response(),
     };
-    let mut response = Response::new(Body::from(bytes));
-    *response.status_mut() = StatusCode::OK;
-    let ct = if mime.is_empty() {
-        "application/octet-stream"
-    } else {
-        mime.as_str()
+    let canonical_file = match std::fs::canonicalize(FsPath::new(&path)) {
+        Ok(v) => v,
+        Err(_) => return StatusCode::NOT_FOUND.into_response(),
     };
-    response.headers_mut().insert(
-        header::CONTENT_TYPE,
-        HeaderValue::from_str(ct)
-            .unwrap_or_else(|_| HeaderValue::from_static("application/octet-stream")),
-    );
-    response.headers_mut().insert(
-        header::CACHE_CONTROL,
-        HeaderValue::from_static("private, max-age=3600"),
-    );
-    response.headers_mut().insert(
-        header::X_CONTENT_TYPE_OPTIONS,
-        HeaderValue::from_static("nosniff"),
-    );
-    response
+    if !canonical_file.starts_with(&canonical_root) {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+
+    let bytes = match std::fs::read(canonical_file) {
+        Ok(v) => v,
+        Err(_) => return StatusCode::NOT_FOUND.into_response(),
+    };
+
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, mime)
+        .header(header::CACHE_CONTROL, "private, max-age=3600")
+        .body(Body::from(bytes))
+        .unwrap_or_else(|_| Response::new(Body::empty()))
+        .into_response()
 }
